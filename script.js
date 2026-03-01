@@ -1,4 +1,4 @@
-﻿// ================= PDF HELPER FUNCTION =================
+// ================= PDF HELPER FUNCTION =================
 function getPDFConstructor() {
     // Try multiple ways to get jsPDF constructor
     if (window.jspdf?.jsPDF) {
@@ -258,6 +258,9 @@ const RWANDA_TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 // ================= CART SYSTEM =================
 let cart = []; // Cart items array
+let selectedStockFilter = 'all';
+let pendingStockAdjustContext = null;
+let selectedAdminUserFilter = 'all';
 
 // ================= TRANSLATION SYSTEM =================
 let currentLanguage = 'en';
@@ -266,12 +269,48 @@ const translations = {
     en: {
         home: 'Home',
         addSale: 'Add Sale',
+        stockManagement: 'Stock Management',
         customers: 'Customers',
         clate: 'Clate/Deposit',
         salesHistory: 'Sales History',
         reports: 'Reports',
         settings: 'Settings',
         login: 'Login',
+        admin: 'Admin',
+        adminLogin: 'Admin Login',
+        adminPanel: 'Admin Panel',
+        adminPanelTitle: 'Owner Admin Panel',
+        adminPanelDescription: 'Find employers, manage account roles, and control who can access this app.',
+        adminRefresh: 'Refresh',
+        adminExportAccountsPdf: 'Export Accounts PDF',
+        adminExportAccountsJson: 'Export Accounts JSON',
+        adminSearchEmployersPlaceholder: 'Find employers by name, phone, or email...',
+        adminFilterPrivileged: 'Admin/Owner',
+        adminFilterStaff: 'Staff',
+        adminFilterInactive: 'Inactive',
+        adminDailyExportTitle: 'Daily Sales Export',
+        adminDailyExportDesc: 'Select a specific day and export all sales in ordered time.',
+        adminExportDayPdf: 'Export Day PDF',
+        adminStockAuditPdf: 'Stock Audit PDF',
+        adminClearCurrentUserData: 'Clear Current User Data',
+        adminAiTitle: 'Mini AI Growth Strategy',
+        adminAiDesc: 'AI-style analysis based on your real sales, stock, and credit trends.',
+        adminAnalyzeBusiness: 'Analyze Business',
+        adminAiPlaceholder: 'Run analysis to generate growth strategies.',
+        adminSummaryTotalAccounts: 'Total Accounts',
+        adminSummaryAdminOwner: 'Admin + Owner',
+        adminSummaryStaff: 'Staff',
+        adminSummaryInactive: 'Inactive',
+        adminDailyHeadDate: 'Date',
+        adminDailyHeadTransactions: 'Transactions',
+        adminDailyHeadCases: 'Cases Sold',
+        adminDailyHeadTotal: 'Total Sales',
+        adminDailyHeadProfit: 'Profit',
+        adminEmployerAccountsTitle: 'Employer Accounts',
+        adminNoSalesDataYet: 'No sales data yet.',
+        adminNoEmployersMatch: 'No employers match this filter.',
+        adminAnalysisRequiresSession: 'Admin session required for analysis.',
+        adminExportDayNoSales: 'No sales found for that day.',
         signUp: 'Sign Up',
         fullName: 'Full Name',
         phoneOrEmail: 'Phone Number or Email',
@@ -295,10 +334,20 @@ const translations = {
         resetNewPin: 'New 5-digit PIN',
         resetConfirmPin: 'Confirm New PIN',
         cancel: 'Cancel',
-        authHintLogin: 'Welcome to Make A Way.',
+        authHintLogin: 'Welcome to Make A Way!',
+        authHintAdmin: 'Admin login uses your account number/email with a separate admin PIN.',
         authHintSignup: 'Create your account to secure this app.',
         authHintReset: 'Reset your PIN with your registered phone and email.',
         authInvalidCredentials: 'Incorrect email/phone or PIN',
+        authAccountInactive: 'This account is inactive. Please contact the owner.',
+        authAdminInvalidCredentials: 'Incorrect admin email/phone or admin PIN',
+        authAdminAccessDenied: 'This account does not have admin access',
+        authAdminSetupRequiresUserPin: 'To create admin PIN, enter your normal user PIN first.',
+        authAdminSetupPrompt: 'Set a new 5-digit Admin PIN',
+        authAdminConfirmPrompt: 'Confirm Admin PIN',
+        authAdminPinMustDiffer: 'Admin PIN must be different from your normal PIN',
+        authAdminSetupCancelled: 'Admin PIN setup cancelled.',
+        authAdminSetupSuccess: 'Admin PIN created. You can now login as admin.',
         authTooManyAttempts: 'Too many failed attempts. Try again in 1 minute.',
         authNameRequired: 'Please enter your full name',
         authPhoneRequired: 'Please enter a valid phone number',
@@ -349,6 +398,8 @@ const translations = {
         drinkName: 'Drink Name',
         drinkPricePlaceholder: 'Price (RWF)',
         newDrinkProfitPerCase: 'Profit/Case (RWF)',
+        newDrinkStockQty: 'Initial Stock (Cases)',
+        newDrinkLowStockThreshold: 'Low Stock Alert Level',
         saveDrink: 'Save Drink',
         currentSale: 'Current Sale',
         searchDrinks: 'Search drinks...',
@@ -455,6 +506,15 @@ const translations = {
         importData: 'Import Data',
         clearAllData: 'Clear User Data',
         warningClearData: 'Warning: clears only the currently logged-in user data.',
+        clearDataConfirmTitle: 'Clear User Data',
+        clearDataConfirmLabel: 'Confirmation Text',
+        clearDataConfirmInstruction: 'Type CLEAR USER DATA (all caps) to confirm.',
+        clearDataConfirmPlaceholder: 'Type CLEAR USER DATA',
+        clearDataConfirmAction: 'Clear User Data',
+        clearDataConfirmMismatch: 'Text does not match. Type CLEAR USER DATA exactly.',
+        clearDataConfirmCancelled: 'Data clear cancelled.',
+        clearDataConfirmSuccess: 'Current user data cleared.',
+        clearDataRequiresAdminLogin: 'Admin login required to clear user data.',
         storageLabel: 'Storage:',
         activeAccountLabel: 'Active Account:',
         notLoggedIn: 'Not logged in',
@@ -469,12 +529,18 @@ const translations = {
     rw: {
         home: 'Ahabanza',
         addSale: 'Kongeramo Igurisha',
+        stockManagement: 'Igenzura rya Sitoki',
         customers: 'Abakiriya',
         clate: 'Ingwate/Ubwizigame',
         salesHistory: "Amateka y'Igurisha",
         reports: 'Raporo',
         settings: 'Igenamiterere',
         login: 'Injira',
+        admin: 'Admin',
+        adminLogin: 'Injira nka Admin',
+        adminPanel: 'Admin Panel',
+        adminPanelTitle: 'Urubuga rw Ubuyobozi',
+        adminPanelDescription: 'Shakisha abakozi, uhindure inshingano za konti, kandi ucunge abafite uburenganzira bwo gukoresha porogaramu.',
         signUp: 'Iyandikishe',
         fullName: 'Amazina yuzuye',
         phoneOrEmail: 'Telefoni cyangwa imeyili',
@@ -499,9 +565,19 @@ const translations = {
         resetConfirmPin: 'Emeza PIN nshya',
         cancel: 'Siba',
         authHintLogin: 'Koresha konti yawe usanzwe ufite kugira ngo ukomeze.',
+        authHintAdmin: 'Admin yinjirana telefoni/imeyili imwe ariko ikoresha PIN ya admin itandukanye.',
         authHintSignup: 'Banza ufungure konti kugira ngo urinde porogaramu.',
         authHintReset: 'Hindura PIN ukoresheje telefoni n\'imeyili byanditswe kuri konti.',
         authInvalidCredentials: 'Imeyili/telefoni cyangwa PIN si byo',
+        authAccountInactive: 'Iyi konti ntikora. Vugana na nyiri porogaramu.',
+        authAdminInvalidCredentials: 'Imeyili/telefoni ya admin cyangwa PIN ya admin si byo',
+        authAdminAccessDenied: 'Iyi konti nta burenganzira bwa admin ifite',
+        authAdminSetupRequiresUserPin: 'Kugira ngo ushyireho PIN ya admin, banza winjize PIN yawe isanzwe.',
+        authAdminSetupPrompt: 'Shyiraho PIN nshya ya admin y imibare 5',
+        authAdminConfirmPrompt: 'Emeza PIN ya admin',
+        authAdminPinMustDiffer: 'PIN ya admin igomba kuba itandukanye na PIN isanzwe',
+        authAdminSetupCancelled: 'Gushyiraho PIN ya admin byahagaritswe.',
+        authAdminSetupSuccess: 'PIN ya admin yashyizweho. Ubu ushobora kwinjira nka admin.',
         authTooManyAttempts: 'Wagerageje inshuro nyinshi. Ongera nyuma y umunota 1.',
         authNameRequired: 'Andika amazina yawe yuzuye',
         authPhoneRequired: 'Andika nimero ya telefone yemewe',
@@ -552,6 +628,8 @@ const translations = {
         drinkName: "Izina ry'ikinyobwa",
         drinkPricePlaceholder: 'Igiciro (RWF)',
         newDrinkProfitPerCase: 'Inyungu/Kaso (RWF)',
+        newDrinkStockQty: 'Sitoki ya mbere (amasanduku)',
+        newDrinkLowStockThreshold: 'Urwego rwo kuburira sitoki nkeya',
         saveDrink: 'Bika ikinyobwa',
         currentSale: 'Igurisha riri gukorwa',
         searchDrinks: 'Shakisha ibinyobwa...',
@@ -658,6 +736,15 @@ const translations = {
         importData: 'Injiza amakuru',
         clearAllData: 'Siba amakuru y uwinjiye',
         warningClearData: 'Iburira: bisiba gusa amakuru y uwinjiye ubu.',
+        clearDataConfirmTitle: 'Siba amakuru y uwinjiye',
+        clearDataConfirmLabel: 'Inyandiko yo kwemeza',
+        clearDataConfirmInstruction: 'Andika CLEAR USER DATA (inyuguti nkuru zose) kugira ngo wemeze.',
+        clearDataConfirmPlaceholder: 'Andika CLEAR USER DATA',
+        clearDataConfirmAction: 'Siba amakuru',
+        clearDataConfirmMismatch: 'Inyandiko ntiyahuye. Andika CLEAR USER DATA neza.',
+        clearDataConfirmCancelled: 'Gusiba amakuru byahagaritswe.',
+        clearDataConfirmSuccess: 'Amakuru y uwinjiye yasibwe.',
+        clearDataRequiresAdminLogin: 'Kwinjira nka admin ni ngombwa kugira ngo usibe amakuru y uwinjiye.',
         storageLabel: 'Ububiko:',
         activeAccountLabel: 'Konti iri gukoresha:',
         notLoggedIn: 'Nta winjiye',
@@ -671,27 +758,164 @@ const translations = {
     },
     fr: {
         home: 'Accueil',
-        addSale: 'Ajouter une Vente',
-        customers: 'Clients',
-        clate: 'DÃ©pÃ´t/Consigne',
-        salesHistory: 'Historique des Ventes',
-        reports: 'Rapports',
-        settings: 'ParamÃ¨tres',
-        todaySales: 'Ventes du Jour',
-        todayProfit: 'Profit du Jour',
-        customersOwing: 'Clients EndettÃ©s',
-        pendingDeposits: 'DÃ©pÃ´ts en Attente',
-        availableDrinks: 'Boissons Disponibles',
-        cartItems: 'Articles de Vente',
-        quickAdd: 'Ajouter Rapidement',
-        selectDrink: 'SÃ©lectionner une Boisson',
-        quantity: 'QuantitÃ©',
-        saleType: 'Type de Vente',
-        selectCustomer: 'SÃ©lectionner un Client',
-        confirmSale: 'Confirmer la Vente',
-        clearCart: 'Vider le Panier',
-        normalSale: 'Vente en EspÃ¨ces',
-        creditSale: 'Vente Ã  CrÃ©dit'
+addSale: 'Ajouter une vente',
+stockManagement: 'Gestion du stock',
+customers: 'Clients',
+clate: 'Caution/Dépôt',
+salesHistory: "Historique des ventes",
+reports: 'Rapports',
+settings: 'Paramètres',
+login: 'Connexion',
+admin: 'Admin',
+adminLogin: 'Connexion Admin',
+adminPanel: 'Panneau Admin',
+adminPanelTitle: 'Panneau d’administration',
+adminPanelDescription: 'Rechercher des employés, modifier les rôles des comptes et gérer les autorisations d’accès à l’application.',
+signUp: 'S’inscrire',
+fullName: 'Nom complet',
+phoneOrEmail: 'Téléphone ou email',
+emailAddress: 'Adresse email',
+phoneNumber: 'Numéro de téléphone',
+pinLabel: 'PIN à 5 chiffres',
+confirmPin: 'Confirmer le PIN',
+createAccount: 'Créer un compte',
+continueWithGoogle: 'Continuer avec Google',
+googleEmailPrompt: 'Entrez l’email Google',
+googleClientIdPrompt: 'Entrez le Google OAuth Client ID',
+googleClientIdLooksWrong: 'Cela ne ressemble pas à un Google Web Client ID. Il doit se terminer par .apps.googleusercontent.com',
+googleInvalidClient: 'Google a rejeté le client ID (invalid_client). Utilisez un Google OAuth Web Client ID valide et ajoutez cette URL dans les redirect URIs autorisées.',
+googleLoginFailed: 'La connexion avec Google a échoué. Veuillez réessayer.',
+googleServiceUnavailable: 'Le service de connexion Google est actuellement indisponible.',
+verificationCode: 'Code de vérification',
+sendCode: 'Envoyer le code',
+forgotPin: 'PIN oublié ?',
+resetPin: 'Réinitialiser le PIN',
+resetPinHint: 'Utilisez votre téléphone, email et code pour définir un nouveau PIN.',
+resetNewPin: 'Nouveau PIN à 5 chiffres',
+resetConfirmPin: 'Confirmer le nouveau PIN',
+cancel: 'Annuler',
+authHintLogin: 'Utilisez votre compte existant pour continuer.',
+authHintAdmin: 'L’admin utilise le même téléphone/email mais un PIN admin différent.',
+authHintSignup: 'Créez d’abord un compte pour sécuriser l’application.',
+authHintReset: 'Réinitialisez le PIN avec le téléphone et l’email enregistrés.',
+authInvalidCredentials: 'Email/téléphone ou PIN incorrect',
+authAccountInactive: 'Ce compte est inactif. Contactez le propriétaire de l’application.',
+authAdminInvalidCredentials: 'Email/téléphone admin ou PIN admin incorrect',
+authAdminAccessDenied: 'Ce compte n’a pas les droits administrateur',
+authAdminSetupRequiresUserPin: 'Pour configurer le PIN admin, entrez d’abord votre PIN utilisateur.',
+authAdminSetupPrompt: 'Définissez un nouveau PIN admin à 5 chiffres',
+authAdminConfirmPrompt: 'Confirmez le PIN admin',
+authAdminPinMustDiffer: 'Le PIN admin doit être différent du PIN utilisateur',
+authAdminSetupCancelled: 'Configuration du PIN admin annulée.',
+authAdminSetupSuccess: 'PIN admin configuré. Vous pouvez maintenant vous connecter en tant qu’admin.',
+authTooManyAttempts: 'Trop de tentatives. Réessayez après 1 minute.',
+authNameRequired: 'Entrez votre nom complet',
+authPhoneRequired: 'Entrez un numéro de téléphone valide',
+authEmailRequired: 'Entrez votre email',
+authEmailInvalid: 'Entrez un email valide',
+authPhoneExists: 'Ce numéro possède déjà un compte',
+authEmailExists: 'Cet email possède déjà un compte',
+authPinRules: 'Le PIN doit contenir 5 chiffres',
+authPinMismatch: 'Les PIN ne correspondent pas',
+authVerificationCodeRequired: 'Entrez le code de vérification',
+authVerificationCodeInvalid: 'Code de vérification incorrect',
+authVerificationCodeExpired: 'Code expiré. Demandez-en un nouveau.',
+authVerificationSendFirst: 'Envoyez d’abord le code de vérification.',
+authCodeSent: 'Le code de vérification a été envoyé à {email}.',
+authCodeFallback: 'Le service email n’est pas configuré. Utilisez ce code maintenant : {code}',
+authEmailServiceUnavailable: 'Le service email n’est pas configuré. Configurez les clés EmailJS dans index.html puis rechargez la page.',
+authEmailSendFailed: 'Échec de l’envoi du code par email. Réessayez.',
+authEmailRateLimited: 'Attendez 30 secondes avant de demander un nouveau code.',
+authEmailSetupPrompt: 'Le service email n’est pas configuré. Voulez-vous configurer EmailJS maintenant ?',
+authEmailPublicKeyPrompt: 'Entrez la clé publique EmailJS',
+authEmailServiceIdPrompt: 'Entrez le Service ID EmailJS',
+authEmailTemplateIdPrompt: 'Entrez le Template ID EmailJS',
+authEmailFromNamePrompt: 'Entrez le nom affiché dans l’email',
+authEmailConfigSaved: 'Configuration email enregistrée.',
+authEmailConfigIncomplete: 'Configuration email incomplète.',
+authAccountCreated: 'Compte créé avec succès. Vous pouvez maintenant vous connecter.',
+authUserNotFound: 'Aucun compte trouvé avec ce numéro',
+authResetEmailMismatch: 'L’email ne correspond pas à ce compte',
+authPinResetSuccess: 'PIN réinitialisé avec succès. Vous pouvez maintenant vous connecter.',
+loggedInAs: 'Connecté en tant que',
+todaySales: "Ventes d’aujourd’hui",
+todayProfit: "Bénéfice d’aujourd’hui",
+customersOwing: 'Clients débiteurs',
+pendingDeposits: 'Dépôts en attente',
+availableDrinks: 'Boissons disponibles',
+cartItems: 'Articles dans le panier',
+quickAdd: 'Ajout rapide',
+selectDrink: 'Sélectionner une boisson',
+quantity: 'Quantité',
+saleType: 'Type de vente',
+selectCustomer: 'Sélectionner un client',
+confirmSale: 'Confirmer la vente',
+clearCart: 'Vider le panier',
+normalSale: 'Vente au comptant',
+creditSale: 'Vente à crédit',
+dailyTotal: "Total du jour",
+addNewDrink: 'Ajouter une nouvelle boisson',
+drinkName: 'Nom de la boisson',
+drinkPricePlaceholder: 'Prix (RWF)',
+newDrinkProfitPerCase: 'Bénéfice/Caisse (RWF)',
+newDrinkStockQty: 'Stock initial (caisses)',
+newDrinkLowStockThreshold: 'Seuil d’alerte de stock faible',
+saveDrink: 'Enregistrer la boisson',
+currentSale: 'Vente en cours',
+searchDrinks: 'Rechercher des boissons...',
+noItemsYet: 'Aucun article ajouté',
+chooseDrink: 'Choisir une boisson...',
+enterQuantity: 'Entrer la quantité',
+addToCart: 'Ajouter au panier',
+totalAmount: 'Montant total',
+remove: 'Supprimer',
+all: 'Tous',
+owing: 'Débiteurs',
+cleared: 'Payés',
+addCustomer: 'Ajouter un client',
+exportDebtSummary: 'Exporter le rapport des dettes',
+searchCustomers: 'Rechercher un client par nom, téléphone ou description...',
+addDeposit: 'Ajouter un dépôt',
+trackDeposits: 'Suivre les dépôts et retours.',
+searchDeposits: 'Rechercher un dépôt par client, description ou statut...',
+pending: 'En attente',
+returned: 'Retourné',
+exportPdf: 'Exporter en PDF',
+searchSales: 'Rechercher une vente par boisson, client ou date...',
+cash: 'Espèces',
+dateTime: 'Date et heure',
+items: 'Articles',
+unitPrice: 'Prix unitaire',
+total: 'Total',
+type: 'Type',
+actions: 'Actions',
+noSalesYet: 'Aucune vente enregistrée',
+daily: 'Quotidien',
+weekly: 'Hebdomadaire',
+monthly: 'Mensuel',
+annual: 'Annuel',
+fullReport: 'Rapport complet',
+reportsHelp: 'Utilisez les rapports rapides (jour/semaine/mois/année) ou sélectionnez une période personnalisée.',
+runTutorial: 'Lancer le tutoriel',
+tutorialSkipAll: 'Tout passer',
+tutorialBack: 'Retour',
+tutorialNext: 'Suivant',
+tutorialDone: 'Terminé',
+tutorialStepLabel: 'Étape {current} sur {total}',
+tutorial1Title: 'Bienvenue sur Make A Way',
+tutorial1Text: 'Ce tutoriel vous montre comment démarrer, enregistrer les ventes et gérer votre activité.',
+tutorial2Title: 'Ajoutez d’abord des boissons',
+tutorial2Text: 'Allez dans Ajouter une vente, ajoutez vos boissons et prix puis enregistrez-les.',
+tutorial3Title: 'Enregistrez les ventes',
+tutorial3Text: 'Utilisez Sale Items et Quick Add pour enregistrer les ventes quotidiennes.',
+tutorial4Title: 'Gérez clients et dépôts',
+tutorial4Text: 'Utilisez Clients pour suivre les dettes et Dépôt pour suivre les cautions.',
+tutorial5Title: 'Rapports personnalisés',
+tutorial5Text: 'Utilisez Rapports pour voir jour/semaine/mois/année ou exporter un PDF.',
+tutorial6Title: 'Paramètres et sauvegarde',
+tutorial6Text: 'Modifiez bénéfice, langue et devise dans Paramètres.',
+rightsReserved: '2026 Make A Way. Tous droits réservés.',
+footerText: 'MAKE A WAY - Système de gestion commerciale'
     }
 };
 
@@ -844,6 +1068,8 @@ function getDefaultAppMeta() {
     return {
         authUsers: [],
         lastLoginPhone: '',
+        activeSessionUserId: '',
+        activeSessionLoginMode: '',
         legacyDataMigrated: false
     };
 }
@@ -867,6 +1093,8 @@ function sanitizeUserSettings(raw) {
     const next = isPlainObject(raw) ? { ...raw } : {};
     delete next.authUsers;
     delete next.lastLoginPhone;
+    delete next.activeSessionUserId;
+    delete next.activeSessionLoginMode;
     delete next.legacyMigratedUsers;
     delete next.legacyDataMigrated;
     delete next.profitPerCase;
@@ -877,6 +1105,72 @@ function getDefaultDrinkProfitPerCase() {
     return 700;
 }
 
+function getDefaultLowStockThreshold() {
+    return 5;
+}
+
+function normalizeStockValue(value, fallback = 0) {
+    const parsed = Math.floor(Number(value));
+    if (!Number.isFinite(parsed) || parsed < 0) return Math.max(0, Math.floor(Number(fallback) || 0));
+    return parsed;
+}
+
+function sanitizeStockHistoryEntry(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const action = String(raw.action || '').toLowerCase();
+    if (action !== 'add' && action !== 'remove') return null;
+
+    const quantity = normalizeStockValue(raw.quantity ?? raw.qty, 0);
+    if (quantity <= 0) return null;
+    const beforeQty = normalizeStockValue(raw.beforeQty ?? raw.before, 0);
+    const afterQty = normalizeStockValue(raw.afterQty ?? raw.after, 0);
+    const parsedTimestamp = new Date(raw.timestamp || raw.createdAt || Date.now());
+    const timestamp = Number.isNaN(parsedTimestamp.getTime())
+        ? new Date().toISOString()
+        : parsedTimestamp.toISOString();
+    const reason = String(raw.reason || raw.note || '').trim().slice(0, 160);
+
+    return {
+        timestamp,
+        action,
+        quantity,
+        beforeQty,
+        afterQty,
+        reason
+    };
+}
+
+function normalizeStockHistoryEntries(rawHistory) {
+    if (!Array.isArray(rawHistory)) return [];
+    return rawHistory
+        .map((entry) => sanitizeStockHistoryEntry(entry))
+        .filter(Boolean)
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
+function getDrinkStockHistory(drink) {
+    if (!drink || typeof drink !== 'object') return [];
+    if (!Array.isArray(drink.stockHistory)) return [];
+    return normalizeStockHistoryEntries(drink.stockHistory);
+}
+
+function recordDrinkStockEvent(drink, eventPayload = {}) {
+    if (!drink || typeof drink !== 'object') return;
+    const event = sanitizeStockHistoryEntry({
+        timestamp: new Date().toISOString(),
+        action: eventPayload.action,
+        quantity: eventPayload.quantity,
+        beforeQty: eventPayload.beforeQty,
+        afterQty: eventPayload.afterQty,
+        reason: eventPayload.reason
+    });
+    if (!event) return;
+
+    const nextHistory = getDrinkStockHistory(drink);
+    nextHistory.unshift(event);
+    drink.stockHistory = nextHistory.slice(0, 600);
+}
+
 function sanitizeDrinkEntry(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const name = String(raw.name || '').trim();
@@ -884,12 +1178,28 @@ function sanitizeDrinkEntry(raw) {
     const parsedPrice = Number(raw.price);
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) return null;
     const parsedProfitPerCase = Number(raw.profitPerCase);
+    const hasLegacyStockValue =
+        Object.prototype.hasOwnProperty.call(raw, 'stockQty') ||
+        Object.prototype.hasOwnProperty.call(raw, 'stock') ||
+        Object.prototype.hasOwnProperty.call(raw, 'quantityOnHand');
+    const parsedStockQty = normalizeStockValue(
+        raw.stockQty ?? raw.stock ?? raw.quantityOnHand,
+        hasLegacyStockValue ? 0 : 30
+    );
+    const parsedLowStockThreshold = normalizeStockValue(
+        raw.lowStockThreshold ?? raw.lowStockLimit ?? raw.reorderLevel,
+        getDefaultLowStockThreshold()
+    );
     return {
         name,
         price: parsedPrice,
         profitPerCase: (Number.isFinite(parsedProfitPerCase) && parsedProfitPerCase >= 0)
             ? parsedProfitPerCase
-            : getDefaultDrinkProfitPerCase()
+            : getDefaultDrinkProfitPerCase(),
+        stockQty: parsedStockQty,
+        lowStockThreshold: parsedLowStockThreshold,
+        lastStockUpdatedAt: typeof raw.lastStockUpdatedAt === 'string' ? raw.lastStockUpdatedAt : '',
+        stockHistory: normalizeStockHistoryEntries(raw.stockHistory || raw.stockMovements || raw.stockLogs)
     };
 }
 
@@ -910,6 +1220,39 @@ function getDrinkProfitPerCaseByName(drinkName) {
         return Math.max(0, Number(match.profitPerCase));
     }
     return getDefaultDrinkProfitPerCase();
+}
+
+function getDrinkByName(drinkName) {
+    const target = String(drinkName || '').toLowerCase().trim();
+    if (!target) return null;
+    return drinks.find((drink) => String(drink.name || '').toLowerCase().trim() === target) || null;
+}
+
+function getDrinkStockQty(drink) {
+    if (!drink || typeof drink !== 'object') return 0;
+    return normalizeStockValue(drink.stockQty, 0);
+}
+
+function getDrinkLowStockThreshold(drink) {
+    if (!drink || typeof drink !== 'object') return getDefaultLowStockThreshold();
+    return normalizeStockValue(drink.lowStockThreshold, getDefaultLowStockThreshold());
+}
+
+function getDrinkStockStatus(drink) {
+    const stockQty = getDrinkStockQty(drink);
+    if (stockQty <= 0) return 'out';
+    if (stockQty <= getDrinkLowStockThreshold(drink)) return 'low';
+    return 'ok';
+}
+
+function getLowStockDrinks() {
+    return drinks.filter((drink) => getDrinkStockStatus(drink) !== 'ok');
+}
+
+function getStockStatusLabel(status) {
+    if (status === 'out') return 'Out of Stock';
+    if (status === 'low') return 'Low Stock';
+    return 'Healthy';
 }
 
 function getUserStorageId(user = activeUser) {
@@ -1250,6 +1593,7 @@ async function saveData() {
 // ================= LOGIN / SIGNUP SYSTEM =================
 let authMode = 'login';
 let activeUser = null;
+let activeLoginMode = 'user';
 let failedLoginAttempts = 0;
 let loginLockedUntil = 0;
 let onboardingStepIndex = 0;
@@ -1450,6 +1794,127 @@ function findUserByLoginIdentifier(identifierValue, users = getAuthUsers()) {
     return users.find((u) => normalizePhone(u.phone) === phone) || null;
 }
 
+function isAdminRoleUser(user) {
+    const role = String(user?.role || '').trim().toLowerCase();
+    return role === 'owner' || role === 'admin';
+}
+
+function isOwnerRoleUser(user) {
+    return String(user?.role || '').trim().toLowerCase() === 'owner';
+}
+
+function normalizeAuthRole(roleValue, fallback = 'staff') {
+    const normalized = String(roleValue || '').trim().toLowerCase();
+    if (normalized === 'owner' || normalized === 'admin' || normalized === 'staff') return normalized;
+    return fallback;
+}
+
+function isUserAccountActive(user) {
+    return Boolean(user) && user.isActive !== false;
+}
+
+function isAdminSessionActive(user = activeUser) {
+    return activeLoginMode === 'admin' && isAdminRoleUser(user) && isUserAccountActive(user);
+}
+
+function canAccessAdminPanel(user = activeUser) {
+    return isAdminSessionActive(user);
+}
+
+function canManageAdminAccounts(user = activeUser) {
+    return isAdminSessionActive(user) && isOwnerRoleUser(user);
+}
+
+function formatAppDateTime(value, fallback = 'Never') {
+    if (!value) return fallback;
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return fallback;
+    return dt.toLocaleString();
+}
+
+function registerFailedLoginAttempt(messageKey = 'authInvalidCredentials') {
+    failedLoginAttempts += 1;
+    if (failedLoginAttempts >= 5) {
+        failedLoginAttempts = 0;
+        loginLockedUntil = Date.now() + 60 * 1000;
+        alert(t('authTooManyAttempts'));
+        return;
+    }
+    alert(t(messageKey));
+}
+
+async function setupAdminPinForUser(user, currentUserPin) {
+    if (!user || !isAdminRoleUser(user)) {
+        return { success: false, cancelled: false, message: t('authAdminAccessDenied') };
+    }
+    if (!/^\d{5}$/.test(String(currentUserPin || '').trim()) || String(user.pin || '').trim() !== String(currentUserPin || '').trim()) {
+        return { success: false, cancelled: false, message: t('authAdminSetupRequiresUserPin') };
+    }
+
+    const adminPinRaw = window.prompt(t('authAdminSetupPrompt'), '');
+    if (adminPinRaw === null) {
+        return { success: false, cancelled: true, message: t('authAdminSetupCancelled') };
+    }
+    const adminPin = String(adminPinRaw || '').trim();
+    if (!/^\d{5}$/.test(adminPin)) {
+        return { success: false, cancelled: false, message: t('authPinRules') };
+    }
+    if (adminPin === String(user.pin || '').trim()) {
+        return { success: false, cancelled: false, message: t('authAdminPinMustDiffer') };
+    }
+
+    const confirmRaw = window.prompt(t('authAdminConfirmPrompt'), '');
+    if (confirmRaw === null) {
+        return { success: false, cancelled: true, message: t('authAdminSetupCancelled') };
+    }
+    const confirmAdminPin = String(confirmRaw || '').trim();
+    if (confirmAdminPin !== adminPin) {
+        return { success: false, cancelled: false, message: t('authPinMismatch') };
+    }
+
+    user.adminPin = adminPin;
+    user.updatedAt = new Date().toISOString();
+    appMeta.authUsers = getAuthUsers();
+    await optimizedSaveData();
+    showSuccessToast(t('authAdminSetupSuccess'));
+    return { success: true, cancelled: false, message: '' };
+}
+
+async function handleAdminLogin(identifier, pin, users = getAuthUsers()) {
+    const user = findUserByLoginIdentifier(identifier, users);
+    if (!user) {
+        registerFailedLoginAttempt('authAdminInvalidCredentials');
+        return;
+    }
+    if (!isUserAccountActive(user)) {
+        alert(t('authAccountInactive'));
+        return;
+    }
+    if (!isAdminRoleUser(user)) {
+        alert(t('authAdminAccessDenied'));
+        return;
+    }
+
+    let adminPin = String(user.adminPin || '').trim();
+    if (!/^\d{5}$/.test(adminPin)) {
+        const setupResult = await setupAdminPinForUser(user, pin);
+        if (!setupResult.success) {
+            if (!setupResult.cancelled) {
+                alert(setupResult.message || t('authAdminInvalidCredentials'));
+            }
+            return;
+        }
+        adminPin = String(user.adminPin || '').trim();
+    }
+
+    if (adminPin !== pin) {
+        registerFailedLoginAttempt('authAdminInvalidCredentials');
+        return;
+    }
+
+    await completeLoginForUser(user, { loginMode: 'admin' });
+}
+
 function buildGoogleOAuthState() {
     if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
         const bytes = new Uint8Array(16);
@@ -1593,19 +2058,29 @@ async function fetchGoogleUserProfile(accessToken) {
     return data;
 }
 
-async function completeLoginForUser(user) {
+async function completeLoginForUser(user, options = {}) {
     failedLoginAttempts = 0;
     loginLockedUntil = 0;
+    user.role = normalizeAuthRole(user.role, 'staff');
+    user.isActive = user.isActive !== false;
+    user.lastLoginAt = new Date().toISOString();
+    const requestedMode = String(options?.loginMode || '').trim().toLowerCase();
+    activeLoginMode = (requestedMode === 'admin' && isAdminRoleUser(user)) ? 'admin' : 'user';
     activeUser = user;
     appMeta.lastLoginPhone = user.phone || user.email || '';
+    appMeta.activeSessionUserId = getAuthSessionUserId(user);
+    appMeta.activeSessionLoginMode = activeLoginMode;
     await loadActiveUserData(user);
-    pendingOnboardingStart = !settings.onboardingDone &&
+    pendingOnboardingStart = activeLoginMode !== 'admin' &&
+        !settings.onboardingDone &&
         sales.length === 0 &&
         customers.length === 0 &&
         clates.length === 0 &&
         drinks.length === 0;
     await optimizedSaveData();
     updateActiveUserBadge();
+    refreshAdminAccessUI();
+    refreshDataManagementAccessUI();
     showWelcomeAnimation();
 }
 
@@ -1628,6 +2103,7 @@ async function loginWithGoogleProfile(googleProfile) {
             phone: '',
             pin: '',
             role: users.length === 0 ? 'owner' : 'staff',
+            isActive: true,
             authProvider: 'google',
             googleSub,
             avatarUrl: String(googleProfile.picture || '').trim(),
@@ -1650,7 +2126,7 @@ async function loginWithGoogleProfile(googleProfile) {
     }
 
     await saveNamedData(APP_META_STORAGE_KEY, appMeta);
-    await completeLoginForUser(user);
+    await completeLoginForUser(user, { loginMode: 'user' });
 }
 
 async function handleGoogleOAuthRedirectIfNeeded() {
@@ -1820,6 +2296,23 @@ function clearResetVerification() {
     if (resetCodeInput) resetCodeInput.value = '';
 }
 
+function normalizeAuthUsersData() {
+    if (!appMeta || typeof appMeta !== 'object') appMeta = getDefaultAppMeta();
+    if (!Array.isArray(appMeta.authUsers)) appMeta.authUsers = [];
+
+    appMeta.authUsers = appMeta.authUsers
+        .filter((user) => user && typeof user === 'object')
+        .map((user, index) => {
+            const fallbackRole = index === 0 ? 'owner' : 'staff';
+            const normalizedRole = normalizeAuthRole(user.role, fallbackRole);
+            return {
+                ...user,
+                role: normalizedRole,
+                isActive: user.isActive !== false
+            };
+        });
+}
+
 function resetForgotPinFields() {
     const resetPhoneInput = document.getElementById('resetPhone');
     const resetEmailInput = document.getElementById('resetEmail');
@@ -1833,9 +2326,60 @@ function resetForgotPinFields() {
 }
 
 function getAuthUsers() {
-    if (!appMeta || typeof appMeta !== 'object') appMeta = getDefaultAppMeta();
-    if (!Array.isArray(appMeta.authUsers)) appMeta.authUsers = [];
+    normalizeAuthUsersData();
     return appMeta.authUsers;
+}
+
+function getAuthSessionUserId(user) {
+    if (!user || typeof user !== 'object') return '';
+    const scopedId = String(getUserStorageId(user) || '').trim();
+    if (scopedId) return scopedId;
+    const fallbackId = String(user.id || '').trim();
+    if (fallbackId) return fallbackId;
+    return normalizeEmail(user.email || '');
+}
+
+async function restoreActiveSessionFromMeta() {
+    const sessionUserId = String(appMeta?.activeSessionUserId || '').trim();
+    if (!sessionUserId) return false;
+
+    const users = getAuthUsers();
+    const user = users.find((candidate) => getAuthSessionUserId(candidate) === sessionUserId);
+    if (!user) {
+        appMeta.activeSessionUserId = '';
+        appMeta.activeSessionLoginMode = '';
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+        return false;
+    }
+    if (!isUserAccountActive(user)) {
+        appMeta.activeSessionUserId = '';
+        appMeta.activeSessionLoginMode = '';
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+        return false;
+    }
+
+    const savedLoginMode = String(appMeta?.activeSessionLoginMode || '').trim().toLowerCase();
+    activeLoginMode = (savedLoginMode === 'admin' && isAdminRoleUser(user)) ? 'admin' : 'user';
+    activeUser = user;
+    failedLoginAttempts = 0;
+    loginLockedUntil = 0;
+    pendingOnboardingStart = false;
+    appMeta.lastLoginPhone = user.phone || user.email || appMeta.lastLoginPhone || '';
+    appMeta.activeSessionLoginMode = activeLoginMode;
+
+    await loadActiveUserData(user);
+    updateActiveUserBadge();
+    refreshAdminAccessUI();
+    refreshDataManagementAccessUI();
+
+    const loginScreen = document.getElementById('loginScreen');
+    const app = document.getElementById('app');
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (app) app.style.display = 'block';
+
+    showAppBackgroundLetters();
+    showPage(activeLoginMode === 'admin' ? 'adminPanel' : 'home');
+    return true;
 }
 
 function setAuthHintText() {
@@ -1845,7 +2389,26 @@ function setAuthHintText() {
         hint.textContent = t('authHintReset');
         return;
     }
-    hint.textContent = authMode === 'signup' ? t('authHintSignup') : t('authHintLogin');
+    if (authMode === 'signup') {
+        hint.textContent = t('authHintSignup');
+        return;
+    }
+    if (authMode === 'admin') {
+        hint.textContent = t('authHintAdmin');
+        return;
+    }
+    hint.textContent = t('authHintLogin');
+}
+
+function updateAuthPrimaryButtons() {
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    if (loginBtn) {
+        loginBtn.textContent = authMode === 'admin' ? t('adminLogin') : t('login');
+    }
+    if (signupBtn) {
+        signupBtn.textContent = t('createAccount');
+    }
 }
 
 function toggleForgotPinPanel(show) {
@@ -1856,6 +2419,7 @@ function toggleForgotPinPanel(show) {
     const loginBtn = document.getElementById('loginBtn');
     const signupBtn = document.getElementById('signupBtn');
     const loginTab = document.getElementById('authLoginTab');
+    const adminTab = document.getElementById('authAdminTab');
     const signupTab = document.getElementById('authSignupTab');
     const resetPhoneInput = document.getElementById('resetPhone');
     const resetEmailInput = document.getElementById('resetEmail');
@@ -1866,6 +2430,7 @@ function toggleForgotPinPanel(show) {
     if (signupBtn) signupBtn.style.display = (!forgotPinVisible && authMode === 'signup') ? 'block' : 'none';
     if (forgotPinBtn) forgotPinBtn.style.display = (!forgotPinVisible && authMode === 'login') ? 'inline-block' : 'none';
     if (loginTab) loginTab.disabled = forgotPinVisible;
+    if (adminTab) adminTab.disabled = forgotPinVisible;
     if (signupTab) signupTab.disabled = forgotPinVisible;
 
     if (forgotPinVisible) {
@@ -1885,8 +2450,13 @@ function toggleForgotPinPanel(show) {
 }
 
 function switchAuthMode(mode) {
-    authMode = mode === 'signup' ? 'signup' : 'login';
+    if (mode === 'signup' || mode === 'admin') {
+        authMode = mode;
+    } else {
+        authMode = 'login';
+    }
     const isSignup = authMode === 'signup';
+    const isAdmin = authMode === 'admin';
 
     const signupNameGroup = document.getElementById('signupNameGroup');
     const signupEmailGroup = document.getElementById('signupEmailGroup');
@@ -1895,6 +2465,7 @@ function switchAuthMode(mode) {
     const loginBtn = document.getElementById('loginBtn');
     const signupBtn = document.getElementById('signupBtn');
     const loginTab = document.getElementById('authLoginTab');
+    const adminTab = document.getElementById('authAdminTab');
     const signupTab = document.getElementById('authSignupTab');
     const forgotPinBtn = document.getElementById('forgotPinBtn');
 
@@ -1908,12 +2479,16 @@ function switchAuthMode(mode) {
     if (signupVerificationGroup) signupVerificationGroup.style.display = isSignup ? 'block' : 'none';
     if (loginBtn) loginBtn.style.display = isSignup ? 'none' : 'block';
     if (signupBtn) signupBtn.style.display = isSignup ? 'block' : 'none';
-    if (forgotPinBtn) forgotPinBtn.style.display = isSignup ? 'none' : 'inline-block';
-    if (loginTab) loginTab.classList.toggle('active', !isSignup);
+    if (forgotPinBtn) forgotPinBtn.style.display = (!isSignup && !isAdmin) ? 'inline-block' : 'none';
+    if (loginTab) loginTab.classList.toggle('active', !isSignup && !isAdmin);
+    if (adminTab) adminTab.classList.toggle('active', isAdmin);
     if (signupTab) signupTab.classList.toggle('active', isSignup);
     if (loginTab) loginTab.disabled = false;
+    if (adminTab) adminTab.disabled = false;
     if (signupTab) signupTab.disabled = false;
 
+    updateAuthPrimaryButtons();
+    updateAuthPrimaryButtons();
     setAuthHintText();
 }
 
@@ -1954,6 +2529,7 @@ function renderOnboardingStep() {
     const titleEl = document.getElementById('onboardingTitle');
     const textEl = document.getElementById('onboardingText');
     const stepLabelEl = document.getElementById('onboardingStepLabel');
+    const progressBarEl = document.getElementById('onboardingProgressBar');
     const prevBtn = document.getElementById('onboardingPrevBtn');
     const nextBtn = document.getElementById('onboardingNextBtn');
     if (!overlay || !titleEl || !textEl || !stepLabelEl || !nextBtn || !prevBtn) return;
@@ -1970,6 +2546,10 @@ function renderOnboardingStep() {
     stepLabelEl.textContent = label;
     titleEl.textContent = step.title;
     textEl.textContent = step.text;
+    if (progressBarEl) {
+        const progressPercent = ((onboardingStepIndex + 1) / steps.length) * 100;
+        progressBarEl.style.width = `${Math.min(100, Math.max(0, progressPercent))}%`;
+    }
     prevBtn.disabled = onboardingStepIndex === 0;
     nextBtn.textContent = onboardingStepIndex === steps.length - 1 ? t('tutorialDone') : t('tutorialNext');
 }
@@ -2046,21 +2626,28 @@ async function handleLogin() {
     const pin = (pinInput ? pinInput.value : '').trim();
     const users = getAuthUsers();
 
-    const user = findUserByLoginIdentifier(loginIdentifier, users);
-
-    if (!user || String(user.pin) !== pin) {
-        failedLoginAttempts += 1;
-        if (failedLoginAttempts >= 5) {
-            failedLoginAttempts = 0;
-            loginLockedUntil = Date.now() + 60 * 1000;
-            alert(t('authTooManyAttempts'));
-        } else {
-            alert(t('authInvalidCredentials'));
-        }
+    if (!/^\d{5}$/.test(pin)) {
+        alert(t('authPinRules'));
         return;
     }
 
-    await completeLoginForUser(user);
+    if (authMode === 'admin') {
+        await handleAdminLogin(loginIdentifier, pin, users);
+        return;
+    }
+
+    const user = findUserByLoginIdentifier(loginIdentifier, users);
+
+    if (!user || String(user.pin) !== pin) {
+        registerFailedLoginAttempt('authInvalidCredentials');
+        return;
+    }
+    if (!isUserAccountActive(user)) {
+        alert(t('authAccountInactive'));
+        return;
+    }
+
+    await completeLoginForUser(user, { loginMode: 'user' });
 }
 
 async function sendSignupVerificationCode() {
@@ -2182,6 +2769,7 @@ async function handleSignup() {
         phone,
         pin,
         role: users.length === 0 ? 'owner' : 'staff',
+        isActive: true,
         emailVerifiedAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
     };
@@ -2385,6 +2973,7 @@ async function handleResetPin() {
 function initializeAuthUI() {
     const users = getAuthUsers();
     const loginTab = document.getElementById('authLoginTab');
+    const adminTab = document.getElementById('authAdminTab');
     const signupTab = document.getElementById('authSignupTab');
     const phoneInput = document.getElementById('phone');
     const loginBtn = document.getElementById('loginBtn');
@@ -2406,6 +2995,10 @@ function initializeAuthUI() {
     if (loginTab && !loginTab.dataset.bound) {
         loginTab.addEventListener('click', () => switchAuthMode('login'));
         loginTab.dataset.bound = '1';
+    }
+    if (adminTab && !adminTab.dataset.bound) {
+        adminTab.addEventListener('click', () => switchAuthMode('admin'));
+        adminTab.dataset.bound = '1';
     }
     if (signupTab && !signupTab.dataset.bound) {
         signupTab.addEventListener('click', () => switchAuthMode('signup'));
@@ -2509,30 +3102,96 @@ function initializeAuthUI() {
 
     toggleForgotPinPanel(false);
     switchAuthMode(users.length === 0 ? 'signup' : 'login');
+    if (!activeUser) {
+        activeLoginMode = 'user';
+    }
     updateActiveUserBadge();
+    refreshAdminAccessUI();
+    refreshDataManagementAccessUI();
+}
+
+let mobileChromeAutoHideBound = false;
+
+function initializeMobileChromeAutoHide() {
+    if (mobileChromeAutoHideBound) return;
+    const app = document.getElementById('app');
+    if (!app) return;
+
+    let lastScrollY = window.scrollY || 0;
+    let ticking = false;
+
+    const canAutoHide = () => {
+        if (typeof window.matchMedia !== 'function') return false;
+        const isMobileViewport = window.matchMedia('(max-width: 900px)').matches;
+        return isMobileViewport && app.style.display !== 'none';
+    };
+
+    const applyChromeVisibility = () => {
+        ticking = false;
+        if (!canAutoHide()) {
+            app.classList.remove('chrome-hidden');
+            lastScrollY = window.scrollY || 0;
+            return;
+        }
+
+        const currentY = window.scrollY || 0;
+        const delta = currentY - lastScrollY;
+        if (currentY > 90 && delta > 6) {
+            app.classList.add('chrome-hidden');
+        } else if (delta < -4 || currentY < 48) {
+            app.classList.remove('chrome-hidden');
+        }
+        lastScrollY = currentY;
+    };
+
+    const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(applyChromeVisibility);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', applyChromeVisibility);
+    document.addEventListener('visibilitychange', applyChromeVisibility);
+
+    mobileChromeAutoHideBound = true;
+    applyChromeVisibility();
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('Make A Way App Initializing...');
+    const loginScreenEl = document.getElementById('loginScreen');
+    if (loginScreenEl) {
+        // Prevent a login-screen flash while restoring a saved session.
+        loginScreenEl.style.visibility = 'hidden';
+    }
     
     // Load data first
     await loadAllData();
+    const didRestoreSession = await restoreActiveSessionFromMeta();
     setAppLanguage(settings.language || 'en');
     configureDatePickers();
     setRangeToThisMonth();
     initializeAuthUI();
+    initializeMobileChromeAutoHide();
+    if (!didRestoreSession && loginScreenEl) {
+        loginScreenEl.style.visibility = 'visible';
+        loginScreenEl.style.display = 'flex';
+    }
     startRwandaClock();
     bindOnboardingControls();
+    ensureStockAdjustOverlayBindings();
+    ensureClearDataConfirmBindings();
     
     const logoutBtn = document.getElementById('logoutBtn');
     
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', function() {
+        logoutBtn.addEventListener('click', async function() {
             const userAtLogout = activeUser;
             if (userAtLogout) {
                 const payload = buildCurrentSavePayload(userAtLogout);
                 const entries = Object.entries(payload).map(([name, value]) => ({ name, value }));
-                void saveManyNamedData(entries);
+                await saveManyNamedData(entries);
                 flushDataSyncOnExit(userAtLogout);
             }
             const appLetters = document.getElementById('appBgLetters');
@@ -2542,14 +3201,25 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             
             activeUser = null;
+            activeLoginMode = 'user';
+            appMeta.activeSessionUserId = '';
+            appMeta.activeSessionLoginMode = '';
+            await saveNamedData(APP_META_STORAGE_KEY, appMeta);
             failedLoginAttempts = 0;
             loginLockedUntil = 0;
             pendingOnboardingStart = false;
             updateActiveUserBadge();
+            refreshAdminAccessUI();
+            refreshDataManagementAccessUI();
             closeOnboarding(false);
 
             document.getElementById('app').style.display = 'none';
-            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('app').classList.remove('chrome-hidden');
+            const loginScreen = document.getElementById('loginScreen');
+            if (loginScreen) {
+                loginScreen.style.visibility = 'visible';
+                loginScreen.style.display = 'flex';
+            }
             document.getElementById('phone').value = appMeta.lastLoginPhone || '';
             document.getElementById('pin').value = '';
             const signupName = document.getElementById('signupName');
@@ -2687,7 +3357,7 @@ function showWelcomeAnimation() {
         applyTheme(savedTheme);
         updateActiveUserBadge();
 
-        showPage('home');
+        showPage(activeLoginMode === 'admin' ? 'adminPanel' : 'home');
         if (pendingOnboardingStart) {
             setTimeout(() => startOnboardingTutorial(false), 300);
         }
@@ -2945,6 +3615,18 @@ function configureDatePickers() {
             monthInput.dataset.pickerBound = '1';
         }
     }
+
+    const adminSalesDateInput = document.getElementById('adminSalesExportDate');
+    if (adminSalesDateInput) {
+        adminSalesDateInput.max = todayIso;
+        if (!adminSalesDateInput.value) adminSalesDateInput.value = todayIso;
+        if (!adminSalesDateInput.dataset.bound) {
+            adminSalesDateInput.addEventListener('change', () => {
+                if (!adminSalesDateInput.value) adminSalesDateInput.value = todayIso;
+            });
+            adminSalesDateInput.dataset.bound = '1';
+        }
+    }
 }
 
 function openAppDB() {
@@ -3021,8 +3703,779 @@ async function loadFromIndexedDB() {
     }
 }
 
+function refreshAdminAccessUI() {
+    const adminSession = isAdminSessionActive();
+    const adminPanelAllowed = canAccessAdminPanel();
+    if (document.body) {
+        document.body.classList.toggle('admin-session', adminSession);
+    }
+
+    document.querySelectorAll('.nav-btn[data-page]').forEach((btn) => {
+        const page = btn.dataset.page;
+        if (adminSession) {
+            btn.style.display = page === 'adminPanel' ? 'inline-flex' : 'none';
+            return;
+        }
+        if (page === 'adminPanel') {
+            btn.style.display = adminPanelAllowed ? 'inline-flex' : 'none';
+            return;
+        }
+        btn.style.display = 'inline-flex';
+    });
+
+    const topSettingsBtn = document.getElementById('topSettingsBtn');
+    if (topSettingsBtn) {
+        topSettingsBtn.style.display = adminSession ? 'none' : 'inline-flex';
+    }
+}
+
+function refreshDataManagementAccessUI() {
+    const clearBtn = document.getElementById('clearUserDataBtn');
+    const clearQuickBtn = document.getElementById('adminClearDataQuickBtn');
+    const warningText = document.getElementById('clearWarningText');
+    const allowed = isAdminSessionActive();
+
+    if (clearBtn) {
+        clearBtn.disabled = !allowed;
+        clearBtn.style.opacity = allowed ? '1' : '0.55';
+        clearBtn.style.cursor = allowed ? 'pointer' : 'not-allowed';
+        clearBtn.title = allowed ? '' : t('clearDataRequiresAdminLogin');
+    }
+
+    if (warningText) {
+        warningText.textContent = allowed ? t('warningClearData') : t('clearDataRequiresAdminLogin');
+    }
+
+    if (clearQuickBtn) {
+        clearQuickBtn.disabled = !allowed;
+        clearQuickBtn.style.opacity = allowed ? '1' : '0.55';
+        clearQuickBtn.style.cursor = allowed ? 'pointer' : 'not-allowed';
+        clearQuickBtn.title = allowed ? '' : t('clearDataRequiresAdminLogin');
+    }
+}
+
+function normalizeUserRoleLabel(roleValue) {
+    const role = normalizeAuthRole(roleValue, 'staff');
+    if (role === 'owner') return 'Owner';
+    if (role === 'admin') return 'Admin';
+    return 'Staff';
+}
+
+function getAuthProviderLabel(user) {
+    const provider = String(user?.authProvider || '').trim().toLowerCase();
+    return provider === 'google' ? 'Google' : 'PIN';
+}
+
+function setAdminUserFilter(filter, event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const allowedFilters = new Set(['all', 'privileged', 'staff', 'inactive']);
+    selectedAdminUserFilter = allowedFilters.has(filter) ? filter : 'all';
+
+    const mapping = {
+        all: document.getElementById('adminFilterAll'),
+        privileged: document.getElementById('adminFilterPrivileged'),
+        staff: document.getElementById('adminFilterStaff'),
+        inactive: document.getElementById('adminFilterInactive')
+    };
+    Object.entries(mapping).forEach(([key, btn]) => {
+        if (!btn) return;
+        btn.classList.toggle('active', key === selectedAdminUserFilter);
+    });
+
+    renderAdminPanel();
+}
+
+function getFilteredAdminUserEntries() {
+    const searchInput = document.getElementById('adminUserSearch');
+    const searchValue = String(searchInput ? searchInput.value : '').trim().toLowerCase();
+    const users = getAuthUsers();
+
+    return users
+        .map((user, index) => ({ user, index }))
+        .filter(({ user }) => {
+            const role = normalizeAuthRole(user.role, 'staff');
+            const active = isUserAccountActive(user);
+
+            if (selectedAdminUserFilter === 'privileged' && role === 'staff') return false;
+            if (selectedAdminUserFilter === 'staff' && role !== 'staff') return false;
+            if (selectedAdminUserFilter === 'inactive' && active) return false;
+
+            if (!searchValue) return true;
+            const nameText = String(user.name || '').toLowerCase();
+            const phoneText = String(user.phone || '').toLowerCase();
+            const emailText = String(user.email || '').toLowerCase();
+            return nameText.includes(searchValue) || phoneText.includes(searchValue) || emailText.includes(searchValue);
+        });
+}
+
+function getSaleDateTimeOrNull(sale) {
+    if (!sale || typeof sale !== 'object') return null;
+    const parsed = new Date(sale.date || sale.createdAt || '');
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+}
+
+function getSaleDateIso(sale) {
+    const parsed = getSaleDateTimeOrNull(sale);
+    return parsed ? parsed.toISOString().slice(0, 10) : '';
+}
+
+function getDailySalesRowsOrdered() {
+    const grouped = new Map();
+
+    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+        const dayIso = getSaleDateIso(sale);
+        if (!dayIso) return;
+
+        if (!grouped.has(dayIso)) {
+            grouped.set(dayIso, []);
+        }
+        grouped.get(dayIso).push(sale);
+    });
+
+    return Array.from(grouped.entries())
+        .map(([dayIso, daySales]) => ({
+            dayIso,
+            transactions: daySales.length,
+            cases: daySales.reduce((sum, sale) => sum + (Number(sale.quantity) || 0), 0),
+            total: daySales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0),
+            profit: calculateProfitFromSales(daySales)
+        }))
+        .sort((a, b) => b.dayIso.localeCompare(a.dayIso));
+}
+
+function renderAdminDailySalesSummary() {
+    const body = document.getElementById('adminDailySummaryBody');
+    if (!body) return;
+
+    const rows = getDailySalesRowsOrdered();
+    if (!rows.length) {
+        body.innerHTML = `<tr><td id="adminDailyNoDataCell" colspan="5" style="padding: 28px; text-align: center; color: #789;">${escapeHtml(t('adminNoSalesDataYet'))}</td></tr>`;
+        return;
+    }
+
+    body.innerHTML = rows
+        .map((row) => `
+            <tr>
+                <td>${escapeHtml(formatPdfDate(row.dayIso))}</td>
+                <td>${Number(row.transactions).toLocaleString()}</td>
+                <td>${Number(row.cases).toLocaleString()}</td>
+                <td>RWF ${Number(row.total).toLocaleString()}</td>
+                <td>RWF ${Number(row.profit).toLocaleString()}</td>
+            </tr>
+        `)
+        .join('');
+}
+
+function getSalesForSpecificDay(dayIso) {
+    const { dayStart, dayEnd } = getDayRange(dayIso);
+    return (Array.isArray(sales) ? sales : [])
+        .filter((sale) => {
+            const saleDate = getSaleDateTimeOrNull(sale);
+            return saleDate && saleDate >= dayStart && saleDate < dayEnd;
+        })
+        .sort((a, b) => {
+            const aDate = getSaleDateTimeOrNull(a);
+            const bDate = getSaleDateTimeOrNull(b);
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            return aDate - bDate;
+        });
+}
+
+function getAdminGrowthInsights() {
+    const now = new Date();
+    const recentStart = new Date(now);
+    recentStart.setDate(recentStart.getDate() - 29);
+    recentStart.setHours(0, 0, 0, 0);
+
+    const prevStart = new Date(recentStart);
+    prevStart.setDate(prevStart.getDate() - 30);
+    const prevEnd = new Date(recentStart);
+
+    const recentSales = (Array.isArray(sales) ? sales : []).filter((sale) => {
+        const dt = getSaleDateTimeOrNull(sale);
+        return dt && dt >= recentStart && dt <= now;
+    });
+    const previousSales = (Array.isArray(sales) ? sales : []).filter((sale) => {
+        const dt = getSaleDateTimeOrNull(sale);
+        return dt && dt >= prevStart && dt < prevEnd;
+    });
+
+    const recentTotal = recentSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const previousTotal = previousSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const growthRate = previousTotal > 0
+        ? ((recentTotal - previousTotal) / previousTotal) * 100
+        : (recentTotal > 0 ? 100 : 0);
+
+    const recentCredit = recentSales
+        .filter((sale) => sale.type === 'credit')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const creditShare = recentTotal > 0 ? (recentCredit / recentTotal) * 100 : 0;
+
+    const drinkTotals = new Map();
+    recentSales.forEach((sale) => {
+        const key = String(sale.drinkName || 'Unknown').trim();
+        if (!key) return;
+        if (!drinkTotals.has(key)) {
+            drinkTotals.set(key, { qty: 0, total: 0 });
+        }
+        const current = drinkTotals.get(key);
+        current.qty += Number(sale.quantity) || 0;
+        current.total += Number(sale.total) || 0;
+    });
+    const topDrinks = Array.from(drinkTotals.entries())
+        .sort((a, b) => b[1].qty - a[1].qty)
+        .slice(0, 3)
+        .map(([name, stats]) => `${name} (${stats.qty} cases)`);
+
+    const lowStockItems = getLowStockDrinks();
+    const unsoldDrinks = drinks
+        .filter((drink) => !drinkTotals.has(String(drink.name || '').trim()))
+        .slice(0, 3)
+        .map((drink) => String(drink.name || '').trim())
+        .filter(Boolean);
+
+    const insights = [];
+    insights.push(
+        growthRate >= 0
+            ? `Sales growth is +${growthRate.toFixed(1)}% vs previous 30 days. Keep pushing best sellers with bundle deals.`
+            : `Sales growth is ${growthRate.toFixed(1)}% vs previous 30 days. Run a 7-day promo on high-margin drinks.`
+    );
+    if (topDrinks.length > 0) {
+        insights.push(`Top movers: ${topDrinks.join(', ')}. Keep these in priority stock and near checkout.`);
+    } else {
+        insights.push('No recent sales detected. Start with a small launch offer and daily customer follow-up.');
+    }
+    if (creditShare > 35) {
+        insights.push(`Credit sales are ${creditShare.toFixed(1)}% of revenue. Tighten credit terms and increase cash incentives.`);
+    } else {
+        insights.push(`Credit sales are controlled at ${creditShare.toFixed(1)}%. Offer small discounts for same-day cash payment.`);
+    }
+    if (lowStockItems.length > 0) {
+        const names = lowStockItems.slice(0, 3).map((drink) => drink.name).join(', ');
+        insights.push(`Restock alert: ${lowStockItems.length} item(s) low/out. Prioritize: ${names}.`);
+    }
+    if (unsoldDrinks.length > 0) {
+        insights.push(`Slow movers this month: ${unsoldDrinks.join(', ')}. Consider a combo with top sellers or reduce reorder quantity.`);
+    }
+
+    return insights;
+}
+
+function runAdminGrowthAnalysis(silent = false) {
+    const output = document.getElementById('adminAiInsights');
+    if (!output) return;
+
+    if (!canAccessAdminPanel()) {
+        if (!silent) alert('Only an active admin session can run AI analysis.');
+        output.innerHTML = `<p style="margin: 0; color: #6f8ca7;">${escapeHtml(t('adminAnalysisRequiresSession'))}</p>`;
+        return;
+    }
+
+    const insights = getAdminGrowthInsights();
+    output.innerHTML = `
+        <ul>
+            ${insights.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+        </ul>
+    `;
+
+    if (!silent) {
+        showSuccessToast('AI growth analysis updated.');
+    }
+}
+
+function exportAdminDailySalesPDF() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can export daily sales.');
+        return;
+    }
+
+    const dateInput = document.getElementById('adminSalesExportDate');
+    const selectedDate = String(dateInput?.value || getTodayISODate()).trim() || getTodayISODate();
+    if (dateInput && !dateInput.value) dateInput.value = selectedDate;
+
+    const daySales = getSalesForSpecificDay(selectedDate);
+    if (!daySales.length) {
+        alert(t('adminExportDayNoSales'));
+        return;
+    }
+
+    const totalSales = daySales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const cashSales = daySales
+        .filter((sale) => sale.type === 'normal')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const creditSales = daySales
+        .filter((sale) => sale.type === 'credit')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const totalProfit = calculateProfitFromSales(daySales);
+
+    try {
+        const doc = createPDFDocument({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const reportTitle = `Daily Sales ${selectedDate}`;
+        let y = applyPdfBrandHeader(doc, reportTitle);
+        const margin = 14;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(12, 96, 156);
+        doc.text(`Daily Sales Summary - ${formatPdfDate(selectedDate)}`, margin, y);
+        y += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Transactions: ${daySales.length}`, margin, y);
+        doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 54, y);
+        doc.text(`Profit: RWF ${totalProfit.toLocaleString()}`, margin + 124, y);
+        y += 5;
+        doc.text(`Cash: RWF ${cashSales.toLocaleString()}`, margin, y);
+        doc.text(`Credit: RWF ${creditSales.toLocaleString()}`, margin + 54, y);
+        y += 6;
+
+        const tableRows = daySales.map((sale) => {
+            const saleDate = getSaleDateTimeOrNull(sale);
+            const customerName = sale.type === 'credit'
+                ? (typeof getSafeCustomerName === 'function' ? getSafeCustomerName(sale.customerId) : 'Customer')
+                : 'Guest';
+            return [
+                saleDate ? saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--',
+                String(sale.drinkName || 'Unknown'),
+                String(Number(sale.quantity) || 0),
+                `RWF ${Number(sale.unitPrice || 0).toLocaleString()}`,
+                `RWF ${Number(sale.total || 0).toLocaleString()}`,
+                sale.type === 'credit' ? 'Credit' : 'Cash',
+                String(customerName || 'Guest')
+            ];
+        });
+
+        if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+                startY: y,
+                head: [['Time', 'Drink', 'Qty', 'Unit Price', 'Total', 'Type', 'Customer']],
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 8.8, cellPadding: 2.4 },
+                headStyles: { fillColor: [13, 124, 227], textColor: 255 },
+                alternateRowStyles: { fillColor: [245, 250, 255] }
+            });
+        } else {
+            doc.setFontSize(9);
+            tableRows.slice(0, 28).forEach((row, idx) => {
+                const yy = y + (idx * 5);
+                doc.text(`${row[0]} | ${row[1]} | ${row[2]} | ${row[4]} | ${row[5]}`, margin, yy);
+            });
+        }
+
+        applyPdfBrandFooter(doc, reportTitle);
+        doc.save(`admin-daily-sales-${selectedDate}.pdf`);
+        showSuccessToast(`Daily sales PDF exported for ${selectedDate}.`);
+    } catch (error) {
+        console.error('Admin daily sales export failed:', error);
+        alert(`Could not export day PDF: ${error.message}`);
+    }
+}
+
+function exportAdminStockAuditPDF() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can export stock audit PDF.');
+        return;
+    }
+    exportStockManagementPDF();
+}
+
+function renderAdminPanel() {
+    const body = document.getElementById('adminUsersBody');
+    const totalEl = document.getElementById('adminSummaryTotal');
+    const privilegedEl = document.getElementById('adminSummaryPrivileged');
+    const staffEl = document.getElementById('adminSummaryStaff');
+    const inactiveEl = document.getElementById('adminSummaryInactive');
+    if (!body || !totalEl || !privilegedEl || !staffEl || !inactiveEl) return;
+
+    configureDatePickers();
+    renderAdminDailySalesSummary();
+    runAdminGrowthAnalysis(true);
+
+    const users = getAuthUsers();
+    const privilegedCount = users.filter((user) => isAdminRoleUser(user)).length;
+    const staffCount = users.filter((user) => normalizeAuthRole(user.role, 'staff') === 'staff').length;
+    const inactiveCount = users.filter((user) => !isUserAccountActive(user)).length;
+
+    totalEl.textContent = String(users.length);
+    privilegedEl.textContent = String(privilegedCount);
+    staffEl.textContent = String(staffCount);
+    inactiveEl.textContent = String(inactiveCount);
+
+    if (!canAccessAdminPanel()) {
+        body.innerHTML = '<tr><td colspan="6" style="padding: 30px; text-align: center; color: #789;">Only admin/owner accounts can view this page.</td></tr>';
+        return;
+    }
+
+    const entries = getFilteredAdminUserEntries();
+    clearElement(body);
+
+    if (entries.length === 0) {
+        body.innerHTML = `<tr><td colspan="6" style="padding: 30px; text-align: center; color: #789;">${escapeHtml(t('adminNoEmployersMatch'))}</td></tr>`;
+        return;
+    }
+
+    const canManage = canManageAdminAccounts();
+    const activeId = getAuthSessionUserId(activeUser);
+
+    entries.forEach(({ user, index }) => {
+        const role = normalizeAuthRole(user.role, 'staff');
+        const roleLabel = normalizeUserRoleLabel(role);
+        const roleClass = role === 'owner' ? 'admin-role-owner' : (role === 'admin' ? 'admin-role-admin' : 'admin-role-staff');
+        const isActive = isUserAccountActive(user);
+        const statusClass = isActive ? 'admin-status-active' : 'admin-status-inactive';
+        const statusLabel = isActive ? 'Active' : 'Inactive';
+        const isSelf = getAuthSessionUserId(user) === activeId;
+
+        const canResetPin = canManage || (!canManage && !isAdminRoleUser(user));
+        const canResetAdminPin = canManage && isAdminRoleUser(user);
+        const canToggleRole = canManage && !isSelf;
+        const canToggleStatus = canManage && !isSelf;
+        const roleToggleLabel = role === 'staff' ? 'Make Admin' : 'Make Staff';
+        const statusToggleLabel = isActive ? 'Deactivate' : 'Activate';
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <strong>${escapeHtml(user.name || 'Unnamed User')}</strong>
+                <div class="admin-contact-line">${escapeHtml(user.phone || '-')}</div>
+                <div class="admin-contact-line">${escapeHtml(user.email || '-')}</div>
+            </td>
+            <td><span class="admin-pill ${roleClass}">${roleLabel}</span></td>
+            <td><span class="admin-pill ${statusClass}">${statusLabel}</span></td>
+            <td>${escapeHtml(getAuthProviderLabel(user))}</td>
+            <td>${escapeHtml(formatAppDateTime(user.lastLoginAt, 'Never'))}</td>
+            <td>
+                <div class="admin-action-row">
+                    <button class="admin-action-btn secondary" onclick="viewUserDataSnapshot(${index})">Data</button>
+                    <button class="admin-action-btn" onclick="adminResetUserPin(${index})" ${canResetPin ? '' : 'disabled'}>Reset PIN</button>
+                    <button class="admin-action-btn" onclick="adminResetUserAdminPin(${index})" ${canResetAdminPin ? '' : 'disabled'}>Reset Admin PIN</button>
+                    <button class="admin-action-btn" onclick="toggleUserRole(${index})" ${canToggleRole ? '' : 'disabled'}>${roleToggleLabel}</button>
+                    <button class="admin-action-btn danger" onclick="toggleUserActiveStatus(${index})" ${canToggleStatus ? '' : 'disabled'}>${statusToggleLabel}</button>
+                </div>
+            </td>
+        `;
+        body.appendChild(row);
+    });
+}
+
+async function saveAuthUsersWithFeedback(successMessage = '') {
+    normalizeAuthUsersData();
+    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    refreshAdminAccessUI();
+    refreshDataManagementAccessUI();
+    renderAdminPanel();
+    if (successMessage) showSuccessToast(successMessage);
+}
+
+async function toggleUserRole(index) {
+    if (!canManageAdminAccounts()) {
+        alert('Only the owner can change account roles.');
+        return;
+    }
+    const users = getAuthUsers();
+    const target = users[index];
+    if (!target) return;
+    if (getAuthSessionUserId(target) === getAuthSessionUserId(activeUser)) {
+        alert('You cannot change your own role while logged in.');
+        return;
+    }
+
+    const currentRole = normalizeAuthRole(target.role, 'staff');
+    const nextRole = currentRole === 'staff' ? 'admin' : 'staff';
+    if (currentRole === 'owner') {
+        const ownerCount = users.filter((user) => normalizeAuthRole(user.role, 'staff') === 'owner').length;
+        if (ownerCount <= 1) {
+            alert('At least one owner account must remain.');
+            return;
+        }
+    }
+
+    target.role = nextRole;
+    if (nextRole === 'staff') {
+        target.adminPin = '';
+    }
+    target.updatedAt = new Date().toISOString();
+    appMeta.authUsers = users;
+    await saveAuthUsersWithFeedback(`Role updated for ${target.name || 'user'}.`);
+}
+
+async function toggleUserActiveStatus(index) {
+    if (!canManageAdminAccounts()) {
+        alert('Only the owner can activate or deactivate accounts.');
+        return;
+    }
+    const users = getAuthUsers();
+    const target = users[index];
+    if (!target) return;
+    if (getAuthSessionUserId(target) === getAuthSessionUserId(activeUser)) {
+        alert('You cannot deactivate your own account.');
+        return;
+    }
+
+    const role = normalizeAuthRole(target.role, 'staff');
+    const nextActive = !isUserAccountActive(target);
+    if (!nextActive && role === 'owner') {
+        const activeOwners = users.filter(
+            (user) => normalizeAuthRole(user.role, 'staff') === 'owner' && isUserAccountActive(user)
+        ).length;
+        if (activeOwners <= 1) {
+            alert('At least one active owner account is required.');
+            return;
+        }
+    }
+
+    target.isActive = nextActive;
+    target.updatedAt = new Date().toISOString();
+    appMeta.authUsers = users;
+    await saveAuthUsersWithFeedback(`${target.name || 'User'} is now ${nextActive ? 'active' : 'inactive'}.`);
+}
+
+async function adminResetUserPin(index) {
+    if (!canAccessAdminPanel()) {
+        alert('You do not have admin access.');
+        return;
+    }
+    const users = getAuthUsers();
+    const target = users[index];
+    if (!target) return;
+    if (!canManageAdminAccounts() && isAdminRoleUser(target)) {
+        alert('Only the owner can reset admin/owner PINs.');
+        return;
+    }
+
+    const pinRaw = window.prompt(`Set a new 5-digit PIN for ${target.name || 'this user'}:`, '');
+    if (pinRaw === null) return;
+    const nextPin = String(pinRaw || '').trim();
+    if (!/^\d{5}$/.test(nextPin)) {
+        alert(t('authPinRules'));
+        return;
+    }
+
+    target.pin = nextPin;
+    target.updatedAt = new Date().toISOString();
+    appMeta.authUsers = users;
+    await saveAuthUsersWithFeedback(`PIN reset for ${target.name || 'user'}.`);
+}
+
+async function adminResetUserAdminPin(index) {
+    if (!canManageAdminAccounts()) {
+        alert('Only the owner can reset admin PINs.');
+        return;
+    }
+    const users = getAuthUsers();
+    const target = users[index];
+    if (!target) return;
+    if (!isAdminRoleUser(target)) {
+        alert('This user does not have admin privileges.');
+        return;
+    }
+
+    const pinRaw = window.prompt(`Set a new 5-digit Admin PIN for ${target.name || 'this user'}:`, '');
+    if (pinRaw === null) return;
+    const nextPin = String(pinRaw || '').trim();
+    if (!/^\d{5}$/.test(nextPin)) {
+        alert(t('authPinRules'));
+        return;
+    }
+    if (nextPin === String(target.pin || '').trim()) {
+        alert(t('authAdminPinMustDiffer'));
+        return;
+    }
+
+    const confirmRaw = window.prompt('Confirm the new Admin PIN:', '');
+    if (confirmRaw === null) return;
+    const confirmPin = String(confirmRaw || '').trim();
+    if (confirmPin !== nextPin) {
+        alert(t('authPinMismatch'));
+        return;
+    }
+
+    target.adminPin = nextPin;
+    target.updatedAt = new Date().toISOString();
+    appMeta.authUsers = users;
+    await saveAuthUsersWithFeedback(`Admin PIN reset for ${target.name || 'user'}.`);
+}
+
+async function viewUserDataSnapshot(index) {
+    if (!canAccessAdminPanel()) {
+        alert('You do not have admin access.');
+        return;
+    }
+    const users = getAuthUsers();
+    const target = users[index];
+    if (!target) return;
+
+    const salesKey = userDataKey('sales', target);
+    const customersKey = userDataKey('customers', target);
+    const clatesKey = userDataKey('clates', target);
+    const drinksKey = userDataKey('drinks', target);
+    if (!salesKey || !customersKey || !clatesKey || !drinksKey) {
+        alert('Could not resolve this user data scope.');
+        return;
+    }
+
+    const loaded = await loadManyNamedData([
+        { name: salesKey, defaultValue: [] },
+        { name: customersKey, defaultValue: [] },
+        { name: clatesKey, defaultValue: [] },
+        { name: drinksKey, defaultValue: [] }
+    ]);
+
+    const userSales = Array.isArray(loaded[salesKey]) ? loaded[salesKey] : [];
+    const userCustomers = Array.isArray(loaded[customersKey]) ? loaded[customersKey] : [];
+    const userClates = Array.isArray(loaded[clatesKey]) ? loaded[clatesKey] : [];
+    const userDrinks = Array.isArray(loaded[drinksKey]) ? loaded[drinksKey] : [];
+    const totalSalesAmount = userSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+
+    alert(
+        `Employer: ${target.name || 'User'}\n` +
+        `Role: ${normalizeUserRoleLabel(target.role)}\n` +
+        `Status: ${isUserAccountActive(target) ? 'Active' : 'Inactive'}\n\n` +
+        `Sales records: ${userSales.length}\n` +
+        `Sales total: RWF ${totalSalesAmount.toLocaleString()}\n` +
+        `Customers: ${userCustomers.length}\n` +
+        `Deposits: ${userClates.length}\n` +
+        `Drinks configured: ${userDrinks.length}`
+    );
+}
+
+function getAdminExportUserRows() {
+    return getAuthUsers().map((user) => ({
+        id: user.id || '',
+        name: user.name || '',
+        phone: user.phone || '',
+        email: user.email || '',
+        role: normalizeUserRoleLabel(user.role),
+        status: isUserAccountActive(user) ? 'Active' : 'Inactive',
+        provider: getAuthProviderLabel(user),
+        createdAt: formatAppDateTime(user.createdAt, 'Unknown'),
+        lastLoginAt: formatAppDateTime(user.lastLoginAt, 'Never'),
+        hasAdminPin: Boolean(String(user.adminPin || '').trim())
+    }));
+}
+
+function exportAdminUsersJSON() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can export account data.');
+        return;
+    }
+
+    const rows = getAdminExportUserRows();
+    const payload = {
+        generatedAt: new Date().toISOString(),
+        exportedBy: activeUser ? (activeUser.name || activeUser.phone || activeUser.email || 'Admin') : 'Admin',
+        users: rows
+    };
+
+    try {
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `admin-accounts-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        showSuccessToast('Admin account JSON exported.');
+    } catch (error) {
+        console.error('Admin JSON export failed:', error);
+        alert(`Could not export JSON: ${error.message}`);
+    }
+}
+
+function exportAdminUsersPDF() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can export account data.');
+        return;
+    }
+
+    try {
+        const rows = getAdminExportUserRows();
+        if (!rows.length) {
+            alert('No account data to export.');
+            return;
+        }
+
+        const doc = createPDFDocument({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const reportTitle = 'Admin Accounts';
+        let y = applyPdfBrandHeader(doc, reportTitle);
+        const margin = 12;
+        const activeCount = rows.filter((row) => row.status === 'Active').length;
+        const privilegedCount = rows.filter((row) => row.role === 'Owner' || row.role === 'Admin').length;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(12, 96, 156);
+        doc.text('Account Summary', margin, y);
+        y += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Total Accounts: ${rows.length}`, margin, y);
+        doc.text(`Privileged: ${privilegedCount}`, margin + 52, y);
+        doc.text(`Active: ${activeCount}`, margin + 90, y);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 130, y);
+        y += 6;
+
+        const tableBody = rows.map((row) => [
+            String(row.name),
+            String(row.phone || '-'),
+            String(row.email || '-'),
+            String(row.role),
+            String(row.status),
+            String(row.provider),
+            String(row.lastLoginAt),
+            row.hasAdminPin ? 'Yes' : 'No'
+        ]);
+
+        if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+                startY: y,
+                head: [['Name', 'Phone', 'Email', 'Role', 'Status', 'Provider', 'Last Login', 'Admin PIN']],
+                body: tableBody,
+                theme: 'grid',
+                styles: { fontSize: 8.2, cellPadding: 2.1 },
+                headStyles: { fillColor: [13, 124, 227], textColor: 255 },
+                alternateRowStyles: { fillColor: [245, 250, 255] }
+            });
+        } else {
+            doc.setFontSize(8.5);
+            tableBody.slice(0, 22).forEach((row, rowIndex) => {
+                const yy = y + (rowIndex * 4.8);
+                doc.text(`${row[0]} | ${row[3]} | ${row[4]} | ${row[6]}`, margin, yy);
+            });
+        }
+
+        applyPdfBrandFooter(doc, reportTitle);
+        doc.save(`admin-accounts-${new Date().toISOString().split('T')[0]}.pdf`);
+        showSuccessToast('Admin accounts PDF exported.');
+    } catch (error) {
+        console.error('Admin PDF export failed:', error);
+        alert(`Could not export PDF: ${error.message}`);
+    }
+}
+
 // ================= PAGE NAVIGATION =================
 function showPage(pageName) {
+    refreshAdminAccessUI();
+    const adminSession = isAdminSessionActive();
+
+    if (adminSession && pageName !== 'adminPanel') {
+        pageName = 'adminPanel';
+    }
+
+    if (pageName === 'adminPanel' && !canAccessAdminPanel()) {
+        alert('Only admin/owner accounts can open Admin Panel.');
+        pageName = 'home';
+    }
+
     // Hide all pages
     document.querySelectorAll('.page').forEach(page => {
         page.style.display = 'none';
@@ -3061,6 +4514,12 @@ function showPage(pageName) {
             updateQuickDrinkSelect();
             updateCustomerDropdown();
             updateCartDisplay();
+            break;
+        case 'stockManagement':
+            renderStockManagement();
+            break;
+        case 'adminPanel':
+            renderAdminPanel();
             break;
         case 'customers':
             displayCustomers();
@@ -3123,6 +4582,385 @@ function getCurrentReportType() {
     return 'full';
 }
 
+function renderHomeStockWarning() {
+    const banner = document.getElementById('stockWarningBanner');
+    if (!banner) return;
+
+    const lowStock = getLowStockDrinks();
+    if (!lowStock.length) {
+        banner.style.display = 'none';
+        banner.textContent = '';
+        return;
+    }
+
+    const outOfStockCount = lowStock.filter((drink) => getDrinkStockStatus(drink) === 'out').length;
+    const lowCount = lowStock.length - outOfStockCount;
+    const preview = lowStock
+        .slice(0, 3)
+        .map((drink) => `${escapeHtml(drink.name)} (${getDrinkStockQty(drink)})`)
+        .join(', ');
+    const remaining = lowStock.length > 3 ? ` +${lowStock.length - 3} more` : '';
+
+    banner.innerHTML = `
+        <strong>Stock Warning:</strong>
+        ${outOfStockCount} out of stock, ${lowCount} low stock.
+        <span>${preview}${remaining}</span>
+        <button class="stock-action-btn" style="margin-left: 8px;" onclick="showPage('stockManagement')">Open Stock Management</button>
+    `;
+    banner.style.display = 'block';
+}
+
+function setStockFilter(filter, event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    selectedStockFilter = (filter === 'low' || filter === 'out') ? filter : 'all';
+
+    const mapping = {
+        all: document.getElementById('stockFilterAll'),
+        low: document.getElementById('stockFilterLow'),
+        out: document.getElementById('stockFilterOut')
+    };
+    Object.entries(mapping).forEach(([key, btn]) => {
+        if (!btn) return;
+        btn.classList.toggle('active', key === selectedStockFilter);
+    });
+
+    renderStockManagement();
+}
+
+function getFilteredStockDrinkEntries() {
+    const searchInput = document.getElementById('stockSearch');
+    const searchValue = String(searchInput ? searchInput.value : '').trim().toLowerCase();
+
+    return drinks
+        .map((drink, index) => ({ drink, index }))
+        .filter(({ drink }) => {
+            const status = getDrinkStockStatus(drink);
+            if (selectedStockFilter === 'low' && status !== 'low') return false;
+            if (selectedStockFilter === 'out' && status !== 'out') return false;
+            if (!searchValue) return true;
+            return String(drink.name || '').toLowerCase().includes(searchValue);
+        });
+}
+
+function renderStockManagement() {
+    const body = document.getElementById('stockManagementBody');
+    const totalEl = document.getElementById('stockSummaryTotal');
+    const lowEl = document.getElementById('stockSummaryLow');
+    const outEl = document.getElementById('stockSummaryOut');
+    if (!body || !totalEl || !lowEl || !outEl) return;
+
+    normalizeDrinksData();
+    const lowStockAll = getLowStockDrinks();
+    const outStockAll = lowStockAll.filter((drink) => getDrinkStockStatus(drink) === 'out');
+
+    totalEl.textContent = String(drinks.length);
+    lowEl.textContent = String(lowStockAll.filter((drink) => getDrinkStockStatus(drink) === 'low').length);
+    outEl.textContent = String(outStockAll.length);
+
+    const entries = getFilteredStockDrinkEntries();
+    clearElement(body);
+
+    if (entries.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" style="padding: 30px; text-align: center; color: #789;">No drinks match this filter.</td></tr>';
+        return;
+    }
+
+    entries.forEach(({ drink, index }) => {
+        const stockQty = getDrinkStockQty(drink);
+        const lowThreshold = getDrinkLowStockThreshold(drink);
+        const status = getDrinkStockStatus(drink);
+        const statusClass = status === 'out' ? 'stock-status-out' : (status === 'low' ? 'stock-status-low' : 'stock-status-ok');
+        const statusLabel = getStockStatusLabel(status);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <strong>${escapeHtml(drink.name)}</strong>
+                <div style="font-size: 12px; color: #6d8aa4;">Updated: ${drink.lastStockUpdatedAt ? new Date(drink.lastStockUpdatedAt).toLocaleString() : 'Never'}</div>
+            </td>
+            <td>RWF ${Number(drink.price || 0).toLocaleString()}</td>
+            <td>
+                <strong>${stockQty}</strong> case(s)
+            </td>
+            <td>
+                <input id="stockThresholdInput_${index}" type="number" min="0" step="1" value="${lowThreshold}">
+            </td>
+            <td>
+                <span class="stock-status-badge ${statusClass}">${statusLabel}</span>
+            </td>
+            <td>
+                <div class="stock-edit-row">
+                    <button class="stock-action-btn" onclick="openStockAdjustForm(${index}, 'add')">+ Add</button>
+                    <button class="stock-action-btn danger" onclick="openStockAdjustForm(${index}, 'remove')">- Remove</button>
+                    <button class="stock-action-btn" onclick="saveStockValues(${index})">Save Alert</button>
+                </div>
+            </td>
+        `;
+        body.appendChild(row);
+    });
+}
+
+function ensureStockAdjustOverlayBindings() {
+    const overlay = document.getElementById('stockAdjustOverlay');
+    if (!overlay) return;
+    if (overlay.dataset.bound) return;
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) closeStockAdjustForm();
+    });
+    overlay.dataset.bound = '1';
+}
+
+async function saveStockValues(index) {
+    const drink = drinks[index];
+    if (!drink) return;
+
+    const thresholdInput = document.getElementById(`stockThresholdInput_${index}`);
+    const lowStockThreshold = normalizeStockValue(
+        thresholdInput ? thresholdInput.value : drink.lowStockThreshold,
+        getDrinkLowStockThreshold(drink)
+    );
+
+    drink.lowStockThreshold = lowStockThreshold;
+    drink.lastStockUpdatedAt = new Date().toISOString();
+
+    await optimizedSaveData();
+    updateQuickDrinkSelect();
+    updateDrinkList();
+    updateCartDisplay();
+    updateHome();
+    renderStockManagement();
+    showSuccessToast(`Low stock alert updated for ${drink.name}.`);
+}
+
+function openStockAdjustForm(index, direction) {
+    const drink = drinks[index];
+    if (!drink) return;
+
+    pendingStockAdjustContext = {
+        index,
+        direction: direction === 'remove' ? 'remove' : 'add'
+    };
+
+    const overlay = document.getElementById('stockAdjustOverlay');
+    const titleEl = document.getElementById('stockAdjustTitle');
+    const infoEl = document.getElementById('stockAdjustDrinkInfo');
+    const qtyInput = document.getElementById('stockAdjustQtyInput');
+    const noteInput = document.getElementById('stockAdjustNoteInput');
+    const submitBtn = document.getElementById('stockAdjustSubmitBtn');
+
+    if (titleEl) titleEl.textContent = pendingStockAdjustContext.direction === 'remove' ? 'Remove Stock' : 'Add Stock';
+    if (infoEl) {
+        infoEl.textContent = `${drink.name} | Current stock: ${getDrinkStockQty(drink)} case(s)`;
+    }
+    if (qtyInput) qtyInput.value = '1';
+    if (noteInput) noteInput.value = '';
+    if (submitBtn) submitBtn.textContent = pendingStockAdjustContext.direction === 'remove' ? 'Remove' : 'Add';
+    if (overlay) overlay.style.display = 'block';
+    if (qtyInput) qtyInput.focus();
+}
+
+function closeStockAdjustForm() {
+    const overlay = document.getElementById('stockAdjustOverlay');
+    if (overlay) overlay.style.display = 'none';
+    pendingStockAdjustContext = null;
+}
+
+async function confirmStockAdjustment() {
+    if (!pendingStockAdjustContext) return;
+    const qtyInput = document.getElementById('stockAdjustQtyInput');
+    const noteInput = document.getElementById('stockAdjustNoteInput');
+    const qty = normalizeStockValue(qtyInput ? qtyInput.value : 0, 0);
+    if (qty <= 0) {
+        alert('Enter a stock quantity greater than zero.');
+        return;
+    }
+    const applied = await applyStockAdjustment(
+        pendingStockAdjustContext.index,
+        pendingStockAdjustContext.direction,
+        qty,
+        noteInput ? String(noteInput.value || '').trim() : ''
+    );
+    if (applied) closeStockAdjustForm();
+}
+
+async function applyStockAdjustment(index, direction, qtyInputValue = null, note = '') {
+    const drink = drinks[index];
+    if (!drink) return false;
+
+    const qty = normalizeStockValue(qtyInputValue, 0);
+    if (qty <= 0) {
+        alert('Enter a stock quantity greater than zero.');
+        return false;
+    }
+
+    const currentQty = getDrinkStockQty(drink);
+    if (direction === 'remove' && qty > currentQty) {
+        alert(`Cannot remove ${qty}. Only ${currentQty} case(s) available.`);
+        return false;
+    }
+
+    const normalizedDirection = direction === 'remove' ? 'remove' : 'add';
+    const nextQty = normalizedDirection === 'remove'
+        ? Math.max(0, currentQty - qty)
+        : currentQty + qty;
+    const cleanNote = String(note || '').trim().slice(0, 160);
+
+    drink.stockQty = nextQty;
+    recordDrinkStockEvent(drink, {
+        action: normalizedDirection,
+        quantity: qty,
+        beforeQty: currentQty,
+        afterQty: nextQty,
+        reason: cleanNote
+    });
+    drink.lastStockUpdatedAt = new Date().toISOString();
+
+    await optimizedSaveData();
+    updateQuickDrinkSelect();
+    updateDrinkList();
+    updateCartDisplay();
+    updateHome();
+    renderStockManagement();
+    const noteText = cleanNote ? ` (${cleanNote})` : '';
+    showSuccessToast(`${drink.name} stock ${normalizedDirection === 'remove' ? 'reduced' : 'increased'} by ${qty}${noteText}.`);
+    return true;
+}
+
+function exportStockManagementPDF() {
+    try {
+        normalizeDrinksData();
+        if (!drinks.length) {
+            alert('No stock data to export.');
+            return;
+        }
+
+        const doc = createPDFDocument({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const reportTitle = 'Stock Management Report';
+        let y = applyPdfBrandHeader(doc, reportTitle);
+        const margin = 14;
+
+        const lowStock = getLowStockDrinks();
+        const outOfStock = lowStock.filter((drink) => getDrinkStockStatus(drink) === 'out');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(12, 96, 156);
+        doc.text('Stock Summary', margin, y);
+        y += 7;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Total Drinks: ${drinks.length}`, margin, y);
+        doc.text(`Low Stock: ${lowStock.filter((drink) => getDrinkStockStatus(drink) === 'low').length}`, margin + 58, y);
+        doc.text(`Out of Stock: ${outOfStock.length}`, margin + 108, y);
+        y += 7;
+        doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+        y += 6;
+
+        const tableRows = drinks.map((drink) => [
+            String(drink.name || ''),
+            `RWF ${Number(drink.price || 0).toLocaleString()}`,
+            String(getDrinkStockQty(drink)),
+            String(getDrinkLowStockThreshold(drink)),
+            getStockStatusLabel(getDrinkStockStatus(drink))
+        ]);
+
+        let tableEndY = y;
+        if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+                startY: y,
+                head: [['Drink', 'Price', 'In Stock', 'Low Alert', 'Status']],
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 2.6 },
+                headStyles: { fillColor: [13, 124, 227], textColor: 255 },
+                alternateRowStyles: { fillColor: [245, 250, 255] }
+            });
+            tableEndY = (doc.lastAutoTable?.finalY || y) + 8;
+        } else {
+            doc.setFontSize(9);
+            tableRows.slice(0, 28).forEach((row, rowIndex) => {
+                const yy = y + (rowIndex * 5);
+                doc.text(`${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} | ${row[4]}`, margin, yy);
+            });
+            tableEndY = y + (Math.min(tableRows.length, 28) * 5) + 8;
+        }
+
+        const stockHistoryEntries = [];
+        drinks.forEach((drink) => {
+            const drinkName = String(drink.name || '');
+            const history = getDrinkStockHistory(drink);
+            history.forEach((entry) => {
+                stockHistoryEntries.push({
+                    ts: new Date(entry.timestamp).getTime(),
+                    row: [
+                        formatPdfDateTime(entry.timestamp),
+                        drinkName,
+                        entry.action === 'remove' ? 'Removed' : 'Added',
+                        String(entry.quantity),
+                        String(entry.beforeQty),
+                        String(entry.afterQty),
+                        entry.reason || '-'
+                    ]
+                });
+            });
+        });
+        stockHistoryEntries.sort((a, b) => b.ts - a.ts);
+        const stockHistoryRows = stockHistoryEntries.map((entry) => entry.row);
+
+        const pageHeight = doc.internal.pageSize.getHeight();
+        if (tableEndY > pageHeight - 32) {
+            doc.addPage();
+            tableEndY = 32;
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(12, 96, 156);
+        doc.text('Stock Adjustment History', margin, tableEndY);
+        tableEndY += 6;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        if (!stockHistoryRows.length) {
+            doc.text('No add/remove stock history recorded yet.', margin, tableEndY);
+        } else if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+                startY: tableEndY,
+                head: [['Date & Time', 'Drink', 'Action', 'Qty', 'Before', 'After', 'Reason']],
+                body: stockHistoryRows,
+                theme: 'grid',
+                styles: { fontSize: 8.4, cellPadding: 2.1 },
+                headStyles: { fillColor: [32, 163, 124], textColor: 255 },
+                alternateRowStyles: { fillColor: [246, 252, 249] },
+                columnStyles: {
+                    0: { cellWidth: 31 },
+                    1: { cellWidth: 32 },
+                    2: { cellWidth: 18 },
+                    3: { cellWidth: 11 },
+                    4: { cellWidth: 14 },
+                    5: { cellWidth: 14 },
+                    6: { cellWidth: 62 }
+                }
+            });
+        } else {
+            stockHistoryRows.slice(0, 22).forEach((row, rowIndex) => {
+                const yy = tableEndY + (rowIndex * 4.5);
+                doc.text(`${row[0]} | ${row[1]} | ${row[2]} ${row[3]} | ${row[6]}`, margin, yy);
+            });
+        }
+
+        applyPdfBrandFooter(doc, reportTitle);
+        const fileDate = new Date().toISOString().split('T')[0];
+        doc.save(`stock-management-${fileDate}.pdf`);
+        showSuccessToast('Stock report PDF exported successfully.');
+    } catch (error) {
+        console.error('Stock PDF export failed:', error);
+        alert(`Error exporting stock PDF: ${error.message}`);
+    }
+}
+
 // ================= ADD SALE FUNCTIONS =================
 function updateDrinkList() {
     const drinkList = document.getElementById('drinkList');
@@ -3137,6 +4975,11 @@ function updateDrinkList() {
     
     drinks.forEach((drink, index) => {
         const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
+        const stockQty = getDrinkStockQty(drink);
+        const stockStatus = getDrinkStockStatus(drink);
+        const stockLabel = getStockStatusLabel(stockStatus);
+        const stockClass = stockStatus === 'out' ? 'stock-status-out' : (stockStatus === 'low' ? 'stock-status-low' : 'stock-status-ok');
+        const disableSelect = stockStatus === 'out';
         const item = document.createElement('div');
         item.className = 'drink-item';
         item.innerHTML = `
@@ -3145,10 +4988,12 @@ function updateDrinkList() {
                 <div class="drink-meta">
                     <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
                     <span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>
+                    <span>Stock: ${stockQty} case(s)</span>
+                    <span class="stock-status-badge ${stockClass}">${stockLabel}</span>
                 </div>
             </div>
             <div class="drink-actions">
-                <button class="select-drink-btn" onclick="selectDrink(${index})">Select</button>
+                <button class="select-drink-btn" onclick="selectDrink(${index})" ${disableSelect ? 'disabled title="Out of stock"' : ''}>${disableSelect ? 'Out' : 'Select'}</button>
                 <button onclick="deleteDrink(${index})" class="delete-drink-btn">🗑️</button>
             </div>
         `;
@@ -3180,16 +5025,23 @@ function filterDrinks() {
         const item = document.createElement('div');
         item.className = 'drink-item';
         const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
+        const stockQty = getDrinkStockQty(drink);
+        const stockStatus = getDrinkStockStatus(drink);
+        const stockLabel = getStockStatusLabel(stockStatus);
+        const stockClass = stockStatus === 'out' ? 'stock-status-out' : (stockStatus === 'low' ? 'stock-status-low' : 'stock-status-ok');
+        const disableSelect = stockStatus === 'out';
         item.innerHTML = `
             <div>
                 <strong>${drink.name}</strong>
                 <div class="drink-meta">
                     <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
                     <span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>
+                    <span>Stock: ${stockQty} case(s)</span>
+                    <span class="stock-status-badge ${stockClass}">${stockLabel}</span>
                 </div>
             </div>
             <div class="drink-actions">
-                <button class="select-drink-btn" onclick="selectDrink(${originalIndex})">Select</button>
+                <button class="select-drink-btn" onclick="selectDrink(${originalIndex})" ${disableSelect ? 'disabled title="Out of stock"' : ''}>${disableSelect ? 'Out' : 'Select'}</button>
                 <button onclick="deleteDrink(${originalIndex})" class="delete-drink-btn">🗑️</button>
             </div>
         `;
@@ -3199,6 +5051,11 @@ function filterDrinks() {
 
 function selectDrink(index) {
     const drink = drinks[index];
+    if (!drink) return;
+    if (getDrinkStockQty(drink) <= 0) {
+        alert(`${drink.name} is out of stock.`);
+        return;
+    }
     const select = document.getElementById('quickDrinkSelect');
     if (select) {
         select.value = index;
@@ -3216,9 +5073,17 @@ function updateQuickDrinkSelect() {
     
     select.innerHTML = `<option value="">${t('chooseDrink')}</option>`;
     drinks.forEach((drink, index) => {
+        const stockQty = getDrinkStockQty(drink);
+        const status = getDrinkStockStatus(drink);
         const option = document.createElement('option');
         option.value = index;
-        option.textContent = `${drink.name} - RWF ${drink.price.toLocaleString()}`;
+        option.textContent = `${drink.name} - RWF ${drink.price.toLocaleString()} | Stock: ${stockQty}`;
+        if (status === 'out') {
+            option.disabled = true;
+            option.textContent += ' (Out)';
+        } else if (status === 'low') {
+            option.textContent += ' (Low)';
+        }
         select.appendChild(option);
     });
 }
@@ -3237,16 +5102,34 @@ function addToCart() {
         return;
     }
     
-    const drink = drinks[parseInt(drinkIndex)];
+    const parsedDrinkIndex = parseInt(drinkIndex);
+    const drink = drinks[parsedDrinkIndex];
+    if (!drink) {
+        alert('Drink not found.');
+        return;
+    }
+    const totalStock = getDrinkStockQty(drink);
+    const reservedQty = cart
+        .filter((item) => item.drinkIndex === parsedDrinkIndex)
+        .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const availableQty = totalStock - reservedQty;
+    if (availableQty <= 0) {
+        alert(`${drink.name} is out of stock.`);
+        return;
+    }
+    if (quantity > availableQty) {
+        alert(`Only ${availableQty} case(s) of ${drink.name} available right now.`);
+        return;
+    }
     
     // Check if drink already in cart
-    const existingItem = cart.findIndex(item => item.drinkIndex === parseInt(drinkIndex));
+    const existingItem = cart.findIndex(item => item.drinkIndex === parsedDrinkIndex);
     
     if (existingItem >= 0) {
         cart[existingItem].quantity += quantity;
     } else {
         cart.push({
-            drinkIndex: parseInt(drinkIndex),
+            drinkIndex: parsedDrinkIndex,
             drinkName: drink.name,
             price: drink.price,
             profitPerCase: getDrinkProfitPerCaseByName(drink.name),
@@ -3303,6 +5186,23 @@ function updateCartItemQty(index, newQty) {
         alert('Quantity must be at least 1');
         return;
     }
+
+    const item = cart[index];
+    if (!item) return;
+    const drink = drinks[item.drinkIndex];
+    const totalStock = getDrinkStockQty(drink);
+    const otherReservedQty = cart.reduce((sum, entry, entryIndex) => {
+        if (entryIndex === index) return sum;
+        if (entry.drinkIndex !== item.drinkIndex) return sum;
+        return sum + (Number(entry.quantity) || 0);
+    }, 0);
+    const maxAllowed = Math.max(0, totalStock - otherReservedQty);
+    if (qty > maxAllowed) {
+        alert(`Only ${maxAllowed} case(s) available for ${item.drinkName}.`);
+        updateCartDisplay();
+        return;
+    }
+
     cart[index].quantity = qty;
     updateCartDisplay();
 }
@@ -3345,9 +5245,20 @@ async function confirmSale() {
         alert('Please select a customer for credit sale');
         return;
     }
+
+    for (const item of cart) {
+        const drink = drinks[item.drinkIndex] || getDrinkByName(item.drinkName);
+        const stockQty = getDrinkStockQty(drink);
+        if (!drink || stockQty < item.quantity) {
+            const availableText = drink ? `${stockQty}` : '0';
+            alert(`Insufficient stock for ${item.drinkName}. Available: ${availableText} case(s).`);
+            return;
+        }
+    }
     
     let totalAmount = 0;
     const saleItems = [];
+    const nowIso = new Date().toISOString();
     
     // Create sale entries for each item
     cart.forEach(item => {
@@ -3370,10 +5281,16 @@ async function confirmSale() {
             total: itemTotal,
             type: currentSaleType,
             customerId: currentSaleType === 'credit' ? selectedCustomerId : null,
-            date: new Date().toISOString()
+            date: nowIso
         };
         
         sales.push(sale);
+
+        const drink = drinks[item.drinkIndex] || getDrinkByName(item.drinkName);
+        if (drink) {
+            drink.stockQty = Math.max(0, getDrinkStockQty(drink) - item.quantity);
+            drink.lastStockUpdatedAt = nowIso;
+        }
     });
     
     // Update customer debt if credit sale
@@ -3405,7 +5322,18 @@ async function confirmSale() {
     currentSaleType = 'normal';
     updateCartDisplay();
     updateQuickDrinkSelect();
+    updateDrinkList();
+    renderStockManagement();
     updateHome();
+
+    const lowStock = getLowStockDrinks();
+    if (lowStock.length > 0) {
+        const preview = lowStock
+            .slice(0, 2)
+            .map((drink) => `${drink.name} (${getDrinkStockQty(drink)})`)
+            .join(', ');
+        showSuccessToast(`Stock alert: ${lowStock.length} item(s) need attention. ${preview}`);
+    }
 }
 
 async function deleteDrink(index) {
@@ -3416,9 +5344,18 @@ async function deleteDrink(index) {
     }
     
     drinks.splice(index, 1);
+    cart = cart
+        .filter((item) => item.drinkIndex !== index)
+        .map((item) => ({
+            ...item,
+            drinkIndex: item.drinkIndex > index ? item.drinkIndex - 1 : item.drinkIndex
+        }));
     await optimizedSaveData();
     updateDrinkList();
     updateQuickDrinkSelect();
+    updateCartDisplay();
+    renderStockManagement();
+    updateHome();
     renderDrinkProfitEditor();
     
     showSuccessToast(`Drink deleted: ${drink.name}`);
@@ -3428,8 +5365,14 @@ function saveNewDrink() {
     const name = document.getElementById('newDrinkName').value.trim();
     const price = parseFloat(document.getElementById('newDrinkPrice').value);
     const profitPerCaseInput = document.getElementById('newDrinkProfitPerCase');
+    const stockQtyInput = document.getElementById('newDrinkStockQty');
+    const lowStockThresholdInput = document.getElementById('newDrinkLowStockThreshold');
     const rawProfitValue = profitPerCaseInput ? String(profitPerCaseInput.value || '').trim() : '';
     const parsedProfitValue = rawProfitValue === '' ? NaN : parseFloat(rawProfitValue);
+    const rawStockValue = stockQtyInput ? String(stockQtyInput.value || '').trim() : '';
+    const rawLowStockValue = lowStockThresholdInput ? String(lowStockThresholdInput.value || '').trim() : '';
+    const parsedStockValue = rawStockValue === '' ? NaN : Number(rawStockValue);
+    const parsedLowStockValue = rawLowStockValue === '' ? NaN : Number(rawLowStockValue);
     
     if (!name || isNaN(price) || price <= 0) {
         alert('Please enter valid drink name and price');
@@ -3439,27 +5382,56 @@ function saveNewDrink() {
         alert(t('profitPerCaseError'));
         return;
     }
+    if (rawStockValue !== '' && (!Number.isFinite(parsedStockValue) || parsedStockValue < 0)) {
+        alert('Initial stock must be zero or greater.');
+        return;
+    }
+    if (rawLowStockValue !== '' && (!Number.isFinite(parsedLowStockValue) || parsedLowStockValue < 0)) {
+        alert('Low stock alert level must be zero or greater.');
+        return;
+    }
     const defaultProfit = getDefaultDrinkProfitPerCase();
     const finalProfitPerCase = rawProfitValue === '' ? defaultProfit : parsedProfitValue;
     
     // Check if drink exists
     const existingIndex = drinks.findIndex(d => d.name.toLowerCase() === name.toLowerCase());
+    const existingDrink = existingIndex >= 0 ? drinks[existingIndex] : null;
+    const finalStockQty = rawStockValue === ''
+        ? getDrinkStockQty(existingDrink)
+        : normalizeStockValue(parsedStockValue, 0);
+    const finalLowStockThreshold = rawLowStockValue === ''
+        ? getDrinkLowStockThreshold(existingDrink)
+        : normalizeStockValue(parsedLowStockValue, getDefaultLowStockThreshold());
     if (existingIndex >= 0) {
         drinks[existingIndex].price = price;
         drinks[existingIndex].profitPerCase = finalProfitPerCase;
+        drinks[existingIndex].stockQty = finalStockQty;
+        drinks[existingIndex].lowStockThreshold = finalLowStockThreshold;
+        drinks[existingIndex].lastStockUpdatedAt = new Date().toISOString();
     } else {
-        drinks.push({ name, price, profitPerCase: finalProfitPerCase });
+        drinks.push({
+            name,
+            price,
+            profitPerCase: finalProfitPerCase,
+            stockQty: finalStockQty,
+            lowStockThreshold: finalLowStockThreshold,
+            lastStockUpdatedAt: new Date().toISOString()
+        });
     }
     
     optimizedSaveData();
     updateDrinkList();
     updateQuickDrinkSelect();
+    renderStockManagement();
+    updateHome();
     renderDrinkProfitEditor();
     document.getElementById('newDrinkName').value = '';
     document.getElementById('newDrinkPrice').value = '';
     if (profitPerCaseInput) profitPerCaseInput.value = '';
+    if (stockQtyInput) stockQtyInput.value = '';
+    if (lowStockThresholdInput) lowStockThresholdInput.value = String(getDefaultLowStockThreshold());
     
-    showSuccessToast(`Drink saved: ${name} - RWF ${price.toLocaleString()} (Profit/Case: RWF ${Number(finalProfitPerCase).toLocaleString()})`);
+    showSuccessToast(`Drink saved: ${name} | Stock ${Number(finalStockQty).toLocaleString()} | Low alert ${Number(finalLowStockThreshold).toLocaleString()}`);
 }
 
 function changeQty(change) {
@@ -4149,6 +6121,8 @@ function updateHome() {
     if (clatesPendingElement) {
         clatesPendingElement.textContent = `RWF ${pendingDeposits.toLocaleString()}`;
     }
+
+    renderHomeStockWarning();
 }
 
 function getProfitConfig() {
@@ -7008,6 +8982,14 @@ function loadSettings() {
     if (addDrinkProfitInput && !addDrinkProfitInput.value) {
         addDrinkProfitInput.value = Number(getDefaultDrinkProfitPerCase());
     }
+    const addDrinkStockInput = document.getElementById('newDrinkStockQty');
+    if (addDrinkStockInput && !addDrinkStockInput.value) {
+        addDrinkStockInput.value = '0';
+    }
+    const addDrinkLowStockInput = document.getElementById('newDrinkLowStockThreshold');
+    if (addDrinkLowStockInput && !addDrinkLowStockInput.value) {
+        addDrinkLowStockInput.value = String(getDefaultLowStockThreshold());
+    }
     
     // Load theme and language
     const currentTheme = settings.theme || 'light';
@@ -7028,6 +9010,9 @@ function loadSettings() {
     applyTheme(currentTheme);
     refreshStorageStatus();
     renderDrinkProfitEditor();
+    renderStockManagement();
+    renderHomeStockWarning();
+    refreshDataManagementAccessUI();
 }
 
 function saveProfitPercentage() {
@@ -7123,6 +9108,8 @@ function updateLanguageUI() {
     const navKeyByPage = {
         home: 'home',
         addSale: 'addSale',
+        stockManagement: 'stockManagement',
+        adminPanel: 'adminPanel',
         customers: 'customers',
         clate: 'clate',
         salesHistory: 'salesHistory',
@@ -7147,6 +9134,9 @@ function updateLanguageUI() {
 
     // Page headers
     setText('#addSale .page-header h2', t('addSale'));
+    setText('#stockManagement .page-header h2', t('stockManagement'));
+    setText('#adminPanelTitle', t('adminPanelTitle'));
+    setText('#adminPanelDescription', t('adminPanelDescription'));
     setText('#customers .page-header h2', t('customers'));
     setText('#clate .page-header h2', t('clate'));
     setText('#salesHistory .page-header h2', t('salesHistory'));
@@ -7155,6 +9145,7 @@ function updateLanguageUI() {
 
     // Login / signup UI
     setText('#authLoginTab', t('login'));
+    setText('#authAdminTab', t('admin'));
     setText('#authSignupTab', t('signUp'));
     setText('#loginScreen label[for="signupName"]', t('fullName'));
     setText('#loginScreen label[for="signupEmail"]', t('emailAddress'));
@@ -7163,8 +9154,7 @@ function updateLanguageUI() {
     setText('#loginScreen label[for="confirmPin"]', t('confirmPin'));
     setText('#loginScreen label[for="signupVerificationCode"]', t('verificationCode'));
     setText('#sendSignupCodeBtn', t('sendCode'));
-    setText('#loginBtn', t('login'));
-    setText('#signupBtn', t('createAccount'));
+    updateAuthPrimaryButtons();
     setText('#forgotPinBtn', t('forgotPin'));
     setText('#forgotPinTitle', t('resetPin'));
     setText('#loginScreen label[for="resetPhone"]', t('phoneNumber'));
@@ -7208,6 +9198,8 @@ function updateLanguageUI() {
     setPlaceholder('#newDrinkName', t('drinkName'));
     setPlaceholder('#newDrinkPrice', t('drinkPricePlaceholder'));
     setPlaceholder('#newDrinkProfitPerCase', t('newDrinkProfitPerCase'));
+    setPlaceholder('#newDrinkStockQty', t('newDrinkStockQty'));
+    setPlaceholder('#newDrinkLowStockThreshold', t('newDrinkLowStockThreshold'));
     setText('#addSale button[onclick="saveNewDrink()"]', t('saveDrink'));
     setText('#addSale .sale-right > h3', t('currentSale'));
     setText('#addSale .sale-right > div:nth-of-type(1) h4', t('cartItems'));
@@ -7226,6 +9218,42 @@ function updateLanguageUI() {
     const saleTypeCredit = document.querySelector('#saleType option[value="credit"]');
     if (saleTypeNormal) saleTypeNormal.textContent = t('normalSale');
     if (saleTypeCredit) saleTypeCredit.textContent = t('creditSale');
+
+    // Stock management page
+    setText('#stockManagement button[onclick="renderStockManagement()"]', 'Refresh');
+    setText('#stockManagement button[onclick="exportStockManagementPDF()"]', t('exportPdf'));
+    setPlaceholder('#stockSearch', t('searchDrinks'));
+
+    // Admin panel
+    setText('#adminPanel button[onclick="renderAdminPanel()"]', t('adminRefresh'));
+    setText('#adminExportUsersPdfBtn', t('adminExportAccountsPdf'));
+    setText('#adminExportUsersJsonBtn', t('adminExportAccountsJson'));
+    setPlaceholder('#adminUserSearch', t('adminSearchEmployersPlaceholder'));
+    setText('#adminDailyExportTitle', t('adminDailyExportTitle'));
+    setText('#adminDailyExportDesc', t('adminDailyExportDesc'));
+    setText('#adminExportDayPdfBtn', t('adminExportDayPdf'));
+    setText('#adminStockAuditPdfBtn', t('adminStockAuditPdf'));
+    setText('#adminClearDataQuickBtn', t('adminClearCurrentUserData'));
+    setText('#adminAiTitle', t('adminAiTitle'));
+    setText('#adminAiDesc', t('adminAiDesc'));
+    setText('#adminRunAiBtn', t('adminAnalyzeBusiness'));
+    setText('#adminAiPlaceholder', t('adminAiPlaceholder'));
+    setText('#adminSummaryTotalLabel', t('adminSummaryTotalAccounts'));
+    setText('#adminSummaryPrivilegedLabel', t('adminSummaryAdminOwner'));
+    setText('#adminSummaryStaffLabel', t('adminSummaryStaff'));
+    setText('#adminSummaryInactiveLabel', t('adminSummaryInactive'));
+    setText('#adminDailyHeadDate', t('adminDailyHeadDate'));
+    setText('#adminDailyHeadTransactions', t('adminDailyHeadTransactions'));
+    setText('#adminDailyHeadCases', t('adminDailyHeadCases'));
+    setText('#adminDailyHeadTotal', t('adminDailyHeadTotal'));
+    setText('#adminDailyHeadProfit', t('adminDailyHeadProfit'));
+    setText('#adminDailyNoDataCell', t('adminNoSalesDataYet'));
+    setText('#adminEmployerAccountsTitle', t('adminEmployerAccountsTitle'));
+    const adminFilterBtns = document.querySelectorAll('#adminPanel .filter-buttons .filter-btn');
+    if (adminFilterBtns[0]) adminFilterBtns[0].textContent = t('all');
+    if (adminFilterBtns[1]) adminFilterBtns[1].textContent = t('adminFilterPrivileged');
+    if (adminFilterBtns[2]) adminFilterBtns[2].textContent = t('adminFilterStaff');
+    if (adminFilterBtns[3]) adminFilterBtns[3].textContent = t('adminFilterInactive');
 
     // Customers page
     setText('#customers button[onclick="openCustomerForm()"]', `+ ${t('addCustomer')}`);
@@ -7308,7 +9336,15 @@ function updateLanguageUI() {
     setText('#saveLanguageCurrencyBtn', t('saveLanguageCurrency'));
     setText('#startTutorialBtn', t('runTutorial'));
     setText('#settings button[onclick="clearAllData()"]', t('clearAllData'));
+    setText('#clearUserDataBtn', t('clearAllData'));
     setText('#clearWarningText', t('warningClearData'));
+    setText('#clearDataConfirmTitle', t('clearDataConfirmTitle'));
+    setText('#clearDataConfirmInstruction', t('clearDataConfirmInstruction'));
+    setText('#clearDataConfirmLabel', t('clearDataConfirmLabel'));
+    setText('#clearDataConfirmCancelBtn', t('cancel'));
+    setText('#clearDataConfirmSubmitBtn', t('clearDataConfirmAction'));
+    setPlaceholder('#clearDataConfirmInput', t('clearDataConfirmPlaceholder'));
+    setText('#clearDataConfirmError', t('clearDataConfirmMismatch'));
 
     // App info and footer
     const appNameRow = document.getElementById('appNameRow');
@@ -7327,37 +9363,142 @@ function updateLanguageUI() {
     // Keep dynamic parts in sync
     refreshStorageStatus();
     updateActiveUserBadge();
+    refreshAdminAccessUI();
+    refreshDataManagementAccessUI();
     if (onboardingVisible) renderOnboardingStep();
     updateQuickDrinkSelect();
     updateCartDisplay();
     renderDrinkProfitEditor();
+    renderAdminPanel();
 }
 
-async function clearAllData() {
+function ensureClearDataConfirmBindings() {
+    const overlay = document.getElementById('clearDataConfirmOverlay');
+    const input = document.getElementById('clearDataConfirmInput');
+    const cancelBtn = document.getElementById('clearDataConfirmCancelBtn');
+    const submitBtn = document.getElementById('clearDataConfirmSubmitBtn');
+    if (!overlay || !input || !cancelBtn || !submitBtn) return false;
+    if (overlay.dataset.bound) return true;
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) closeClearDataConfirmForm();
+    });
+    input.addEventListener('input', handleClearDataConfirmInput);
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !submitBtn.disabled) {
+            event.preventDefault();
+            void confirmClearAllData();
+        }
+    });
+    cancelBtn.addEventListener('click', closeClearDataConfirmForm);
+    overlay.dataset.bound = '1';
+    return true;
+}
+
+function handleClearDataConfirmInput() {
+    const input = document.getElementById('clearDataConfirmInput');
+    const submitBtn = document.getElementById('clearDataConfirmSubmitBtn');
+    const errorEl = document.getElementById('clearDataConfirmError');
+    if (!input || !submitBtn) return;
+
+    const normalized = String(input.value || '').trim();
+    submitBtn.disabled = normalized !== 'CLEAR USER DATA';
+    if (errorEl) errorEl.style.display = 'none';
+}
+
+function openClearDataConfirmForm() {
     if (!activeUser) {
         alert('Please login first.');
         return;
     }
-    const confirmation = prompt('WARNING: This clears only the current user data.\nType "CLEAR USER DATA" to proceed:');
-    if (confirmation === 'CLEAR USER DATA') {
-        sales = [];
-        customers = [];
-        clates = [];
-        drinks = [];
-        settings = getDefaultUserSettings();
-        cart = [];
-        
-        await optimizedSaveData();
-        updateHome();
-        updateDrinkList();
-        updateQuickDrinkSelect();
-        updateCustomerDropdown();
-        updateCartDisplay();
-        showPage('home');
-        showSuccessToast('Current user data cleared.');
-    } else {
-        alert('Data clear cancelled.');
+    if (!isAdminSessionActive()) {
+        alert(t('clearDataRequiresAdminLogin'));
+        return;
     }
+    if (!ensureClearDataConfirmBindings()) {
+        const ok = window.prompt('Type CLEAR USER DATA to confirm:');
+        if (ok === 'CLEAR USER DATA') {
+            void confirmClearAllData(true);
+        }
+        return;
+    }
+
+    const overlay = document.getElementById('clearDataConfirmOverlay');
+    const input = document.getElementById('clearDataConfirmInput');
+    const submitBtn = document.getElementById('clearDataConfirmSubmitBtn');
+    const errorEl = document.getElementById('clearDataConfirmError');
+
+    if (input) input.value = '';
+    if (submitBtn) submitBtn.disabled = true;
+    if (errorEl) {
+        errorEl.textContent = t('clearDataConfirmMismatch');
+        errorEl.style.display = 'none';
+    }
+    if (overlay) overlay.style.display = 'block';
+    if (input) input.focus();
+}
+
+function closeClearDataConfirmForm() {
+    const overlay = document.getElementById('clearDataConfirmOverlay');
+    const input = document.getElementById('clearDataConfirmInput');
+    const errorEl = document.getElementById('clearDataConfirmError');
+    const submitBtn = document.getElementById('clearDataConfirmSubmitBtn');
+    if (overlay) overlay.style.display = 'none';
+    if (input) input.value = '';
+    if (submitBtn) submitBtn.disabled = true;
+    if (errorEl) errorEl.style.display = 'none';
+}
+
+async function confirmClearAllData(skipInputValidation = false) {
+    if (!activeUser) {
+        alert('Please login first.');
+        closeClearDataConfirmForm();
+        return;
+    }
+    if (!isAdminSessionActive()) {
+        alert(t('clearDataRequiresAdminLogin'));
+        closeClearDataConfirmForm();
+        return;
+    }
+
+    const confirmationInput = document.getElementById('clearDataConfirmInput');
+    const errorEl = document.getElementById('clearDataConfirmError');
+    const confirmation = String(confirmationInput ? confirmationInput.value : '').trim();
+    const isValid = skipInputValidation || confirmation === 'CLEAR USER DATA';
+
+    if (!isValid) {
+        if (errorEl) {
+            errorEl.textContent = t('clearDataConfirmMismatch');
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+
+    sales = [];
+    customers = [];
+    clates = [];
+    drinks = [];
+    settings = getDefaultUserSettings();
+    cart = [];
+
+    await optimizedSaveData();
+    updateHome();
+    updateDrinkList();
+    updateQuickDrinkSelect();
+    updateCustomerDropdown();
+    updateCartDisplay();
+    renderStockManagement();
+    showPage('home');
+    closeClearDataConfirmForm();
+    showSuccessToast(t('clearDataConfirmSuccess'));
+}
+
+function clearAllData() {
+    if (!isAdminSessionActive()) {
+        alert(t('clearDataRequiresAdminLogin'));
+        return;
+    }
+    openClearDataConfirmForm();
 }
 
 // Make functions available globally
@@ -7416,9 +9557,32 @@ window.setTheme = setTheme;
 window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
 window.startOnboardingTutorial = startOnboardingTutorial;
 window.clearAllData = clearAllData;
+window.openClearDataConfirmForm = openClearDataConfirmForm;
+window.closeClearDataConfirmForm = closeClearDataConfirmForm;
+window.confirmClearAllData = confirmClearAllData;
 window.showPage = showPage;
 window.filterDrinks = filterDrinks;
 window.updateLanguageUI = updateLanguageUI;
+window.setStockFilter = setStockFilter;
+window.renderStockManagement = renderStockManagement;
+window.saveStockValues = saveStockValues;
+window.applyStockAdjustment = applyStockAdjustment;
+window.openStockAdjustForm = openStockAdjustForm;
+window.closeStockAdjustForm = closeStockAdjustForm;
+window.confirmStockAdjustment = confirmStockAdjustment;
+window.exportStockManagementPDF = exportStockManagementPDF;
+window.setAdminUserFilter = setAdminUserFilter;
+window.renderAdminPanel = renderAdminPanel;
+window.toggleUserRole = toggleUserRole;
+window.toggleUserActiveStatus = toggleUserActiveStatus;
+window.adminResetUserPin = adminResetUserPin;
+window.adminResetUserAdminPin = adminResetUserAdminPin;
+window.viewUserDataSnapshot = viewUserDataSnapshot;
+window.exportAdminUsersPDF = exportAdminUsersPDF;
+window.exportAdminUsersJSON = exportAdminUsersJSON;
+window.runAdminGrowthAnalysis = runAdminGrowthAnalysis;
+window.exportAdminDailySalesPDF = exportAdminDailySalesPDF;
+window.exportAdminStockAuditPDF = exportAdminStockAuditPDF;
 
 
 
