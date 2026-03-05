@@ -5306,3 +5306,762 @@ body.dark-mode .divider::after {
 body.dark-mode .divider span {
     color: #8f9bb5;
 }
+
+/* ================= ADMIN BUSINESS ANALYSIS ================= */
+#app #reports .admin-business-analysis {
+    display: none;
+    margin-bottom: 18px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(37, 117, 252, 0.16);
+    background:
+        radial-gradient(circle at 12% 2%, rgba(95, 165, 255, 0.12), rgba(95, 165, 255, 0) 35%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(242, 248, 255, 0.95));
+    box-shadow: 0 16px 34px rgba(37, 117, 252, 0.14);
+}
+
+#app #reports .admin-growth-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+#app #reports .admin-growth-header h3 {
+    margin: 0;
+    color: #1e5ec5;
+    font-size: 1.05rem;
+}
+
+#app #reports .admin-growth-badge {
+    border-radius: 999px;
+    border: 1px solid rgba(46, 129, 231, 0.25);
+    background: rgba(37, 117, 252, 0.12);
+    color: #1f5da8;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+#app #reports .admin-growth-badge.positive {
+    color: #167f45;
+    background: rgba(22, 171, 89, 0.14);
+    border-color: rgba(22, 171, 89, 0.28);
+}
+
+#app #reports .admin-growth-badge.negative {
+    color: #b93535;
+    background: rgba(227, 78, 78, 0.14);
+    border-color: rgba(227, 78, 78, 0.28);
+}
+
+#app #reports .admin-growth-badge.flat {
+    color: #3e5975;
+    background: rgba(110, 130, 158, 0.15);
+    border-color: rgba(110, 130, 158, 0.26);
+}
+
+#app #reports .admin-growth-summary {
+    margin: 0 0 14px;
+    color: #475f7d;
+    line-height: 1.45;
+    font-size: 0.93rem;
+}
+
+#app #reports .admin-growth-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#app #reports .growth-window-btn {
+    border-radius: 999px;
+    border: 1px solid rgba(75, 114, 161, 0.28);
+    background: rgba(255, 255, 255, 0.9);
+    color: #2f4f74;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#app #reports .growth-window-btn:hover {
+    border-color: rgba(37, 117, 252, 0.42);
+    background: rgba(240, 247, 255, 0.95);
+}
+
+#app #reports .growth-window-btn.active {
+    color: #fff;
+    border-color: rgba(30, 96, 194, 0.84);
+    background: linear-gradient(135deg, #1f6be4, #2b86f4);
+    box-shadow: 0 8px 20px rgba(35, 109, 219, 0.3);
+}
+
+#app #reports .admin-growth-chart {
+    min-height: 322px;
+    border-radius: 14px;
+    border: 1px solid rgba(37, 117, 252, 0.14);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(244, 249, 255, 0.93));
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+#app #reports .admin-growth-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+#app #reports .admin-growth-legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 8px;
+    color: #4f6785;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#app #reports .admin-growth-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#app #reports .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+#app #reports .legend-dot.up {
+    background: #18a85c;
+}
+
+#app #reports .legend-dot.down {
+    background: #d74a4a;
+}
+
+#app #reports .legend-dot.avg {
+    background: #396fbe;
+}
+
+#app #reports .growth-grid-line {
+    stroke: rgba(56, 95, 145, 0.16);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+}
+
+#app #reports .growth-y-label,
+#app #reports .growth-x-label {
+    fill: #6880a0;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+#app #reports .growth-axis-line {
+    stroke: rgba(64, 102, 149, 0.35);
+    stroke-width: 1;
+}
+
+#app #reports .growth-bar {
+    cursor: pointer;
+    transition: opacity 0.2s ease, filter 0.2s ease, stroke 0.2s ease, stroke-width 0.2s ease;
+    opacity: 0.88;
+    stroke-width: 0;
+}
+
+#app #reports .growth-bar:hover {
+    opacity: 1;
+    filter: brightness(1.05);
+}
+
+#app #reports .growth-bar:focus-visible {
+    outline: none;
+    stroke: rgba(34, 105, 201, 0.95);
+    stroke-width: 1.8;
+    opacity: 1;
+}
+
+#app #reports .growth-bar-up {
+    fill: rgba(25, 167, 91, 0.88);
+}
+
+#app #reports .growth-bar-down {
+    fill: rgba(218, 79, 79, 0.88);
+}
+
+#app #reports .growth-bar-flat {
+    fill: rgba(108, 139, 176, 0.9);
+}
+
+#app #reports .growth-bar-zero {
+    fill: rgba(170, 183, 203, 0.85);
+}
+
+#app #reports .growth-bar.active {
+    opacity: 1;
+    stroke: rgba(255, 255, 255, 0.95);
+    stroke-width: 1.5;
+}
+
+#app #reports .growth-moving-average-line {
+    fill: none;
+    stroke: #2f67b6;
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+#app #reports .growth-moving-point {
+    fill: #fff;
+    stroke: #2f67b6;
+    stroke-width: 1.4;
+}
+
+#app #reports .growth-moving-point.active {
+    fill: #2f67b6;
+    stroke: #fff;
+    stroke-width: 1.8;
+}
+
+#app #reports .growth-selected-line {
+    stroke: rgba(55, 91, 136, 0.26);
+    stroke-width: 1;
+}
+
+#app #reports .admin-growth-point-details {
+    border-radius: 14px;
+    border: 1px solid rgba(37, 117, 252, 0.16);
+    background: rgba(255, 255, 255, 0.92);
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+#app #reports .admin-growth-point-empty {
+    color: #5a7090;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+#app #reports .admin-growth-point-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+#app #reports .admin-growth-point-head h5 {
+    margin: 0;
+    color: #214f8d;
+    font-size: 0.96rem;
+}
+
+#app #reports .admin-growth-point-head p {
+    margin: 3px 0 0;
+    font-size: 12px;
+    color: #6481a3;
+}
+
+#app #reports .admin-growth-point-chip {
+    border-radius: 999px;
+    border: 1px solid rgba(74, 108, 148, 0.24);
+    background: rgba(103, 131, 168, 0.16);
+    color: #3f5d80;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    white-space: nowrap;
+}
+
+#app #reports .admin-growth-point-chip.positive {
+    background: rgba(23, 170, 93, 0.15);
+    color: #177a45;
+    border-color: rgba(23, 170, 93, 0.28);
+}
+
+#app #reports .admin-growth-point-chip.negative {
+    background: rgba(218, 79, 79, 0.16);
+    color: #ad3b3b;
+    border-color: rgba(218, 79, 79, 0.3);
+}
+
+#app #reports .admin-growth-point-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+#app #reports .admin-growth-stat-card {
+    border-radius: 10px;
+    border: 1px solid rgba(94, 130, 175, 0.2);
+    background: rgba(255, 255, 255, 0.94);
+    padding: 9px 10px;
+}
+
+#app #reports .admin-growth-stat-card span {
+    display: block;
+    color: #657f9f;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+#app #reports .admin-growth-stat-card strong {
+    display: block;
+    color: #214f8d;
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+#app #reports .admin-growth-stat-card strong.positive,
+#app #reports .admin-growth-point-note.positive {
+    color: #177a45;
+}
+
+#app #reports .admin-growth-stat-card strong.negative,
+#app #reports .admin-growth-point-note.negative {
+    color: #b13f3f;
+}
+
+#app #reports .admin-growth-point-note {
+    margin-top: 10px;
+    border-top: 1px dashed rgba(96, 126, 162, 0.26);
+    padding-top: 9px;
+    color: #3f5d80;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#app #reports .admin-ai-advisor-card {
+    border-radius: 14px;
+    border: 1px solid rgba(37, 117, 252, 0.16);
+    background: rgba(255, 255, 255, 0.92);
+    padding: 14px;
+}
+
+#app #reports .admin-ai-advisor-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+#app #reports .admin-ai-advisor-title h4 {
+    margin: 0;
+    color: #1c5cb5;
+}
+
+#app #reports .admin-ai-advisor-title p {
+    margin: 4px 0 0;
+    color: #5d7798;
+    font-size: 12px;
+}
+
+#app #reports .admin-ai-advisor-head h4 {
+    margin: 0;
+    color: #1c5cb5;
+}
+
+#app #reports .admin-ai-advisor-output {
+    border-radius: 12px;
+    border: 1px solid rgba(37, 117, 252, 0.18);
+    background: linear-gradient(170deg, rgba(255, 255, 255, 0.96), rgba(247, 251, 255, 0.93));
+    min-height: 118px;
+    padding: 12px;
+    color: #385878;
+    line-height: 1.45;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+#app #reports .advisor-empty-state strong {
+    display: block;
+    color: #2a5a93;
+}
+
+#app #reports .advisor-empty-state p {
+    margin: 4px 0 0;
+    color: #6b85a5;
+    font-size: 13px;
+}
+
+#app #reports .advisor-loading {
+    display: grid;
+    gap: 9px;
+}
+
+#app #reports .advisor-loading-line {
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(150, 188, 235, 0.12) 20%, rgba(130, 173, 227, 0.38) 45%, rgba(150, 188, 235, 0.12) 72%);
+    background-size: 220% 100%;
+    animation: advisorLoadingSweep 1s linear infinite;
+}
+
+#app #reports .advisor-loading-line.w50 { width: 52%; }
+#app #reports .advisor-loading-line.w70 { width: 72%; }
+#app #reports .advisor-loading-line.w85 { width: 86%; }
+#app #reports .advisor-loading-line.w92 { width: 92%; }
+
+#app #reports .advisor-meta-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+#app #reports .advisor-meta-pill {
+    border-radius: 999px;
+    border: 1px solid rgba(79, 116, 162, 0.24);
+    background: rgba(85, 131, 191, 0.13);
+    color: #35587e;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 5px 9px;
+}
+
+#app #reports .advisor-meta-pill.neutral {
+    background: rgba(108, 131, 161, 0.13);
+    border-color: rgba(108, 131, 161, 0.22);
+    color: #4e637b;
+}
+
+#app #reports .advisor-insight-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+}
+
+#app #reports .advisor-insight-card {
+    border-radius: 10px;
+    border: 1px solid rgba(95, 131, 176, 0.22);
+    background: rgba(255, 255, 255, 0.96);
+    padding: 10px;
+}
+
+#app #reports .advisor-insight-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+#app #reports .advisor-insight-head h5 {
+    margin: 0;
+    color: #234f88;
+    font-size: 13px;
+}
+
+#app #reports .advisor-insight-metric {
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid rgba(92, 127, 171, 0.24);
+    background: rgba(84, 122, 175, 0.14);
+    color: #35557b;
+    white-space: nowrap;
+}
+
+#app #reports .advisor-insight-card p {
+    margin: 8px 0 0;
+    color: #4a6586;
+    font-size: 12px;
+}
+
+#app #reports .advisor-insight-card.positive {
+    border-color: rgba(24, 168, 92, 0.28);
+    background: rgba(236, 255, 244, 0.9);
+}
+
+#app #reports .advisor-insight-card.positive .advisor-insight-metric {
+    border-color: rgba(24, 168, 92, 0.3);
+    background: rgba(24, 168, 92, 0.14);
+    color: #167443;
+}
+
+#app #reports .advisor-insight-card.warning {
+    border-color: rgba(221, 151, 47, 0.3);
+    background: rgba(255, 249, 233, 0.92);
+}
+
+#app #reports .advisor-insight-card.warning .advisor-insight-metric {
+    border-color: rgba(221, 151, 47, 0.3);
+    background: rgba(221, 151, 47, 0.14);
+    color: #915e17;
+}
+
+#app #reports .advisor-insight-card.negative {
+    border-color: rgba(215, 74, 74, 0.3);
+    background: rgba(255, 240, 240, 0.9);
+}
+
+#app #reports .advisor-insight-card.negative .advisor-insight-metric {
+    border-color: rgba(215, 74, 74, 0.34);
+    background: rgba(215, 74, 74, 0.14);
+    color: #aa3535;
+}
+
+#app #reports .admin-ai-advisor-output ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+#app #reports .admin-ai-advisor-output li + li {
+    margin-top: 8px;
+}
+
+#app #reports .admin-ai-advisor-output.is-generating {
+    border-color: rgba(22, 176, 118, 0.56);
+    background: linear-gradient(135deg, rgba(220, 255, 238, 0.66), rgba(231, 245, 255, 0.82));
+    box-shadow: 0 0 0 2px rgba(28, 180, 116, 0.16), 0 0 26px rgba(28, 180, 116, 0.2);
+    animation: adminAdvisorGlow 1s ease-in-out infinite alternate;
+}
+
+#app #reports #runBusinessAiAdvisorBtn.is-generating {
+    border-color: rgba(26, 171, 117, 0.62);
+    box-shadow: 0 0 0 2px rgba(26, 171, 117, 0.2), 0 0 22px rgba(26, 171, 117, 0.4);
+    animation: adminAdvisorButtonGlow 0.95s ease-in-out infinite alternate;
+}
+
+@keyframes adminAdvisorGlow {
+    from {
+        box-shadow: 0 0 0 1px rgba(28, 180, 116, 0.15), 0 0 16px rgba(28, 180, 116, 0.18);
+    }
+    to {
+        box-shadow: 0 0 0 2px rgba(28, 180, 116, 0.28), 0 0 30px rgba(28, 180, 116, 0.32);
+    }
+}
+
+@keyframes adminAdvisorButtonGlow {
+    from {
+        transform: translateY(0);
+        filter: brightness(1);
+    }
+    to {
+        transform: translateY(-1px);
+        filter: brightness(1.05);
+    }
+}
+
+@keyframes advisorLoadingSweep {
+    from { background-position: 100% 0; }
+    to { background-position: -100% 0; }
+}
+
+body.admin-session #app #reports .admin-business-analysis {
+    display: block;
+}
+
+body.admin-session #app #reports .report-controls,
+body.admin-session #app #reports .report-range-panel,
+body.admin-session #app #reports #reportOutput {
+    display: none !important;
+}
+
+body.dark-mode #app #reports .admin-business-analysis {
+    border-color: rgba(130, 177, 255, 0.2);
+    background:
+        radial-gradient(circle at 15% 2%, rgba(85, 148, 255, 0.16), rgba(85, 148, 255, 0) 35%),
+        linear-gradient(170deg, rgba(16, 28, 49, 0.92), rgba(10, 20, 37, 0.9));
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-mode #app #reports .admin-growth-header h3,
+body.dark-mode #app #reports .admin-ai-advisor-head h4 {
+    color: #9cc8ff;
+}
+
+body.dark-mode #app #reports .admin-growth-summary {
+    color: #a7bddb;
+}
+
+body.dark-mode #app #reports .growth-window-btn {
+    border-color: rgba(126, 165, 214, 0.3);
+    background: rgba(19, 33, 56, 0.9);
+    color: #b9d3ef;
+}
+
+body.dark-mode #app #reports .growth-window-btn.active {
+    color: #fff;
+    border-color: rgba(126, 182, 255, 0.5);
+    background: linear-gradient(135deg, #2f78e8, #2290d4);
+}
+
+body.dark-mode #app #reports .admin-growth-chart {
+    border-color: rgba(130, 177, 255, 0.2);
+    background: linear-gradient(180deg, rgba(11, 22, 40, 0.94), rgba(10, 19, 35, 0.92));
+}
+
+body.dark-mode #app #reports .growth-grid-line {
+    stroke: rgba(136, 172, 224, 0.24);
+}
+
+body.dark-mode #app #reports .growth-y-label,
+body.dark-mode #app #reports .growth-x-label {
+    fill: #9cb4d7;
+}
+
+body.dark-mode #app #reports .growth-axis-line {
+    stroke: rgba(134, 172, 224, 0.34);
+}
+
+body.dark-mode #app #reports .growth-bar-up {
+    fill: rgba(43, 191, 117, 0.88);
+}
+
+body.dark-mode #app #reports .growth-bar-down {
+    fill: rgba(232, 95, 95, 0.9);
+}
+
+body.dark-mode #app #reports .growth-bar-flat,
+body.dark-mode #app #reports .growth-bar-zero {
+    fill: rgba(124, 152, 191, 0.85);
+}
+
+body.dark-mode #app #reports .growth-moving-average-line {
+    stroke: #8ec2ff;
+}
+
+body.dark-mode #app #reports .growth-moving-point {
+    fill: #0e2039;
+    stroke: #8ec2ff;
+}
+
+body.dark-mode #app #reports .growth-selected-line {
+    stroke: rgba(141, 181, 236, 0.35);
+}
+
+body.dark-mode #app #reports .admin-growth-point-details {
+    background: rgba(11, 22, 39, 0.9);
+    border-color: rgba(130, 177, 255, 0.22);
+}
+
+body.dark-mode #app #reports .admin-growth-point-head h5 {
+    color: #abd2ff;
+}
+
+body.dark-mode #app #reports .admin-growth-point-head p,
+body.dark-mode #app #reports .admin-growth-stat-card span {
+    color: #93afcf;
+}
+
+body.dark-mode #app #reports .admin-growth-stat-card {
+    background: rgba(15, 28, 49, 0.92);
+    border-color: rgba(134, 170, 214, 0.24);
+}
+
+body.dark-mode #app #reports .admin-growth-stat-card strong {
+    color: #cfe5ff;
+}
+
+body.dark-mode #app #reports .admin-growth-point-note {
+    border-top-color: rgba(130, 177, 255, 0.26);
+    color: #a7c2e0;
+}
+
+body.dark-mode #app #reports .admin-ai-advisor-card,
+body.dark-mode #app #reports .admin-ai-advisor-output {
+    border-color: rgba(130, 177, 255, 0.22);
+    background: rgba(10, 21, 38, 0.86);
+    color: #bdd4ef;
+}
+
+body.dark-mode #app #reports .admin-ai-advisor-title p,
+body.dark-mode #app #reports .advisor-empty-state p {
+    color: #9cb6d4;
+}
+
+body.dark-mode #app #reports .advisor-empty-state strong {
+    color: #d2e7ff;
+}
+
+body.dark-mode #app #reports .advisor-meta-pill {
+    border-color: rgba(134, 170, 214, 0.32);
+    background: rgba(109, 145, 191, 0.2);
+    color: #bad5f4;
+}
+
+body.dark-mode #app #reports .advisor-meta-pill.neutral {
+    border-color: rgba(134, 170, 214, 0.26);
+    background: rgba(98, 123, 155, 0.18);
+    color: #a9bfdb;
+}
+
+body.dark-mode #app #reports .advisor-insight-card {
+    background: rgba(13, 27, 47, 0.92);
+    border-color: rgba(130, 177, 255, 0.22);
+}
+
+body.dark-mode #app #reports .advisor-insight-head h5 {
+    color: #cfe5ff;
+}
+
+body.dark-mode #app #reports .advisor-insight-card p {
+    color: #9fb9d8;
+}
+
+body.dark-mode #app #reports .advisor-insight-metric {
+    border-color: rgba(130, 177, 255, 0.3);
+    background: rgba(114, 152, 201, 0.2);
+    color: #c2ddf9;
+}
+
+body.dark-mode #app #reports .advisor-insight-card.positive {
+    background: rgba(20, 46, 39, 0.86);
+    border-color: rgba(43, 191, 117, 0.34);
+}
+
+body.dark-mode #app #reports .advisor-insight-card.warning {
+    background: rgba(50, 41, 20, 0.86);
+    border-color: rgba(232, 176, 83, 0.36);
+}
+
+body.dark-mode #app #reports .advisor-insight-card.negative {
+    background: rgba(58, 29, 31, 0.86);
+    border-color: rgba(232, 95, 95, 0.34);
+}
+
+body.dark-mode #app #reports .admin-ai-advisor-output.is-generating {
+    border-color: rgba(71, 208, 144, 0.52);
+    background: linear-gradient(140deg, rgba(13, 45, 39, 0.92), rgba(11, 33, 58, 0.92));
+    box-shadow: 0 0 0 2px rgba(71, 208, 144, 0.2), 0 0 26px rgba(71, 208, 144, 0.24);
+}
+
+@media (max-width: 820px) {
+    #app #reports .admin-growth-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    #app #reports .admin-growth-point-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #app #reports .admin-ai-advisor-head {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    #app #reports .advisor-insight-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #app #reports .admin-growth-chart {
+        min-height: 278px;
+        padding: 8px;
+    }
+}
