@@ -1464,6 +1464,12 @@
             min-width: 880px;
         }
 
+        #app #adminStockManagementTable {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 880px;
+        }
+
         #app #adminUsersTable {
             width: 100%;
             border-collapse: collapse;
@@ -1472,6 +1478,8 @@
 
         #app #stockManagementTable th,
         #app #stockManagementTable td,
+        #app #adminStockManagementTable th,
+        #app #adminStockManagementTable td,
         #app #adminUsersTable th,
         #app #adminUsersTable td {
             padding: 10px 9px;
@@ -1481,6 +1489,7 @@
         }
 
         #app #stockManagementTable th,
+        #app #adminStockManagementTable th,
         #app #adminUsersTable th {
             background: linear-gradient(135deg, rgba(12, 123, 205, 0.13), rgba(0, 181, 195, 0.11));
             color: #0f5889;
@@ -1574,7 +1583,7 @@
 
         #app .admin-tools-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 12px;
             margin-top: 12px;
             margin-bottom: 12px;
@@ -1584,19 +1593,36 @@
             border-radius: 18px !important;
         }
 
-        #app .admin-ai-insights {
-            border-radius: 12px;
-            border: 1px solid rgba(17, 116, 184, 0.2);
-            background: rgba(255, 255, 255, 0.78);
-            padding: 12px;
-            min-height: 120px;
-            color: #325a7a;
-            line-height: 1.45;
+        #app .admin-main-tabs,
+        #app .admin-sub-tabs {
+            margin-top: 10px;
+            margin-bottom: 6px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
-        #app .admin-ai-insights ul {
-            margin: 0;
-            padding-left: 18px;
+        #app .admin-main-tabs .filter-btn,
+        #app .admin-sub-tabs .filter-btn {
+            min-width: 150px;
+        }
+
+        #app .admin-main-tab-panel {
+            margin-top: 8px;
+        }
+
+        #app .admin-sub-tab-panel {
+            margin-top: 10px;
+        }
+
+        #app .admin-stock-header {
+            margin-top: 4px;
+            align-items: center;
+        }
+
+        #app .admin-stock-header h3 {
+            color: #135f97;
+            letter-spacing: 0.02em;
         }
 
         #app #adminDailySummaryTable {
@@ -1867,7 +1893,8 @@
             border-color: rgba(122, 187, 244, 0.28);
         }
 
-        body.dark-mode #app #stockManagementTable th {
+        body.dark-mode #app #stockManagementTable th,
+        body.dark-mode #app #adminStockManagementTable th {
             background: linear-gradient(135deg, rgba(36, 104, 167, 0.34), rgba(8, 151, 162, 0.26));
             color: #d6efff;
         }
@@ -1909,12 +1936,6 @@
             background: rgba(255, 99, 122, 0.24);
             color: #ffd3dc;
             border-color: rgba(255, 127, 146, 0.36);
-        }
-
-        body.dark-mode #app .admin-ai-insights {
-            background: rgba(8, 21, 37, 0.72);
-            border-color: rgba(122, 187, 244, 0.3);
-            color: #c5dff7;
         }
 
         body.dark-mode #app #adminDailySummaryTable th {
@@ -2076,6 +2097,12 @@
 
             #app .admin-tools-grid {
                 grid-template-columns: 1fr;
+            }
+
+            #app .admin-main-tabs .filter-btn,
+            #app .admin-sub-tabs .filter-btn {
+                min-width: 124px;
+                flex: 1 1 calc(50% - 10px);
             }
         }
 
@@ -2575,105 +2602,175 @@
             <div class="page-header">
                 <h2 id="adminPanelTitle">Owner Admin Panel</h2>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="renderAdminPanel()" class="add-btn">Refresh</button>
-                    <button id="adminExportUsersPdfBtn" onclick="exportAdminUsersPDF()" class="add-btn" style="background: #20a37c;">Export Accounts PDF</button>
-                    <button id="adminExportUsersJsonBtn" onclick="exportAdminUsersJSON()" class="add-btn" style="background: #3b82f6;">Export Accounts JSON</button>
+                    <button id="adminRefreshBtn" onclick="renderAdminPanel()" class="add-btn">Refresh</button>
                 </div>
             </div>
 
             <p id="adminPanelDescription" class="page-description">Find employers, manage account roles, and control who can access this app.</p>
 
-            <div class="admin-tools-grid">
-                <div class="settings-card admin-tool-card">
-                    <h3 id="adminDailyExportTitle" class="settings-card-title" style="margin-bottom: 8px;">Daily Sales Export</h3>
-                    <p id="adminDailyExportDesc" class="settings-help-text" style="margin-bottom: 12px;">Select a specific day and export all sales in ordered time.</p>
-                    <div class="settings-inline-row">
-                        <input type="date" id="adminSalesExportDate">
-                        <button id="adminExportDayPdfBtn" onclick="exportAdminDailySalesPDF()" class="add-btn">Export Day PDF</button>
+            <div class="filter-buttons admin-main-tabs">
+                <button id="adminMainTabSalesBtn" class="filter-btn active" onclick="setAdminMainTab('sales', event)">Sales</button>
+                <button id="adminMainTabAccountsBtn" class="filter-btn" onclick="setAdminMainTab('accounts', event)">Account Management</button>
+            </div>
+
+            <div id="adminMainTabSales" class="admin-main-tab-panel">
+                <div class="filter-buttons admin-sub-tabs">
+                    <button id="adminSalesSubTabDailyBtn" class="filter-btn active" onclick="setAdminSalesSubTab('daily', event)">Daily Sales</button>
+                    <button id="adminSalesSubTabStockBtn" class="filter-btn" onclick="setAdminSalesSubTab('stock', event)">Stock</button>
+                </div>
+
+                <div id="adminSalesSubTabDaily" class="admin-sub-tab-panel">
+                    <div class="settings-card admin-tool-card">
+                        <h3 id="adminDailyExportTitle" class="settings-card-title" style="margin-bottom: 8px;">Daily Sales Export</h3>
+                        <p id="adminDailyExportDesc" class="settings-help-text" style="margin-bottom: 12px;">Select a specific day and export all sales in ordered time.</p>
+                        <div class="settings-inline-row">
+                            <input type="date" id="adminSalesExportDate">
+                            <button id="adminExportDayPdfBtn" onclick="exportAdminDailySalesPDF()" class="add-btn">Export Day PDF</button>
+                        </div>
                     </div>
-                    <div class="settings-inline-row" style="margin-top: 10px; flex-wrap: wrap;">
+
+                    <div class="stock-table-wrap admin-daily-table-wrap">
+                        <table id="adminDailySummaryTable">
+                            <thead>
+                                <tr>
+                                    <th id="adminDailyHeadDate">Date</th>
+                                    <th id="adminDailyHeadTransactions">Transactions</th>
+                                    <th id="adminDailyHeadCases">Cases Sold</th>
+                                    <th id="adminDailyHeadTotal">Total Sales</th>
+                                    <th id="adminDailyHeadProfit">Profit</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminDailySummaryBody">
+                                <tr>
+                                    <td id="adminDailyNoDataCell" colspan="5" style="padding: 28px; text-align: center; color: #789;">No sales data yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="adminSalesSubTabStock" class="admin-sub-tab-panel" style="display: none;">
+                    <div class="page-header admin-stock-header">
+                        <h3 id="adminStockSectionTitle">Stock Overview</h3>
                         <button id="adminStockAuditPdfBtn" onclick="exportAdminStockAuditPDF()" class="add-btn" style="background: #1f9d80;">Stock Audit PDF</button>
-                        <button id="adminClearDataQuickBtn" onclick="clearAllData()" class="add-btn" style="background: #d93f3f;">Clear Current User Data</button>
+                    </div>
+                    <p id="adminStockSectionDesc" class="page-description">Track stock exactly like the user stock page and print reports.</p>
+
+                    <div class="stock-summary-grid">
+                        <div class="stock-summary-card">
+                            <h4 id="adminStockSummaryTotalLabel">Total Drinks</h4>
+                            <h2 id="adminStockSummaryTotal">0</h2>
+                        </div>
+                        <div class="stock-summary-card warning">
+                            <h4 id="adminStockSummaryLowLabel">Low Stock</h4>
+                            <h2 id="adminStockSummaryLow">0</h2>
+                        </div>
+                        <div class="stock-summary-card danger">
+                            <h4 id="adminStockSummaryOutLabel">Out of Stock</h4>
+                            <h2 id="adminStockSummaryOut">0</h2>
+                        </div>
+                    </div>
+
+                    <div class="customer-controls" style="margin-top: 20px;">
+                        <input type="text" id="adminStockSearch" class="search-input" placeholder="Search drinks..." oninput="renderAdminSalesStockManagement()">
+                        <div class="filter-buttons">
+                            <button id="adminStockFilterAll" class="filter-btn active" onclick="setAdminStockFilter('all', event)">All</button>
+                            <button id="adminStockFilterLow" class="filter-btn" onclick="setAdminStockFilter('low', event)">Low</button>
+                            <button id="adminStockFilterOut" class="filter-btn" onclick="setAdminStockFilter('out', event)">Out</button>
+                        </div>
+                    </div>
+
+                    <div class="stock-table-wrap">
+                        <table id="adminStockManagementTable">
+                            <thead>
+                                <tr>
+                                    <th>Drink</th>
+                                    <th>Price</th>
+                                    <th>In Stock</th>
+                                    <th>Low Alert</th>
+                                    <th>Status</th>
+                                    <th>Adjust</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminStockManagementBody">
+                                <tr>
+                                    <td id="adminStockNoDataCell" colspan="6" style="padding: 30px; text-align: center; color: #789;">No drinks available yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="adminMainTabAccounts" class="admin-main-tab-panel" style="display: none;">
+                <div class="admin-tools-grid">
+                    <div class="settings-card admin-tool-card">
+                        <h3 id="adminAccountsExportTitle" class="settings-card-title" style="margin-bottom: 8px;">Account Exports</h3>
+                        <p id="adminAccountsExportDesc" class="settings-help-text" style="margin-bottom: 12px;">Download employer/account data in PDF or JSON.</p>
+                        <div class="settings-inline-row" style="flex-wrap: wrap;">
+                            <button id="adminExportUsersPdfBtn" onclick="exportAdminUsersPDF()" class="add-btn" style="background: #20a37c;">Export Accounts PDF</button>
+                            <button id="adminExportUsersJsonBtn" onclick="exportAdminUsersJSON()" class="add-btn" style="background: #3b82f6;">Export Accounts JSON</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-card admin-tool-card">
+                        <h3 id="adminDataProtectionTitle" class="settings-card-title" style="margin-bottom: 8px;">Data Protection</h3>
+                        <p id="adminDataProtectionDesc" class="settings-help-text" style="margin-bottom: 12px;">Only admin login can clear current user data.</p>
+                        <div class="settings-inline-row" style="flex-wrap: wrap;">
+                            <button id="adminClearDataQuickBtn" onclick="clearAllData()" class="add-btn" style="background: #d93f3f;">Clear Current User Data</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="settings-card admin-tool-card">
-                    <h3 id="adminAiTitle" class="settings-card-title" style="margin-bottom: 8px;">Mini AI Growth Strategy</h3>
-                    <p id="adminAiDesc" class="settings-help-text" style="margin-bottom: 12px;">AI-style analysis based on your real sales, stock, and credit trends.</p>
-                    <button id="adminRunAiBtn" onclick="runAdminGrowthAnalysis()" class="add-btn" style="margin-bottom: 12px;">Analyze Business</button>
-                    <div id="adminAiInsights" class="admin-ai-insights">
-                        <p id="adminAiPlaceholder" style="margin: 0; color: #6f8ca7;">Run analysis to generate growth strategies.</p>
+                <div class="stock-summary-grid admin-summary-grid">
+                    <div class="stock-summary-card">
+                        <h4 id="adminSummaryTotalLabel">Total Accounts</h4>
+                        <h2 id="adminSummaryTotal">0</h2>
+                    </div>
+                    <div class="stock-summary-card warning">
+                        <h4 id="adminSummaryPrivilegedLabel">Admin + Owner</h4>
+                        <h2 id="adminSummaryPrivileged">0</h2>
+                    </div>
+                    <div class="stock-summary-card">
+                        <h4 id="adminSummaryStaffLabel">Staff</h4>
+                        <h2 id="adminSummaryStaff">0</h2>
+                    </div>
+                    <div class="stock-summary-card danger">
+                        <h4 id="adminSummaryInactiveLabel">Inactive</h4>
+                        <h2 id="adminSummaryInactive">0</h2>
                     </div>
                 </div>
-            </div>
 
-            <div class="stock-summary-grid admin-summary-grid">
-                <div class="stock-summary-card">
-                    <h4 id="adminSummaryTotalLabel">Total Accounts</h4>
-                    <h2 id="adminSummaryTotal">0</h2>
+                <div class="customer-controls" style="margin-top: 20px;">
+                    <input type="text" id="adminUserSearch" class="search-input" placeholder="Find employers by name, phone, or email..." oninput="renderAdminPanel()">
+                    <div class="filter-buttons">
+                        <button id="adminFilterAll" class="filter-btn active" onclick="setAdminUserFilter('all', event)">All</button>
+                        <button id="adminFilterPrivileged" class="filter-btn" onclick="setAdminUserFilter('privileged', event)">Admin/Owner</button>
+                        <button id="adminFilterStaff" class="filter-btn" onclick="setAdminUserFilter('staff', event)">Staff</button>
+                        <button id="adminFilterInactive" class="filter-btn" onclick="setAdminUserFilter('inactive', event)">Inactive</button>
+                    </div>
                 </div>
-                <div class="stock-summary-card warning">
-                    <h4 id="adminSummaryPrivilegedLabel">Admin + Owner</h4>
-                    <h2 id="adminSummaryPrivileged">0</h2>
-                </div>
-                <div class="stock-summary-card">
-                    <h4 id="adminSummaryStaffLabel">Staff</h4>
-                    <h2 id="adminSummaryStaff">0</h2>
-                </div>
-                <div class="stock-summary-card danger">
-                    <h4 id="adminSummaryInactiveLabel">Inactive</h4>
-                    <h2 id="adminSummaryInactive">0</h2>
-                </div>
-            </div>
 
-            <div class="stock-table-wrap admin-daily-table-wrap">
-                <table id="adminDailySummaryTable">
-                    <thead>
-                        <tr>
-                            <th id="adminDailyHeadDate">Date</th>
-                            <th id="adminDailyHeadTransactions">Transactions</th>
-                            <th id="adminDailyHeadCases">Cases Sold</th>
-                            <th id="adminDailyHeadTotal">Total Sales</th>
-                            <th id="adminDailyHeadProfit">Profit</th>
-                        </tr>
-                    </thead>
-                    <tbody id="adminDailySummaryBody">
-                        <tr>
-                            <td id="adminDailyNoDataCell" colspan="5" style="padding: 28px; text-align: center; color: #789;">No sales data yet.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="customer-controls" style="margin-top: 20px;">
-                <input type="text" id="adminUserSearch" class="search-input" placeholder="Find employers by name, phone, or email..." oninput="renderAdminPanel()">
-                <div class="filter-buttons">
-                    <button id="adminFilterAll" class="filter-btn active" onclick="setAdminUserFilter('all', event)">All</button>
-                    <button id="adminFilterPrivileged" class="filter-btn" onclick="setAdminUserFilter('privileged', event)">Admin/Owner</button>
-                    <button id="adminFilterStaff" class="filter-btn" onclick="setAdminUserFilter('staff', event)">Staff</button>
-                    <button id="adminFilterInactive" class="filter-btn" onclick="setAdminUserFilter('inactive', event)">Inactive</button>
+                <div class="stock-table-wrap admin-table-wrap">
+                    <h3 id="adminEmployerAccountsTitle" class="settings-card-title" style="padding: 10px 12px 0; border: none; margin: 0;">Employer Accounts</h3>
+                    <table id="adminUsersTable">
+                        <thead>
+                            <tr>
+                                <th>Employer</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Provider</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersBody">
+                            <tr>
+                                <td colspan="6" style="padding: 30px; text-align: center; color: #789;">No user accounts found yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-
-            <div class="stock-table-wrap admin-table-wrap">
-                <h3 id="adminEmployerAccountsTitle" class="settings-card-title" style="padding: 10px 12px 0; border: none; margin: 0;">Employer Accounts</h3>
-                <table id="adminUsersTable">
-                    <thead>
-                        <tr>
-                            <th>Employer</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Provider</th>
-                            <th>Last Login</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="adminUsersBody">
-                        <tr>
-                            <td colspan="6" style="padding: 30px; text-align: center; color: #789;">No user accounts found yet.</td>
-                        </tr>
-                    </tbody>
-                </table>
             </div>
         </div>
 
