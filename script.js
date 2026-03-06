@@ -261,6 +261,9 @@ let cart = []; // Cart items array
 let selectedStockFilter = 'all';
 let pendingStockAdjustContext = null;
 let selectedAdminUserFilter = 'all';
+let selectedAdminStockFilter = 'all';
+let activeAdminMainTab = 'sales';
+let activeAdminSalesSubTab = 'daily';
 let selectedAdminGrowthWindowDays = 30;
 let selectedAdminGrowthPointIndex = -1;
 let cachedAdminGrowthAnalysis = null;
@@ -285,6 +288,10 @@ const translations = {
         adminPanelTitle: 'Owner Admin Panel',
         adminPanelDescription: 'Find employers, manage account roles, and control who can access this app.',
         adminRefresh: 'Refresh',
+        adminTabSales: 'Sales',
+        adminTabAccountManagement: 'Account Management',
+        adminSubTabDailySales: 'Daily Sales',
+        adminSubTabStock: 'Stock',
         adminExportAccountsPdf: 'Export Accounts PDF',
         adminExportAccountsJson: 'Export Accounts JSON',
         adminSearchEmployersPlaceholder: 'Find employers by name, phone, or email...',
@@ -295,7 +302,18 @@ const translations = {
         adminDailyExportDesc: 'Select a specific day and export all sales in ordered time.',
         adminExportDayPdf: 'Export Day PDF',
         adminStockAuditPdf: 'Stock Audit PDF',
+        adminStockSectionTitle: 'Stock Overview',
+        adminStockSectionDesc: 'Track stock exactly like the user stock page and print reports.',
+        adminStockSummaryTotalDrinks: 'Total Drinks',
+        adminStockSummaryLow: 'Low Stock',
+        adminStockSummaryOut: 'Out of Stock',
+        adminStockFilterLow: 'Low',
+        adminStockFilterOut: 'Out',
         adminClearCurrentUserData: 'Clear Current User Data',
+        adminAccountsExportTitle: 'Account Exports',
+        adminAccountsExportDesc: 'Download employer/account data in PDF or JSON.',
+        adminDataProtectionTitle: 'Data Protection',
+        adminDataProtectionDesc: 'Only admin login can clear current user data.',
         adminAiTitle: 'Mini AI Growth Strategy',
         adminAiDesc: 'AI-style analysis based on your real sales, stock, and credit trends.',
         adminAnalyzeBusiness: 'Analyze Business',
@@ -311,6 +329,7 @@ const translations = {
         adminDailyHeadProfit: 'Profit',
         adminEmployerAccountsTitle: 'Employer Accounts',
         adminNoSalesDataYet: 'No sales data yet.',
+        adminNoStockMatch: 'No drinks match this filter.',
         adminNoEmployersMatch: 'No employers match this filter.',
         adminAnalysisRequiresSession: 'Admin session required for analysis.',
         adminExportDayNoSales: 'No sales found for that day.',
@@ -335,9 +354,9 @@ const translations = {
         resetPin: 'Reset PIN',
         resetPinHint: 'Use phone, email, and verification code to set a new PIN.',
         resetNewPin: 'New 5-digit PIN',
-        resetConfirmPin: 'Confirm New PIN',
+        resetConfirmPin: 'Confirm New PIN', 
         cancel: 'Cancel',
-        authHintLogin: 'Welcome to Make A Way!',
+        authHintLogin: 'Welcome back to Make A Way!',
         authHintAdmin: 'Admin login uses your account number/email with a separate admin PIN.',
         authHintSignup: 'Create your account to secure this app.',
         authHintReset: 'Reset your PIN with your registered phone and email.',
@@ -1822,6 +1841,10 @@ function isAdminSessionActive(user = activeUser) {
 
 function canAccessAdminPanel(user = activeUser) {
     return isAdminSessionActive(user);
+}
+
+function canViewProfitData(user = activeUser) {
+    return canAccessAdminPanel(user);
 }
 
 function canManageAdminAccounts(user = activeUser) {
@@ -3738,6 +3761,7 @@ function refreshAdminAccessUI() {
     }
 
     setReportsPageModeForRole();
+    refreshProfitVisibilityUI();
 }
 
 function setReportsPageModeForRole() {
@@ -3762,6 +3786,28 @@ function setReportsPageModeForRole() {
     }
     if (reportOutput) {
         reportOutput.style.display = adminSession ? 'none' : '';
+    }
+}
+
+function refreshProfitVisibilityUI() {
+    const allowProfit = canViewProfitData();
+
+    const todayProfitElement = document.getElementById('todayProfit');
+    const todayProfitCard = todayProfitElement ? todayProfitElement.closest('.stat-card') : null;
+    if (todayProfitCard) {
+        todayProfitCard.style.display = allowProfit ? '' : 'none';
+    }
+
+    const addSaleProfitInput = document.getElementById('newDrinkProfitPerCase');
+    if (addSaleProfitInput) {
+        addSaleProfitInput.style.display = allowProfit ? '' : 'none';
+        addSaleProfitInput.disabled = !allowProfit;
+        if (!allowProfit) addSaleProfitInput.value = '';
+    }
+
+    const settingsBusinessCard = document.getElementById('settingsBusinessCard');
+    if (settingsBusinessCard) {
+        settingsBusinessCard.style.display = allowProfit ? '' : 'none';
     }
 }
 
@@ -3800,6 +3846,46 @@ function normalizeUserRoleLabel(roleValue) {
 function getAuthProviderLabel(user) {
     const provider = String(user?.authProvider || '').trim().toLowerCase();
     return provider === 'google' ? 'Google' : 'PIN';
+}
+
+function setAdminMainTab(tab, event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    activeAdminMainTab = tab === 'accounts' ? 'accounts' : 'sales';
+
+    const salesBtn = document.getElementById('adminMainTabSalesBtn');
+    const accountsBtn = document.getElementById('adminMainTabAccountsBtn');
+    const salesPanel = document.getElementById('adminMainTabSales');
+    const accountsPanel = document.getElementById('adminMainTabAccounts');
+
+    if (salesBtn) salesBtn.classList.toggle('active', activeAdminMainTab === 'sales');
+    if (accountsBtn) accountsBtn.classList.toggle('active', activeAdminMainTab === 'accounts');
+    if (salesPanel) salesPanel.style.display = activeAdminMainTab === 'sales' ? 'block' : 'none';
+    if (accountsPanel) accountsPanel.style.display = activeAdminMainTab === 'accounts' ? 'block' : 'none';
+
+    if (activeAdminMainTab === 'sales') {
+        setAdminSalesSubTab(activeAdminSalesSubTab);
+    }
+}
+
+function setAdminSalesSubTab(tab, event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    activeAdminSalesSubTab = tab === 'stock' ? 'stock' : 'daily';
+
+    const dailyBtn = document.getElementById('adminSalesSubTabDailyBtn');
+    const stockBtn = document.getElementById('adminSalesSubTabStockBtn');
+    const dailyPanel = document.getElementById('adminSalesSubTabDaily');
+    const stockPanel = document.getElementById('adminSalesSubTabStock');
+
+    if (dailyBtn) dailyBtn.classList.toggle('active', activeAdminSalesSubTab === 'daily');
+    if (stockBtn) stockBtn.classList.toggle('active', activeAdminSalesSubTab === 'stock');
+    if (dailyPanel) dailyPanel.style.display = activeAdminSalesSubTab === 'daily' ? 'block' : 'none';
+    if (stockPanel) stockPanel.style.display = activeAdminSalesSubTab === 'stock' ? 'block' : 'none';
+
+    if (activeAdminSalesSubTab === 'stock') {
+        renderAdminSalesStockManagement();
+        return;
+    }
+    renderAdminDailySalesSummary();
 }
 
 function setAdminUserFilter(filter, event) {
@@ -3929,16 +4015,27 @@ function toLocalDayKey(dateValue) {
     return `${year}-${month}-${day}`;
 }
 
+function trimCompactNumber(value) {
+    return String(value)
+        .replace(/(\.\d*?[1-9])0+$/, '$1')
+        .replace(/\.0+$/, '');
+}
+
 function formatCompactRwf(value) {
     const amount = Number(value) || 0;
     const absolute = Math.abs(amount);
+    const sign = amount < 0 ? '-' : '';
     if (absolute >= 1000000) {
-        return `${(amount / 1000000).toFixed(1)}M`;
+        const display = absolute / 1000000;
+        const digits = display >= 10 ? 0 : 1;
+        return `${sign}${trimCompactNumber(display.toFixed(digits))}M`;
     }
     if (absolute >= 1000) {
-        return `${(amount / 1000).toFixed(1)}K`;
+        const display = absolute / 1000;
+        const digits = display >= 10 ? 0 : 1;
+        return `${sign}${trimCompactNumber(display.toFixed(digits))}K`;
     }
-    return String(Math.round(amount));
+    return `${sign}${Math.round(absolute).toLocaleString()}`;
 }
 
 function formatRwf(value) {
@@ -4024,6 +4121,7 @@ function getAdminBusinessAnalysisData(days = 30) {
     let previousTotal = 0;
     let previousTransactions = 0;
     const productTotals = new Map();
+    const latestCreditByCustomerIndex = new Map();
     (Array.isArray(sales) ? sales : []).forEach((sale) => {
         const saleDate = getSaleDateTimeOrNull(sale);
         if (!saleDate) return;
@@ -4043,6 +4141,13 @@ function getAdminBusinessAnalysisData(days = 30) {
         point.quantity += Number(sale.quantity) || 0;
         if (sale.type === 'credit') {
             point.creditTotal += saleTotal;
+            const customerIndex = Number(sale.customerId);
+            if (Number.isInteger(customerIndex) && customerIndex >= 0) {
+                const currentLatest = latestCreditByCustomerIndex.get(customerIndex);
+                if (!currentLatest || saleDate > currentLatest) {
+                    latestCreditByCustomerIndex.set(customerIndex, saleDate);
+                }
+            }
         }
 
         const drinkName = String(sale.drinkName || 'Unknown').trim() || 'Unknown';
@@ -4089,6 +4194,10 @@ function getAdminBusinessAnalysisData(days = 30) {
     const topProducts = Array.from(productTotals.values())
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 3);
+    const totalQuantity = series.reduce((sum, point) => sum + (Number(point.quantity) || 0), 0);
+    const favoriteDrinkSharePercent = (topProducts[0] && totalQuantity > 0)
+        ? ((Number(topProducts[0].qty) || 0) / totalQuantity) * 100
+        : 0;
 
     let declineStreak = 0;
     for (let i = series.length - 1; i > 0; i--) {
@@ -4135,6 +4244,50 @@ function getAdminBusinessAnalysisData(days = 30) {
     const bestDay = series.slice().sort((a, b) => b.total - a.total)[0] || null;
     const worstDay = series.slice().sort((a, b) => a.total - b.total)[0] || null;
     const lowStockCount = getLowStockDrinks().length;
+    const debtFollowUps = [];
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    (Array.isArray(customers) ? customers : []).forEach((customer, index) => {
+        const owing = Number(customer?.owing) || 0;
+        if (owing <= 0) return;
+
+        let latestDebtDate = latestCreditByCustomerIndex.get(index) || null;
+        const debtHistory = Array.isArray(customer?.debtHistory) ? customer.debtHistory : [];
+        debtHistory.forEach((entry) => {
+            const ts = entry?.timestamp || entry?.date || entry?.time || entry?.createdAt;
+            const dt = ts ? new Date(ts) : null;
+            if (!dt || Number.isNaN(dt.getTime())) return;
+            if (!latestDebtDate || dt > latestDebtDate) {
+                latestDebtDate = dt;
+            }
+        });
+
+        let daysOutstanding = null;
+        if (latestDebtDate && !Number.isNaN(latestDebtDate.getTime())) {
+            const debtDate = new Date(latestDebtDate);
+            debtDate.setHours(0, 0, 0, 0);
+            daysOutstanding = Math.max(0, Math.round((todayStart - debtDate) / 86400000));
+        }
+
+        debtFollowUps.push({
+            name: String(customer?.name || `Customer ${index + 1}`),
+            owing,
+            daysOutstanding,
+            lastDebtDate: latestDebtDate || null
+        });
+    });
+
+    debtFollowUps.sort((a, b) => {
+        const aDays = Number.isFinite(a.daysOutstanding) ? Number(a.daysOutstanding) : -1;
+        const bDays = Number.isFinite(b.daysOutstanding) ? Number(b.daysOutstanding) : -1;
+        if (bDays !== aDays) return bDays - aDays;
+        return Number(b.owing) - Number(a.owing);
+    });
+
+    const topDebtFollowUp = debtFollowUps[0] || null;
+    const overdueDebtCount = debtFollowUps.filter((item) => Number(item.daysOutstanding) >= 7).length;
+    const outstandingDebtTotal = debtFollowUps.reduce((sum, item) => sum + (Number(item.owing) || 0), 0);
 
     return {
         windowDays,
@@ -4154,11 +4307,16 @@ function getAdminBusinessAnalysisData(days = 30) {
         previousTransactions,
         creditSharePercent,
         topProducts,
+        totalQuantity,
+        favoriteDrinkSharePercent,
         slowestWeekday,
         weekendLiftPercent,
         bestDay,
         worstDay,
-        lowStockCount
+        lowStockCount,
+        topDebtFollowUp,
+        overdueDebtCount,
+        outstandingDebtTotal
     };
 }
 
@@ -4240,9 +4398,9 @@ function renderAdminGrowthChart(analysis) {
         return;
     }
 
-    const width = Math.max(860, series.length * 26);
-    const height = 346;
-    const padding = { top: 26, right: 16, bottom: 58, left: 66 };
+    const width = Math.max(920, series.length * 34);
+    const height = 360;
+    const padding = { top: 26, right: 18, bottom: 58, left: 96 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     const chartBottom = height - padding.bottom;
@@ -4334,10 +4492,11 @@ function renderAdminGrowthChart(analysis) {
             <span><i class="legend-dot down"></i>Down vs previous day</span>
             <span><i class="legend-dot avg"></i>7-day moving average</span>
         </div>
-        <svg viewBox="0 0 ${width} ${height}" class="admin-growth-svg" role="img" aria-label="Business growth chart">
+        <div class="admin-growth-canvas">
+            <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" preserveAspectRatio="xMinYMin meet" class="admin-growth-svg" role="img" aria-label="Business growth chart">
             ${yTicks.map((tick) => `
                 <line class="growth-grid-line" x1="${padding.left}" y1="${tick.y.toFixed(2)}" x2="${(width - padding.right).toFixed(2)}" y2="${tick.y.toFixed(2)}"></line>
-                <text class="growth-y-label" x="${(padding.left - 8).toFixed(2)}" y="${(tick.y + 4).toFixed(2)}" text-anchor="end">RWF ${formatCompactRwf(tick.value)}</text>
+                <text class="growth-y-label" x="${(padding.left - 10).toFixed(2)}" y="${(tick.y + 4).toFixed(2)}" text-anchor="end">RWF ${formatCompactRwf(tick.value)}</text>
             `).join('')}
             <line class="growth-axis-line" x1="${padding.left}" y1="${chartBottom.toFixed(2)}" x2="${(width - padding.right).toFixed(2)}" y2="${chartBottom.toFixed(2)}"></line>
             ${barRects}
@@ -4345,7 +4504,8 @@ function renderAdminGrowthChart(analysis) {
             <path class="growth-moving-average-line" d="${movingAveragePath}"></path>
             ${movingAveragePoints}
             ${xLabels}
-        </svg>
+            </svg>
+        </div>
     `;
 
     container.querySelectorAll('.growth-bar[data-point-index]').forEach((bar) => {
@@ -4442,6 +4602,7 @@ function getBusinessAiAdvisorSuggestions(analysis) {
     const suggestions = [];
     const growth = Number(analysis?.growthPercent) || 0;
     const topProducts = Array.isArray(analysis?.topProducts) ? analysis.topProducts : [];
+    const totalQuantity = Number(analysis?.totalQuantity) || 0;
     const growthTone = growth > 1 ? 'positive' : (growth < -1 ? 'negative' : 'neutral');
     const growthHeadline = growth >= 0
         ? `Revenue is trending up. Keep pressure on high-converting days.`
@@ -4474,11 +4635,46 @@ function getBusinessAiAdvisorSuggestions(analysis) {
 
     if (topProducts.length > 0) {
         const bestSeller = topProducts[0];
+        const bestSellerQty = Number(bestSeller.qty) || 0;
+        const bestSellerShare = totalQuantity > 0
+            ? (bestSellerQty / totalQuantity) * 100
+            : (Number(analysis?.favoriteDrinkSharePercent) || 0);
+        suggestions.push({
+            title: 'Customer Favorite',
+            metric: `${bestSellerShare.toFixed(0)}%`,
+            tone: bestSellerShare >= 45 ? 'positive' : 'neutral',
+            detail: `${bestSeller.name} is loved by ${bestSellerShare.toFixed(0)}% of sold cases (${bestSellerQty.toLocaleString()} of ${Math.max(1, Math.round(totalQuantity)).toLocaleString()}). Keep it fully stocked.`
+        });
         suggestions.push({
             title: 'Best Seller Focus',
             metric: `${bestSeller.qty} cases`,
             tone: 'positive',
             detail: `${bestSeller.name} leads volume. Keep buffer stock and bundle it with slower drinks.`
+        });
+    }
+
+    if (analysis?.topDebtFollowUp && Number(analysis.topDebtFollowUp.owing) > 0) {
+        const days = Number.isFinite(analysis.topDebtFollowUp.daysOutstanding)
+            ? Math.max(0, Number(analysis.topDebtFollowUp.daysOutstanding))
+            : null;
+        const daysLabel = days === null
+            ? 'for a while'
+            : `for ${days} day${days === 1 ? '' : 's'}`;
+        suggestions.push({
+            title: 'Debt Follow-up',
+            metric: days === null ? formatRwf(analysis.topDebtFollowUp.owing) : `${days} days`,
+            tone: days !== null && days >= 14 ? 'negative' : 'warning',
+            detail: `Tell ${analysis.topDebtFollowUp.name} to pay back ${formatRwf(analysis.topDebtFollowUp.owing)}. This balance has been pending ${daysLabel}.`
+        });
+    }
+
+    if ((Number(analysis?.overdueDebtCount) || 0) > 0) {
+        const overdueCount = Number(analysis.overdueDebtCount) || 0;
+        suggestions.push({
+            title: 'Overdue Debt Queue',
+            metric: `${overdueCount} overdue`,
+            tone: overdueCount >= 3 ? 'warning' : 'neutral',
+            detail: `${overdueCount} customer account(s) are over 7 days old, totaling ${formatRwf(analysis.outstandingDebtTotal || 0)}. Plan reminder calls today.`
         });
     }
 
@@ -4512,7 +4708,7 @@ function getBusinessAiAdvisorSuggestions(analysis) {
         });
     }
 
-    return suggestions.slice(0, 7);
+    return suggestions.slice(0, 9);
 }
 
 async function runBusinessAiAdvisor(silent = false) {
@@ -4801,7 +4997,11 @@ function renderAdminPanel() {
 
     configureDatePickers();
     renderAdminDailySalesSummary();
-    runAdminGrowthAnalysis(true);
+    renderAdminSalesStockManagement();
+    setAdminMainTab(activeAdminMainTab);
+    if (activeAdminMainTab === 'sales') {
+        setAdminSalesSubTab(activeAdminSalesSubTab);
+    }
 
     const users = getAuthUsers();
     const privilegedCount = users.filter((user) => isAdminRoleUser(user)).length;
@@ -5351,6 +5551,95 @@ function setStockFilter(filter, event) {
     renderStockManagement();
 }
 
+function setAdminStockFilter(filter, event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    selectedAdminStockFilter = (filter === 'low' || filter === 'out') ? filter : 'all';
+
+    const mapping = {
+        all: document.getElementById('adminStockFilterAll'),
+        low: document.getElementById('adminStockFilterLow'),
+        out: document.getElementById('adminStockFilterOut')
+    };
+    Object.entries(mapping).forEach(([key, btn]) => {
+        if (!btn) return;
+        btn.classList.toggle('active', key === selectedAdminStockFilter);
+    });
+
+    renderAdminSalesStockManagement();
+}
+
+function getFilteredAdminStockDrinkEntries() {
+    const searchInput = document.getElementById('adminStockSearch');
+    const searchValue = String(searchInput ? searchInput.value : '').trim().toLowerCase();
+
+    return drinks
+        .map((drink, index) => ({ drink, index }))
+        .filter(({ drink }) => {
+            const status = getDrinkStockStatus(drink);
+            if (selectedAdminStockFilter === 'low' && status !== 'low') return false;
+            if (selectedAdminStockFilter === 'out' && status !== 'out') return false;
+            if (!searchValue) return true;
+            return String(drink.name || '').toLowerCase().includes(searchValue);
+        });
+}
+
+function renderAdminSalesStockManagement() {
+    const body = document.getElementById('adminStockManagementBody');
+    const totalEl = document.getElementById('adminStockSummaryTotal');
+    const lowEl = document.getElementById('adminStockSummaryLow');
+    const outEl = document.getElementById('adminStockSummaryOut');
+    if (!body || !totalEl || !lowEl || !outEl) return;
+
+    normalizeDrinksData();
+    const lowStockAll = getLowStockDrinks();
+    const outStockAll = lowStockAll.filter((drink) => getDrinkStockStatus(drink) === 'out');
+
+    totalEl.textContent = String(drinks.length);
+    lowEl.textContent = String(lowStockAll.filter((drink) => getDrinkStockStatus(drink) === 'low').length);
+    outEl.textContent = String(outStockAll.length);
+
+    const entries = getFilteredAdminStockDrinkEntries();
+    clearElement(body);
+
+    if (entries.length === 0) {
+        body.innerHTML = `<tr><td id="adminStockNoDataCell" colspan="6" style="padding: 30px; text-align: center; color: #789;">${escapeHtml(t('adminNoStockMatch'))}</td></tr>`;
+        return;
+    }
+
+    entries.forEach(({ drink, index }) => {
+        const stockQty = getDrinkStockQty(drink);
+        const lowThreshold = getDrinkLowStockThreshold(drink);
+        const status = getDrinkStockStatus(drink);
+        const statusClass = status === 'out' ? 'stock-status-out' : (status === 'low' ? 'stock-status-low' : 'stock-status-ok');
+        const statusLabel = getStockStatusLabel(status);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <strong>${escapeHtml(drink.name)}</strong>
+                <div style="font-size: 12px; color: #6d8aa4;">Updated: ${drink.lastStockUpdatedAt ? new Date(drink.lastStockUpdatedAt).toLocaleString() : 'Never'}</div>
+            </td>
+            <td>RWF ${Number(drink.price || 0).toLocaleString()}</td>
+            <td>
+                <strong>${stockQty}</strong> case(s)
+            </td>
+            <td>
+                <input id="adminStockThresholdInput_${index}" type="number" min="0" step="1" value="${lowThreshold}">
+            </td>
+            <td>
+                <span class="stock-status-badge ${statusClass}">${statusLabel}</span>
+            </td>
+            <td>
+                <div class="stock-edit-row">
+                    <button class="stock-action-btn" onclick="openStockAdjustForm(${index}, 'add')">+ Add</button>
+                    <button class="stock-action-btn danger" onclick="openStockAdjustForm(${index}, 'remove')">- Remove</button>
+                    <button class="stock-action-btn" onclick="saveAdminStockValues(${index})">Save Alert</button>
+                </div>
+            </td>
+        `;
+        body.appendChild(row);
+    });
+}
+
 function getFilteredStockDrinkEntries() {
     const searchInput = document.getElementById('stockSearch');
     const searchValue = String(searchInput ? searchInput.value : '').trim().toLowerCase();
@@ -5452,6 +5741,30 @@ async function saveStockValues(index) {
     updateCartDisplay();
     updateHome();
     renderStockManagement();
+    renderAdminSalesStockManagement();
+    showSuccessToast(`Low stock alert updated for ${drink.name}.`);
+}
+
+async function saveAdminStockValues(index) {
+    const drink = drinks[index];
+    if (!drink) return;
+
+    const thresholdInput = document.getElementById(`adminStockThresholdInput_${index}`);
+    const lowStockThreshold = normalizeStockValue(
+        thresholdInput ? thresholdInput.value : drink.lowStockThreshold,
+        getDrinkLowStockThreshold(drink)
+    );
+
+    drink.lowStockThreshold = lowStockThreshold;
+    drink.lastStockUpdatedAt = new Date().toISOString();
+
+    await optimizedSaveData();
+    updateQuickDrinkSelect();
+    updateDrinkList();
+    updateCartDisplay();
+    updateHome();
+    renderStockManagement();
+    renderAdminSalesStockManagement();
     showSuccessToast(`Low stock alert updated for ${drink.name}.`);
 }
 
@@ -5544,6 +5857,7 @@ async function applyStockAdjustment(index, direction, qtyInputValue = null, note
     updateCartDisplay();
     updateHome();
     renderStockManagement();
+    renderAdminSalesStockManagement();
     const noteText = cleanNote ? ` (${cleanNote})` : '';
     showSuccessToast(`${drink.name} stock ${normalizedDirection === 'remove' ? 'reduced' : 'increased'} by ${qty}${noteText}.`);
     return true;
@@ -5689,6 +6003,7 @@ function exportStockManagementPDF() {
 function updateDrinkList() {
     const drinkList = document.getElementById('drinkList');
     if (!drinkList) return;
+    const allowProfit = canViewProfitData();
     
     clearElement(drinkList);
     
@@ -5699,6 +6014,7 @@ function updateDrinkList() {
     
     drinks.forEach((drink, index) => {
         const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
+        const profitMeta = allowProfit ? `<span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>` : '';
         const stockQty = getDrinkStockQty(drink);
         const stockStatus = getDrinkStockStatus(drink);
         const stockLabel = getStockStatusLabel(stockStatus);
@@ -5711,7 +6027,7 @@ function updateDrinkList() {
                 <strong>${drink.name}</strong>
                 <div class="drink-meta">
                     <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
-                    <span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>
+                    ${profitMeta}
                     <span>Stock: ${stockQty} case(s)</span>
                     <span class="stock-status-badge ${stockClass}">${stockLabel}</span>
                 </div>
@@ -5728,6 +6044,7 @@ function updateDrinkList() {
 function filterDrinks() {
     const search = document.getElementById('drinkSearch').value.toLowerCase();
     const drinkList = document.getElementById('drinkList');
+    const allowProfit = canViewProfitData();
     
     if (!drinkList) return;
     
@@ -5749,6 +6066,7 @@ function filterDrinks() {
         const item = document.createElement('div');
         item.className = 'drink-item';
         const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
+        const profitMeta = allowProfit ? `<span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>` : '';
         const stockQty = getDrinkStockQty(drink);
         const stockStatus = getDrinkStockStatus(drink);
         const stockLabel = getStockStatusLabel(stockStatus);
@@ -5759,7 +6077,7 @@ function filterDrinks() {
                 <strong>${drink.name}</strong>
                 <div class="drink-meta">
                     <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
-                    <span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>
+                    ${profitMeta}
                     <span>Stock: ${stockQty} case(s)</span>
                     <span class="stock-status-badge ${stockClass}">${stockLabel}</span>
                 </div>
@@ -6088,10 +6406,13 @@ async function deleteDrink(index) {
 function saveNewDrink() {
     const name = document.getElementById('newDrinkName').value.trim();
     const price = parseFloat(document.getElementById('newDrinkPrice').value);
+    const canEditProfit = canViewProfitData();
     const profitPerCaseInput = document.getElementById('newDrinkProfitPerCase');
     const stockQtyInput = document.getElementById('newDrinkStockQty');
     const lowStockThresholdInput = document.getElementById('newDrinkLowStockThreshold');
-    const rawProfitValue = profitPerCaseInput ? String(profitPerCaseInput.value || '').trim() : '';
+    const existingIndex = drinks.findIndex(d => d.name.toLowerCase() === name.toLowerCase());
+    const existingDrink = existingIndex >= 0 ? drinks[existingIndex] : null;
+    const rawProfitValue = (canEditProfit && profitPerCaseInput) ? String(profitPerCaseInput.value || '').trim() : '';
     const parsedProfitValue = rawProfitValue === '' ? NaN : parseFloat(rawProfitValue);
     const rawStockValue = stockQtyInput ? String(stockQtyInput.value || '').trim() : '';
     const rawLowStockValue = lowStockThresholdInput ? String(lowStockThresholdInput.value || '').trim() : '';
@@ -6102,7 +6423,7 @@ function saveNewDrink() {
         alert('Please enter valid drink name and price');
         return;
     }
-    if (rawProfitValue !== '' && (!Number.isFinite(parsedProfitValue) || parsedProfitValue < 0)) {
+    if (canEditProfit && rawProfitValue !== '' && (!Number.isFinite(parsedProfitValue) || parsedProfitValue < 0)) {
         alert(t('profitPerCaseError'));
         return;
     }
@@ -6114,12 +6435,12 @@ function saveNewDrink() {
         alert('Low stock alert level must be zero or greater.');
         return;
     }
-    const defaultProfit = getDefaultDrinkProfitPerCase();
-    const finalProfitPerCase = rawProfitValue === '' ? defaultProfit : parsedProfitValue;
-    
-    // Check if drink exists
-    const existingIndex = drinks.findIndex(d => d.name.toLowerCase() === name.toLowerCase());
-    const existingDrink = existingIndex >= 0 ? drinks[existingIndex] : null;
+    const defaultProfit = Number.isFinite(Number(existingDrink?.profitPerCase))
+        ? Math.max(0, Number(existingDrink.profitPerCase))
+        : getDefaultDrinkProfitPerCase();
+    const finalProfitPerCase = canEditProfit
+        ? (rawProfitValue === '' ? defaultProfit : parsedProfitValue)
+        : defaultProfit;
     const finalStockQty = rawStockValue === ''
         ? getDrinkStockQty(existingDrink)
         : normalizeStockValue(parsedStockValue, 0);
@@ -6808,6 +7129,7 @@ function filterDeposits(type, event) {
 
 // ================= DASHBOARD FUNCTIONS =================
 function updateHome() {
+    const allowProfit = canViewProfitData();
     // Today's sales
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -6823,9 +7145,13 @@ function updateHome() {
         todaySalesElement.textContent = `RWF ${todayTotal.toLocaleString()}`;
     }
     
-    const todayProfit = calculateProfitFromSales(todaySales);
     const todayProfitElement = document.getElementById('todayProfit');
-    if (todayProfitElement) {
+    const todayProfitCard = todayProfitElement ? todayProfitElement.closest('.stat-card') : null;
+    if (todayProfitCard) {
+        todayProfitCard.style.display = allowProfit ? '' : 'none';
+    }
+    if (allowProfit && todayProfitElement) {
+        const todayProfit = calculateProfitFromSales(todaySales);
         todayProfitElement.textContent = `RWF ${todayProfit.toLocaleString()}`;
     }
     
@@ -6889,6 +7215,7 @@ function getProfitDescriptor() {
 
 // ================= REPORT FUNCTIONS =================
 function showDailyReport(dateValue = null) {
+    const allowProfit = canViewProfitData();
     const dateInput = document.getElementById('dailyReportDate');
     const selectedDate = dateValue || (dateInput && dateInput.value) || getTodayISODate();
     if (dateInput) dateInput.value = selectedDate;
@@ -6902,8 +7229,8 @@ function showDailyReport(dateValue = null) {
     const total = dailySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
     const cashSales = dailySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
     const creditSales = dailySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = calculateProfitFromSales(dailySales);
-    const profitLabel = getProfitDescriptor();
+    const profit = allowProfit ? calculateProfitFromSales(dailySales) : 0;
+    const profitLabel = allowProfit ? getProfitDescriptor() : '';
 
     const drinksSold = {};
     dailySales.forEach(sale => {
@@ -6947,10 +7274,12 @@ function showDailyReport(dateValue = null) {
                     <td>Number of Transactions</td>
                     <td>${dailySales.length}</td>
                 </tr>
+                ${allowProfit ? `
                 <tr style="background-color: #e8f4f8;">
                     <td><strong>${profitLabel}</strong></td>
                     <td><strong>RWF ${profit.toLocaleString()}</strong></td>
                 </tr>
+                ` : ''}
             </table>
             
             ${drinksTable ? `
@@ -7111,6 +7440,7 @@ function getSalesForRange(startDate, endDate) {
 }
 
 function showCustomRangeReport() {
+    const allowProfit = canViewProfitData();
     const selection = getValidatedRangeSelection(true);
     if (!selection) return;
 
@@ -7118,8 +7448,8 @@ function showCustomRangeReport() {
     const total = rangeSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
     const cashSales = rangeSales.filter((s) => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
     const creditSales = rangeSales.filter((s) => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = calculateProfitFromSales(rangeSales);
-    const profitLabel = getProfitDescriptor();
+    const profit = allowProfit ? calculateProfitFromSales(rangeSales) : 0;
+    const profitLabel = allowProfit ? getProfitDescriptor() : '';
 
     const drinksSold = {};
     const salesByDay = {};
@@ -7163,10 +7493,12 @@ function showCustomRangeReport() {
             <tr><td>Cash Sales</td><td>RWF ${cashSales.toLocaleString()}</td></tr>
             <tr><td>Credit Sales</td><td>RWF ${creditSales.toLocaleString()}</td></tr>
             <tr><td>Number of Transactions</td><td>${rangeSales.length}</td></tr>
+            ${allowProfit ? `
             <tr style="background-color: #e8f4f8;">
                 <td><strong>${profitLabel}</strong></td>
                 <td><strong>RWF ${profit.toLocaleString()}</strong></td>
             </tr>
+            ` : ''}
         </table>
         ${salesByDayRows ? `
         <h4 style="margin-top: 24px;">Sales by Day</h4>
@@ -7189,6 +7521,7 @@ function showCustomRangeReport() {
 }
 
 function exportCustomRangePDF() {
+    const allowProfit = canViewProfitData();
     const selection = getValidatedRangeSelection(true);
     if (!selection) return;
 
@@ -7211,7 +7544,7 @@ function exportCustomRangePDF() {
         const total = rangeSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
         const cashSales = rangeSales.filter((s) => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
         const creditSales = rangeSales.filter((s) => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
-        const profit = calculateProfitFromSales(rangeSales);
+        const profit = allowProfit ? calculateProfitFromSales(rangeSales) : 0;
 
         const drinksSold = {};
         rangeSales.forEach((sale) => {
@@ -7239,7 +7572,9 @@ function exportCustomRangePDF() {
         doc.text(`Cash: RWF ${cashSales.toLocaleString()}`, margin + 4, y + 10);
         doc.text(`Credit: RWF ${creditSales.toLocaleString()}`, margin + 4, y + 17);
         doc.text(`Transactions: ${rangeSales.length}`, margin + 95, y + 3);
-        doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 95, y + 10);
+        if (allowProfit) {
+            doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 95, y + 10);
+        }
         y += 30;
 
         const drawTopDrinksHeader = () => {
@@ -7324,6 +7659,7 @@ function exportCustomRangePDF() {
 }
 
 function showWeeklyReport() {
+    const allowProfit = canViewProfitData();
     const today = new Date();
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
@@ -7334,7 +7670,7 @@ function showWeeklyReport() {
     });
     
     const total = weeklySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-    const profit = calculateProfitFromSales(weeklySales);
+    const profit = allowProfit ? calculateProfitFromSales(weeklySales) : 0;
     const dailyAverage = Math.round(total / 7);
     
     // Sales by day
@@ -7383,10 +7719,12 @@ function showWeeklyReport() {
                     <td>Daily Average</td>
                     <td>RWF ${dailyAverage.toLocaleString()}</td>
                 </tr>
+                ${allowProfit ? `
                 <tr style="background-color: #e8f4f8;">
                     <td><strong>Weekly Profit</strong></td>
                     <td><strong>RWF ${profit.toLocaleString()}</strong></td>
                 </tr>
+                ` : ''}
             </table>
             
             ${dayTable ? `
@@ -7419,6 +7757,7 @@ function showWeeklyReport() {
 }
 
 function showMonthlyReport() {
+    const allowProfit = canViewProfitData();
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     
@@ -7428,7 +7767,7 @@ function showMonthlyReport() {
     });
     
     const total = monthlySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-    const profit = calculateProfitFromSales(monthlySales);
+    const profit = allowProfit ? calculateProfitFromSales(monthlySales) : 0;
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
     const dailyAverage = Math.round(total / daysInMonth);
     
@@ -7478,10 +7817,12 @@ function showMonthlyReport() {
                     <td>Daily Average</td>
                     <td>RWF ${dailyAverage.toLocaleString()}</td>
                 </tr>
+                ${allowProfit ? `
                 <tr style="background-color: #e8f4f8;">
                     <td><strong>Monthly Profit</strong></td>
                     <td><strong>RWF ${profit.toLocaleString()}</strong></td>
                 </tr>
+                ` : ''}
             </table>
             
             ${dayTable ? `
@@ -7514,6 +7855,7 @@ function showMonthlyReport() {
 }
 
 function showAnnualReport() {
+    const allowProfit = canViewProfitData();
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), 0, 1);
     
@@ -7523,7 +7865,7 @@ function showAnnualReport() {
     });
     
     const total = annualSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-    const profit = calculateProfitFromSales(annualSales);
+    const profit = allowProfit ? calculateProfitFromSales(annualSales) : 0;
     const daysInYear = (today.getFullYear() % 4 === 0) ? 366 : 365;
     const dailyAverage = Math.round(total / daysInYear);
     
@@ -7573,10 +7915,12 @@ function showAnnualReport() {
                     <td>Daily Average</td>
                     <td>RWF ${dailyAverage.toLocaleString()}</td>
                 </tr>
+                ${allowProfit ? `
                 <tr style="background-color: #e8f4f8;">
                     <td><strong>Annual Profit</strong></td>
                     <td><strong>RWF ${profit.toLocaleString()}</strong></td>
                 </tr>
+                ` : ''}
             </table>
             
             ${monthTable ? `
@@ -7609,8 +7953,9 @@ function showAnnualReport() {
 }
 
 function showFullReport() {
+    const allowProfit = canViewProfitData();
     const totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-    const totalProfit = calculateProfitFromSales(sales);
+    const totalProfit = allowProfit ? calculateProfitFromSales(sales) : 0;
     const totalCustomers = customers.length;
     const totalDebt = customers.reduce((sum, customer) => sum + (customer.owing || 0), 0);
     const totalDeposits = clates.filter(c => !c.returned).reduce((sum, c) => sum + (c.amount || 0), 0);
@@ -7642,10 +7987,12 @@ function showFullReport() {
                     <td>Total Sales (All Time)</td>
                     <td>RWF ${totalSales.toLocaleString()}</td>
                 </tr>
+                ${allowProfit ? `
                 <tr>
                     <td>Estimated Total Profit</td>
                     <td>RWF ${totalProfit.toLocaleString()}</td>
                 </tr>
+                ` : ''}
                 <tr>
                     <td>Total Customers</td>
                     <td>${totalCustomers}</td>
@@ -8080,6 +8427,7 @@ function exportCustomerDebtPDF(index) {
 }
 
 function exportDailyPDF(doc, startY, margin) {
+    const allowProfit = canViewProfitData();
     const selectedDate = (document.getElementById('dailyReportDate')?.value) || getTodayISODate();
     const { dayStart: today, dayEnd } = getDayRange(selectedDate);
 
@@ -8101,7 +8449,7 @@ function exportDailyPDF(doc, startY, margin) {
     const totalSales = dailySales.reduce((sum, s) => sum + (s.total || 0), 0);
     const cashSales = dailySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
     const creditSales = dailySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = calculateProfitFromSales(dailySales);
+    const profit = allowProfit ? calculateProfitFromSales(dailySales) : 0;
     
     // Summary Box
     doc.setFillColor(240, 240, 240);
@@ -8110,8 +8458,10 @@ function exportDailyPDF(doc, startY, margin) {
     doc.setFont(undefined, 'bold');
     doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
     doc.text(`Transactions: ${dailySales.length}`, margin + 80, yPos + 3);
-    doc.setTextColor(0, 100, 200);
-    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    if (allowProfit) {
+        doc.setTextColor(0, 100, 200);
+        doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    }
     doc.setTextColor(0);
     yPos += 25;
     
@@ -8259,6 +8609,7 @@ function exportDailyPDF(doc, startY, margin) {
 }
 
 function exportWeeklyPDF(doc, startY, margin) {
+    const allowProfit = canViewProfitData();
     const today = new Date();
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
@@ -8279,7 +8630,7 @@ function exportWeeklyPDF(doc, startY, margin) {
     ]);
     
     const totalSales = weeklySales.reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = calculateProfitFromSales(weeklySales);
+    const profit = allowProfit ? calculateProfitFromSales(weeklySales) : 0;
     const cashSales = weeklySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
     const creditSales = weeklySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
     
@@ -8290,8 +8641,10 @@ function exportWeeklyPDF(doc, startY, margin) {
     doc.setFont(undefined, 'bold');
     doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
     doc.text(`Transactions: ${weeklySales.length}`, margin + 80, yPos + 3);
-    doc.setTextColor(0, 100, 200);
-    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    if (allowProfit) {
+        doc.setTextColor(0, 100, 200);
+        doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    }
     doc.setTextColor(0);
     yPos += 25;
     
@@ -8406,6 +8759,7 @@ function exportWeeklyPDF(doc, startY, margin) {
 }
 
 function exportMonthlyPDF(doc, startY, margin) {
+    const allowProfit = canViewProfitData();
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     
@@ -8425,7 +8779,7 @@ function exportMonthlyPDF(doc, startY, margin) {
     ]);
     
     const totalSales = monthlySales.reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = calculateProfitFromSales(monthlySales);
+    const profit = allowProfit ? calculateProfitFromSales(monthlySales) : 0;
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
     const cashSales = monthlySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
     const creditSales = monthlySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
@@ -8437,8 +8791,10 @@ function exportMonthlyPDF(doc, startY, margin) {
     doc.setFont(undefined, 'bold');
     doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
     doc.text(`Transactions: ${monthlySales.length}`, margin + 80, yPos + 3);
-    doc.setTextColor(0, 100, 200);
-    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    if (allowProfit) {
+        doc.setTextColor(0, 100, 200);
+        doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    }
     doc.setTextColor(0);
     yPos += 25;
     
@@ -8543,6 +8899,7 @@ function exportMonthlyPDF(doc, startY, margin) {
 }
 
 function exportAnnualPDF(doc, startY, margin) {
+    const allowProfit = canViewProfitData();
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), 0, 1);
     
@@ -8578,7 +8935,7 @@ function exportAnnualPDF(doc, startY, margin) {
     yPos += 8;
     
     const totalSales = annualSales.reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = calculateProfitFromSales(annualSales);
+    const profit = allowProfit ? calculateProfitFromSales(annualSales) : 0;
     const cashSales = annualSales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
     const creditSales = annualSales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
     
@@ -8589,8 +8946,10 @@ function exportAnnualPDF(doc, startY, margin) {
     doc.setFont(undefined, 'bold');
     doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
     doc.text(`Transactions: ${annualSales.length}`, margin + 80, yPos + 3);
-    doc.setTextColor(0, 100, 200);
-    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    if (allowProfit) {
+        doc.setTextColor(0, 100, 200);
+        doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    }
     doc.setTextColor(0);
     yPos += 25;
     
@@ -8740,8 +9099,9 @@ function exportAnnualPDF(doc, startY, margin) {
 }
 
 function exportFullPDF(doc, startY, margin) {
+    const allowProfit = canViewProfitData();
     const totalSales = sales.reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = calculateProfitFromSales(sales);
+    const profit = allowProfit ? calculateProfitFromSales(sales) : 0;
     const totalCustomers = customers.length;
     const totalDebt = customers.reduce((sum, c) => sum + (c.owing || 0), 0);
     const cashSales = sales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
@@ -8780,8 +9140,10 @@ function exportFullPDF(doc, startY, margin) {
     doc.setFont(undefined, 'bold');
     doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
     doc.text(`Total Customers: ${totalCustomers}`, margin + 80, yPos + 3);
-    doc.setTextColor(0, 100, 200);
-    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    if (allowProfit) {
+        doc.setTextColor(0, 100, 200);
+        doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    }
     doc.setTextColor(0);
     yPos += 25;
     
@@ -9650,6 +10012,10 @@ async function refreshStorageStatus() {
 function renderDrinkProfitEditor() {
     const container = document.getElementById('drinkProfitList');
     if (!container) return;
+    if (!canViewProfitData()) {
+        clearElement(container);
+        return;
+    }
 
     clearElement(container);
     normalizeDrinksData();
@@ -9671,6 +10037,11 @@ function renderDrinkProfitEditor() {
 }
 
 async function saveDrinkProfitsFromSettings() {
+    if (!canViewProfitData()) {
+        alert('Permission Denied');
+        return 'Permission Denied';
+    }
+
     const inputs = document.querySelectorAll('#drinkProfitList .drink-profit-input');
     if (!inputs.length) {
         alert(t('noDrinksForProfitEditor'));
@@ -9696,6 +10067,7 @@ async function saveDrinkProfitsFromSettings() {
 }
 
 function loadSettings() {
+    const allowProfit = canViewProfitData();
     // Load profit percentage
     const profitPercentage = settings.profitPercentage || 30;
     const profitInput = document.getElementById('profitPercentage');
@@ -9703,8 +10075,13 @@ function loadSettings() {
     const profitModeInput = document.getElementById('profitMode');
     if (profitModeInput) profitModeInput.value = settings.profitMode || 'percentage';
     const addDrinkProfitInput = document.getElementById('newDrinkProfitPerCase');
-    if (addDrinkProfitInput && !addDrinkProfitInput.value) {
-        addDrinkProfitInput.value = Number(getDefaultDrinkProfitPerCase());
+    if (addDrinkProfitInput) {
+        if (allowProfit && !addDrinkProfitInput.value) {
+            addDrinkProfitInput.value = Number(getDefaultDrinkProfitPerCase());
+        }
+        if (!allowProfit) {
+            addDrinkProfitInput.value = '';
+        }
     }
     const addDrinkStockInput = document.getElementById('newDrinkStockQty');
     if (addDrinkStockInput && !addDrinkStockInput.value) {
@@ -9737,9 +10114,15 @@ function loadSettings() {
     renderStockManagement();
     renderHomeStockWarning();
     refreshDataManagementAccessUI();
+    refreshProfitVisibilityUI();
 }
 
 function saveProfitPercentage() {
+    if (!canViewProfitData()) {
+        alert('Permission Denied');
+        return 'Permission Denied';
+    }
+
     const profit = parseFloat(document.getElementById('profitPercentage').value) || 30;
     const profitModeInput = document.getElementById('profitMode');
     const profitMode = profitModeInput ? profitModeInput.value : 'percentage';
@@ -9950,7 +10333,11 @@ function updateLanguageUI() {
     setPlaceholder('#stockSearch', t('searchDrinks'));
 
     // Admin panel
-    setText('#adminPanel button[onclick="renderAdminPanel()"]', t('adminRefresh'));
+    setText('#adminRefreshBtn', t('adminRefresh'));
+    setText('#adminMainTabSalesBtn', t('adminTabSales'));
+    setText('#adminMainTabAccountsBtn', t('adminTabAccountManagement'));
+    setText('#adminSalesSubTabDailyBtn', t('adminSubTabDailySales'));
+    setText('#adminSalesSubTabStockBtn', t('adminSubTabStock'));
     setText('#adminExportUsersPdfBtn', t('adminExportAccountsPdf'));
     setText('#adminExportUsersJsonBtn', t('adminExportAccountsJson'));
     setPlaceholder('#adminUserSearch', t('adminSearchEmployersPlaceholder'));
@@ -9958,6 +10345,20 @@ function updateLanguageUI() {
     setText('#adminDailyExportDesc', t('adminDailyExportDesc'));
     setText('#adminExportDayPdfBtn', t('adminExportDayPdf'));
     setText('#adminStockAuditPdfBtn', t('adminStockAuditPdf'));
+    setText('#adminStockSectionTitle', t('adminStockSectionTitle'));
+    setText('#adminStockSectionDesc', t('adminStockSectionDesc'));
+    setText('#adminStockSummaryTotalLabel', t('adminStockSummaryTotalDrinks'));
+    setText('#adminStockSummaryLowLabel', t('adminStockSummaryLow'));
+    setText('#adminStockSummaryOutLabel', t('adminStockSummaryOut'));
+    setPlaceholder('#adminStockSearch', t('searchDrinks'));
+    setText('#adminStockFilterAll', t('all'));
+    setText('#adminStockFilterLow', t('adminStockFilterLow'));
+    setText('#adminStockFilterOut', t('adminStockFilterOut'));
+    setText('#adminStockNoDataCell', t('adminNoStockMatch'));
+    setText('#adminAccountsExportTitle', t('adminAccountsExportTitle'));
+    setText('#adminAccountsExportDesc', t('adminAccountsExportDesc'));
+    setText('#adminDataProtectionTitle', t('adminDataProtectionTitle'));
+    setText('#adminDataProtectionDesc', t('adminDataProtectionDesc'));
     setText('#adminClearDataQuickBtn', t('adminClearCurrentUserData'));
     setText('#adminAiTitle', t('adminAiTitle'));
     setText('#adminAiDesc', t('adminAiDesc'));
@@ -9974,11 +10375,10 @@ function updateLanguageUI() {
     setText('#adminDailyHeadProfit', t('adminDailyHeadProfit'));
     setText('#adminDailyNoDataCell', t('adminNoSalesDataYet'));
     setText('#adminEmployerAccountsTitle', t('adminEmployerAccountsTitle'));
-    const adminFilterBtns = document.querySelectorAll('#adminPanel .filter-buttons .filter-btn');
-    if (adminFilterBtns[0]) adminFilterBtns[0].textContent = t('all');
-    if (adminFilterBtns[1]) adminFilterBtns[1].textContent = t('adminFilterPrivileged');
-    if (adminFilterBtns[2]) adminFilterBtns[2].textContent = t('adminFilterStaff');
-    if (adminFilterBtns[3]) adminFilterBtns[3].textContent = t('adminFilterInactive');
+    setText('#adminFilterAll', t('all'));
+    setText('#adminFilterPrivileged', t('adminFilterPrivileged'));
+    setText('#adminFilterStaff', t('adminFilterStaff'));
+    setText('#adminFilterInactive', t('adminFilterInactive'));
 
     // Customers page
     setText('#customers button[onclick="openCustomerForm()"]', `+ ${t('addCustomer')}`);
@@ -10297,7 +10697,11 @@ window.closeStockAdjustForm = closeStockAdjustForm;
 window.confirmStockAdjustment = confirmStockAdjustment;
 window.exportStockManagementPDF = exportStockManagementPDF;
 window.setAdminUserFilter = setAdminUserFilter;
+window.setAdminMainTab = setAdminMainTab;
+window.setAdminSalesSubTab = setAdminSalesSubTab;
+window.setAdminStockFilter = setAdminStockFilter;
 window.renderAdminPanel = renderAdminPanel;
+window.renderAdminSalesStockManagement = renderAdminSalesStockManagement;
 window.toggleUserRole = toggleUserRole;
 window.toggleUserActiveStatus = toggleUserActiveStatus;
 window.adminResetUserPin = adminResetUserPin;
@@ -10305,6 +10709,7 @@ window.adminResetUserAdminPin = adminResetUserAdminPin;
 window.viewUserDataSnapshot = viewUserDataSnapshot;
 window.exportAdminUsersPDF = exportAdminUsersPDF;
 window.exportAdminUsersJSON = exportAdminUsersJSON;
+window.saveAdminStockValues = saveAdminStockValues;
 window.runAdminGrowthAnalysis = runAdminGrowthAnalysis;
 window.runBusinessAiAdvisor = runBusinessAiAdvisor;
 window.renderAdminBusinessAnalysisTab = renderAdminBusinessAnalysisTab;
