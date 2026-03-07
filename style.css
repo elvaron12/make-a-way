@@ -4306,8 +4306,7 @@ body.dark-mode #addSale #cartItems {
     border: 1px solid rgba(110, 143, 255, 0.24) !important;
 }
 
-body.dark-mode #addSale #quickDrinkSelect,
-body.dark-mode #addSale #quickQuantity {
+body.dark-mode #addSale #quickDrinkSelect {
     background: rgba(8, 14, 28, 0.95) !important;
     border-color: rgba(110, 143, 255, 0.35) !important;
     color: #e6edff !important;
@@ -4456,8 +4455,6 @@ body.dark-mode .maw-success-toast {
     border-radius: 12px !important;
 }
 
-#app #addSale #quickDrinkSelect,
-#app #addSale #quickQuantity,
 #app #salesHistoryDate,
 #app #dailyReportDate,
 #app #rangeStartDate,
@@ -4470,8 +4467,6 @@ body.dark-mode .maw-success-toast {
     background: rgba(255, 255, 255, 0.86) !important;
 }
 
-#app #addSale #quickDrinkSelect:focus,
-#app #addSale #quickQuantity:focus,
 #app #salesHistoryDate:focus,
 #app #dailyReportDate:focus,
 #app #rangeStartDate:focus,
@@ -4482,6 +4477,177 @@ body.dark-mode .maw-success-toast {
     outline: none;
     border-color: rgba(37, 117, 252, 0.5) !important;
     box-shadow: 0 0 0 3px rgba(37, 117, 252, 0.15) !important;
+}
+
+#app #addSale .quick-drink-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+#app #addSale .quick-drink-tool-btn {
+    border: 1px solid rgba(37, 117, 252, 0.26);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #214f8d;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+}
+
+#app #addSale #toggleDrinkSelectModeBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 74px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+#app #addSale .drink-item-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+#app #addSale .drink-item-content {
+    min-width: 0;
+    flex: 1;
+}
+
+#app #addSale .drink-select-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+#app #addSale .drink-select-inline input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #2575fc;
+    cursor: pointer;
+}
+
+#app #addSale .quick-drink-multi-list {
+    margin-top: 8px;
+    max-height: 190px;
+    overflow-y: auto;
+    border: 1px solid rgba(37, 117, 252, 0.22);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 6px;
+}
+
+#app #addSale .quick-drink-multi-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+#app #addSale .quick-drink-multi-item:hover {
+    background: rgba(37, 117, 252, 0.08);
+}
+
+#app #addSale .quick-drink-multi-item.is-out {
+    opacity: 0.58;
+    cursor: not-allowed;
+}
+
+#app #addSale .quick-drink-multi-item input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: #2575fc;
+}
+
+#app #addSale .quick-drink-multi-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+#app #addSale .quick-drink-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e4f85;
+}
+
+#app #addSale .quick-drink-meta {
+    font-size: 12px;
+    color: #5e7595;
+}
+
+#app #addSale .quick-drink-selected-count {
+    margin: 8px 0 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: #2f5f97;
+}
+
+#app #addSale .quick-drink-empty {
+    padding: 10px;
+    color: #6f86a5;
+    text-align: center;
+    font-size: 13px;
+}
+
+#app #addSale .selected-drink-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(37, 117, 252, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.88);
+}
+
+#app #addSale .selected-drink-row:last-child {
+    margin-bottom: 0;
+}
+
+#app #addSale .selected-drink-info {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+#app #addSale .selected-drink-qty {
+    width: 80px;
+    min-width: 80px;
+    border: 1px solid rgba(37, 117, 252, 0.22);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+#app #addSale .selected-drink-remove-btn {
+    border: 1px solid rgba(244, 99, 99, 0.45);
+    border-radius: 8px;
+    background: #fff5f5;
+    color: #b94747;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+#app #addSale .selected-drink-remove-btn:hover {
+    background: #ffe8e8;
+}
+
+#app #addSale #addSelectedToCartBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 #app .search-input,
@@ -4646,8 +4812,6 @@ body.dark-mode #app #addSale #cartItems {
 }
 
 body.dark-mode #app .search-input,
-body.dark-mode #app #addSale #quickDrinkSelect,
-body.dark-mode #app #addSale #quickQuantity,
 body.dark-mode #app #salesHistoryDate,
 body.dark-mode #app #dailyReportDate,
 body.dark-mode #app #rangeStartDate,
@@ -4658,6 +4822,58 @@ body.dark-mode #app #settings select {
     background: rgba(8, 14, 28, 0.9) !important;
     border: 1px solid rgba(110, 143, 255, 0.26) !important;
     color: #e6edff !important;
+}
+
+body.dark-mode #app #addSale .quick-drink-tool-btn {
+    background: rgba(16, 31, 53, 0.92);
+    border-color: rgba(110, 143, 255, 0.32);
+    color: #c9e2ff;
+}
+
+body.dark-mode #app #addSale .quick-drink-multi-list {
+    background: rgba(8, 14, 28, 0.92);
+    border-color: rgba(110, 143, 255, 0.26);
+}
+
+body.dark-mode #app #addSale .quick-drink-multi-item:hover {
+    background: rgba(110, 143, 255, 0.16);
+}
+
+body.dark-mode #app #addSale .quick-drink-name {
+    color: #cde7ff;
+}
+
+body.dark-mode #app #addSale .quick-drink-meta {
+    color: #9db7d8;
+}
+
+body.dark-mode #app #addSale .quick-drink-selected-count {
+    color: #aac8ea;
+}
+
+body.dark-mode #app #addSale .drink-select-inline input[type="checkbox"] {
+    accent-color: #4d8fff;
+}
+
+body.dark-mode #app #addSale .selected-drink-row {
+    background: rgba(16, 28, 50, 0.82);
+    border-color: rgba(110, 143, 255, 0.26);
+}
+
+body.dark-mode #app #addSale .selected-drink-qty {
+    background: rgba(8, 14, 28, 0.92);
+    border-color: rgba(110, 143, 255, 0.3);
+    color: #d9ebff;
+}
+
+body.dark-mode #app #addSale .selected-drink-remove-btn {
+    background: rgba(90, 24, 33, 0.62);
+    border-color: rgba(240, 120, 140, 0.42);
+    color: #ffd3dc;
+}
+
+body.dark-mode #app #addSale .selected-drink-remove-btn:hover {
+    background: rgba(111, 29, 40, 0.72);
 }
 
 body.dark-mode #app .filter-btn {
@@ -5414,6 +5630,95 @@ body.dark-mode .divider span {
     overflow-y: hidden;
 }
 
+#app #reports .admin-drinks-pie-container {
+    margin-bottom: 16px;
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(37, 117, 252, 0.14);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(244, 249, 255, 0.93));
+}
+
+#app #reports .admin-drinks-pie-title {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #1a4d7a;
+}
+
+#app #reports .admin-drinks-pie-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+}
+
+#app #reports .admin-drinks-pie-wrap canvas {
+    display: block;
+    transition: transform 0.16s ease;
+    cursor: default;
+}
+
+#app #reports .admin-drinks-pie-tooltip {
+    position: absolute;
+    z-index: 4;
+    max-width: 220px;
+    padding: 6px 9px;
+    border-radius: 8px;
+    border: 1px solid rgba(16, 81, 156, 0.2);
+    background: rgba(255, 255, 255, 0.96);
+    color: #204265;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 6px 14px rgba(15, 42, 79, 0.16);
+    pointer-events: none;
+}
+
+#app #reports .admin-drinks-pie-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: #4f6785;
+}
+
+#app #reports .admin-drinks-pie-legend .pie-legend-item {
+    appearance: none;
+    width: 100%;
+    border: 1px solid rgba(37, 117, 252, 0.12);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.76);
+    padding: 6px 8px;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+}
+
+#app #reports .admin-drinks-pie-legend .pie-legend-item:hover {
+    border-color: rgba(37, 117, 252, 0.34);
+    background: rgba(255, 255, 255, 0.96);
+}
+
+#app #reports .admin-drinks-pie-legend .pie-legend-item.is-active {
+    border-color: rgba(37, 117, 252, 0.45);
+    background: rgba(231, 242, 255, 0.96);
+    transform: translateY(-1px);
+}
+
+#app #reports .admin-drinks-pie-legend .pie-legend-item.is-muted {
+    opacity: 0.56;
+}
+
+#app #reports .admin-drinks-pie-legend .pie-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 #app #reports .admin-growth-canvas {
     min-width: 100%;
     width: max-content;
@@ -5912,6 +6217,41 @@ body.dark-mode #app #reports .growth-window-btn.active {
 body.dark-mode #app #reports .admin-growth-chart {
     border-color: rgba(130, 177, 255, 0.2);
     background: linear-gradient(180deg, rgba(11, 22, 40, 0.94), rgba(10, 19, 35, 0.92));
+}
+
+body.dark-mode #app #reports .admin-drinks-pie-container {
+    border-color: rgba(130, 177, 255, 0.2);
+    background: linear-gradient(180deg, rgba(11, 22, 40, 0.94), rgba(10, 19, 35, 0.92));
+}
+
+body.dark-mode #app #reports .admin-drinks-pie-title {
+    color: #a5c8e4;
+}
+
+body.dark-mode #app #reports .admin-drinks-pie-legend {
+    color: #94a8c4;
+}
+
+body.dark-mode #app #reports .admin-drinks-pie-tooltip {
+    border-color: rgba(121, 182, 255, 0.28);
+    background: rgba(12, 27, 46, 0.94);
+    color: #cfe6ff;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.36);
+}
+
+body.dark-mode #app #reports .admin-drinks-pie-legend .pie-legend-item {
+    background: rgba(17, 33, 56, 0.86);
+    border-color: rgba(109, 145, 191, 0.24);
+}
+
+body.dark-mode #app #reports .admin-drinks-pie-legend .pie-legend-item:hover {
+    border-color: rgba(127, 181, 255, 0.42);
+    background: rgba(20, 39, 66, 0.94);
+}
+
+body.dark-mode #app #reports .admin-drinks-pie-legend .pie-legend-item.is-active {
+    border-color: rgba(127, 181, 255, 0.5);
+    background: rgba(24, 48, 79, 0.96);
 }
 
 body.dark-mode #app #reports .growth-grid-line {
