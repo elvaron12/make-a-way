@@ -281,6 +281,7 @@ let customers = [];
 let clates = [];
 let drinks = [];
 let settings = {};
+let yearlyArchives = [];
 let appMeta = {};
 let saleQty = 1;
 let selectedCustomerId = null;
@@ -306,6 +307,7 @@ let activeAdminMainTab = 'sales';
 let activeAdminSalesSubTab = 'daily';
 let selectedAdminGrowthWindowDays = 30;
 let selectedAdminGrowthPointIndex = -1;
+let adminGrowthPreviewPointIndex = -1;
 let cachedAdminGrowthAnalysis = null;
 const ADMIN_DRINKS_PIE_COLORS = ['#1565c0', '#2e7d32', '#c62828', '#f9a825', '#6a1b9a', '#00838f', '#ef6c00', '#37474f', '#7b1fa2', '#00695c'];
 const adminDrinksPieState = {
@@ -383,11 +385,16 @@ const translations = {
         adminExportDayNoSales: 'No sales found for that day.',
         signUp: 'Sign Up',
         fullName: 'Full Name',
-        phoneOrEmail: 'Phone Number or Email',
+        phoneOrEmail: 'Phone Number',
         emailAddress: 'Email Address',
         phoneNumber: 'Phone Number',
         pinLabel: '5-digit PIN',
         confirmPin: 'Confirm PIN',
+        accountType: 'Account Type',
+        signupRoleStaff: 'Staff Account',
+        signupRoleAdmin: 'Admin Account',
+        adminPinLabel: 'Admin PIN (5-digit)',
+        confirmAdminPin: 'Confirm Admin PIN',
         createAccount: 'Create Account',
         continueWithGoogle: 'Continue with Google',
         googleEmailPrompt: 'Enter your Google email',
@@ -400,17 +407,17 @@ const translations = {
         sendCode: 'Send Code',
         forgotPin: 'Forgot PIN?',
         resetPin: 'Reset PIN',
-        resetPinHint: 'Use phone, email, and verification code to set a new PIN.',
+        resetPinHint: 'Use your phone number to set a new PIN.',
         resetNewPin: 'New 5-digit PIN',
         resetConfirmPin: 'Confirm New PIN', 
         cancel: 'Cancel',
         authHintLogin: 'Welcome back to Make A Way!',
-        authHintAdmin: 'Admin login uses your account number/email with a separate admin PIN.',
+        authHintAdmin: 'Admin login uses your phone number with a separate admin PIN.',
         authHintSignup: 'Create your account to secure this app.',
-        authHintReset: 'Reset your PIN with your registered phone and email.',
-        authInvalidCredentials: 'Incorrect email/phone or PIN',
+        authHintReset: 'Reset your PIN with your registered phone number.',
+        authInvalidCredentials: 'Incorrect phone number or PIN',
         authAccountInactive: 'This account is inactive. Please contact the owner.',
-        authAdminInvalidCredentials: 'Incorrect admin email/phone or admin PIN',
+        authAdminInvalidCredentials: 'Incorrect admin phone number or admin PIN',
         authAdminAccessDenied: 'This account does not have admin access',
         authAdminSetupRequiresUserPin: 'To create admin PIN, enter your normal user PIN first.',
         authAdminSetupPrompt: 'Set a new 5-digit Admin PIN',
@@ -613,11 +620,16 @@ const translations = {
         adminPanelDescription: 'Shakisha abakozi, uhindure inshingano za konti, kandi ucunge abafite uburenganzira bwo gukoresha porogaramu.',
         signUp: 'Iyandikishe',
         fullName: 'Amazina yuzuye',
-        phoneOrEmail: 'Telefoni cyangwa imeyili',
+        phoneOrEmail: 'Telefoni',
         emailAddress: 'Imeyili',
         phoneNumber: 'Nimero ya telefone',
         pinLabel: 'PIN y imibare 5',
         confirmPin: 'Emeza PIN',
+        accountType: 'Ubwoko bwa konti',
+        signupRoleStaff: 'Konti isanzwe',
+        signupRoleAdmin: 'Konti ya admin',
+        adminPinLabel: 'PIN ya admin (imibare 5)',
+        confirmAdminPin: 'Emeza PIN ya admin',
         createAccount: 'Fungura konti',
         continueWithGoogle: 'Komeza na Google',
         googleEmailPrompt: 'Andika imeyili ya Google',
@@ -630,17 +642,17 @@ const translations = {
         sendCode: 'Ohereza kode',
         forgotPin: 'Wibagiwe PIN?',
         resetPin: 'Hindura PIN',
-        resetPinHint: 'Koresha telefoni, imeyili na kode kugira ngo ushyireho PIN nshya.',
+        resetPinHint: 'Koresha telefoni yawe kugira ngo ushyireho PIN nshya.',
         resetNewPin: 'PIN nshya y\'imibare 5',
         resetConfirmPin: 'Emeza PIN nshya',
         cancel: 'Siba',
         authHintLogin: 'Koresha konti yawe usanzwe ufite kugira ngo ukomeze.',
-        authHintAdmin: 'Admin yinjirana telefoni/imeyili imwe ariko ikoresha PIN ya admin itandukanye.',
+        authHintAdmin: 'Admin yinjirana nimero ya telefone kandi ikoresha PIN ya admin itandukanye.',
         authHintSignup: 'Banza ufungure konti kugira ngo urinde porogaramu.',
-        authHintReset: 'Hindura PIN ukoresheje telefoni n\'imeyili byanditswe kuri konti.',
-        authInvalidCredentials: 'Imeyili/telefoni cyangwa PIN si byo',
+        authHintReset: 'Hindura PIN ukoresheje nimero ya telefone wandikishijeho konti.',
+        authInvalidCredentials: 'Nimero ya telefone cyangwa PIN si byo',
         authAccountInactive: 'Iyi konti ntikora. Vugana na nyiri porogaramu.',
-        authAdminInvalidCredentials: 'Imeyili/telefoni ya admin cyangwa PIN ya admin si byo',
+        authAdminInvalidCredentials: 'Nimero ya telefone ya admin cyangwa PIN ya admin si byo',
         authAdminAccessDenied: 'Iyi konti nta burenganzira bwa admin ifite',
         authAdminSetupRequiresUserPin: 'Kugira ngo ushyireho PIN ya admin, banza winjize PIN yawe isanzwe.',
         authAdminSetupPrompt: 'Shyiraho PIN nshya ya admin y imibare 5',
@@ -843,11 +855,16 @@ adminPanelTitle: 'Panneau d’administration',
 adminPanelDescription: 'Rechercher des employés, modifier les rôles des comptes et gérer les autorisations d’accès à l’application.',
 signUp: 'S’inscrire',
 fullName: 'Nom complet',
-phoneOrEmail: 'Téléphone ou email',
+phoneOrEmail: 'Téléphone',
 emailAddress: 'Adresse email',
 phoneNumber: 'Numéro de téléphone',
 pinLabel: 'PIN à 5 chiffres',
 confirmPin: 'Confirmer le PIN',
+accountType: 'Type de compte',
+signupRoleStaff: 'Compte employe',
+signupRoleAdmin: 'Compte admin',
+adminPinLabel: 'PIN admin (5 chiffres)',
+confirmAdminPin: 'Confirmer le PIN admin',
 createAccount: 'Créer un compte',
 continueWithGoogle: 'Continuer avec Google',
 googleEmailPrompt: 'Entrez l’email Google',
@@ -860,17 +877,17 @@ verificationCode: 'Code de vérification',
 sendCode: 'Envoyer le code',
 forgotPin: 'PIN oublié ?',
 resetPin: 'Réinitialiser le PIN',
-resetPinHint: 'Utilisez votre téléphone, email et code pour définir un nouveau PIN.',
+resetPinHint: 'Utilisez votre numéro de téléphone pour définir un nouveau PIN.',
 resetNewPin: 'Nouveau PIN à 5 chiffres',
 resetConfirmPin: 'Confirmer le nouveau PIN',
 cancel: 'Annuler',
 authHintLogin: 'Utilisez votre compte existant pour continuer.',
-authHintAdmin: 'L’admin utilise le même téléphone/email mais un PIN admin différent.',
+authHintAdmin: 'L’admin utilise votre numéro de téléphone avec un PIN admin différent.',
 authHintSignup: 'Créez d’abord un compte pour sécuriser l’application.',
-authHintReset: 'Réinitialisez le PIN avec le téléphone et l’email enregistrés.',
-authInvalidCredentials: 'Email/téléphone ou PIN incorrect',
+authHintReset: 'Réinitialisez le PIN avec votre numéro de téléphone enregistré.',
+authInvalidCredentials: 'Numéro de téléphone ou PIN incorrect',
 authAccountInactive: 'Ce compte est inactif. Contactez le propriétaire de l’application.',
-authAdminInvalidCredentials: 'Email/téléphone admin ou PIN admin incorrect',
+authAdminInvalidCredentials: 'Numéro de téléphone admin ou PIN admin incorrect',
 authAdminAccessDenied: 'Ce compte n’a pas les droits administrateur',
 authAdminSetupRequiresUserPin: 'Pour configurer le PIN admin, entrez d’abord votre PIN utilisateur.',
 authAdminSetupPrompt: 'Définissez un nouveau PIN admin à 5 chiffres',
@@ -1151,7 +1168,8 @@ function getDefaultUserSettings() {
         theme: 'light',
         language: 'en',
         currency: 'RWF',
-        onboardingDone: true
+        onboardingDone: true,
+        lastOpenPage: 'home'
     };
 }
 
@@ -1169,6 +1187,46 @@ function sanitizeUserSettings(raw) {
     delete next.legacyDataMigrated;
     delete next.profitPerCase;
     return { ...getDefaultUserSettings(), ...next };
+}
+
+function sanitizeYearArchives(raw) {
+    if (!Array.isArray(raw)) return [];
+
+    const normalized = raw
+        .filter((entry) => entry && typeof entry === 'object')
+        .map((entry) => {
+            const year = Number(entry.year);
+            if (!Number.isFinite(year)) return null;
+            const archivedAtDate = new Date(entry.archivedAt || entry.createdAt || Date.now());
+            const archivedAt = Number.isNaN(archivedAtDate.getTime())
+                ? new Date().toISOString()
+                : archivedAtDate.toISOString();
+            const salesItems = Array.isArray(entry.sales) ? entry.sales : [];
+            const clatesItems = Array.isArray(entry.clates) ? entry.clates : [];
+            const summary = entry.summary && typeof entry.summary === 'object'
+                ? {
+                    salesCount: Number(entry.summary.salesCount) || salesItems.length,
+                    clatesCount: Number(entry.summary.clatesCount) || clatesItems.length,
+                    salesTotal: Number(entry.summary.salesTotal) || salesItems.reduce((sum, sale) => sum + (Number(sale?.total) || 0), 0)
+                }
+                : {
+                    salesCount: salesItems.length,
+                    clatesCount: clatesItems.length,
+                    salesTotal: salesItems.reduce((sum, sale) => sum + (Number(sale?.total) || 0), 0)
+                };
+
+            return {
+                year: Math.trunc(year),
+                archivedAt,
+                sales: salesItems,
+                clates: clatesItems,
+                summary
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => Number(b.year) - Number(a.year));
+
+    return normalized;
 }
 
 function getDefaultDrinkProfitPerCase() {
@@ -1492,14 +1550,16 @@ async function initializeUserStorage(user = activeUser) {
     const clatesKey = userDataKey('clates', user);
     const drinksKey = userDataKey('drinks', user);
     const settingsKey = userDataKey('settings', user);
-    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey) return;
+    const archivesKey = userDataKey('archives', user);
+    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey || !archivesKey) return;
 
     await saveManyNamedData([
         { name: salesKey, value: [] },
         { name: customersKey, value: [] },
         { name: clatesKey, value: [] },
         { name: drinksKey, value: [] },
-        { name: settingsKey, value: getDefaultUserSettings() }
+        { name: settingsKey, value: getDefaultUserSettings() },
+        { name: archivesKey, value: [] }
     ]);
 }
 
@@ -1553,13 +1613,15 @@ async function loadActiveUserData(user = activeUser) {
     const clatesKey = userDataKey('clates', user);
     const drinksKey = userDataKey('drinks', user);
     const settingsKey = userDataKey('settings', user);
+    const archivesKey = userDataKey('archives', user);
 
-    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey) {
+    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey || !archivesKey) {
         sales = [];
         customers = [];
         clates = [];
         drinks = [];
         settings = getDefaultUserSettings();
+        yearlyArchives = [];
         return;
     }
 
@@ -1568,19 +1630,22 @@ async function loadActiveUserData(user = activeUser) {
         { name: customersKey, defaultValue: [] },
         { name: clatesKey, defaultValue: [] },
         { name: drinksKey, defaultValue: [] },
-        { name: settingsKey, defaultValue: {} }
+        { name: settingsKey, defaultValue: {} },
+        { name: archivesKey, defaultValue: [] }
     ]);
     const loadedSales = loadedMap[salesKey];
     const loadedCustomers = loadedMap[customersKey];
     const loadedClates = loadedMap[clatesKey];
     const loadedDrinks = loadedMap[drinksKey];
     const loadedSettings = loadedMap[settingsKey];
+    const loadedArchives = loadedMap[archivesKey];
 
     sales = Array.isArray(loadedSales) ? loadedSales : [];
     customers = Array.isArray(loadedCustomers) ? loadedCustomers : [];
     clates = Array.isArray(loadedClates) ? loadedClates : [];
     drinks = Array.isArray(loadedDrinks) ? loadedDrinks : [];
     settings = sanitizeUserSettings(loadedSettings);
+    yearlyArchives = sanitizeYearArchives(loadedArchives);
     normalizeDrinksData();
 
     await migrateLegacyDataIfNeeded();
@@ -1615,6 +1680,7 @@ async function loadAllData() {
     clates = [];
     drinks = [];
     settings = getDefaultUserSettings();
+    yearlyArchives = [];
 }
 
 function buildCurrentSavePayload(user = activeUser) {
@@ -1630,13 +1696,15 @@ function buildCurrentSavePayload(user = activeUser) {
     const clatesKey = userDataKey('clates', user);
     const drinksKey = userDataKey('drinks', user);
     const settingsKey = userDataKey('settings', user);
-    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey) return payload;
+    const archivesKey = userDataKey('archives', user);
+    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey || !archivesKey) return payload;
 
     payload[salesKey] = Array.isArray(sales) ? sales : [];
     payload[customersKey] = Array.isArray(customers) ? customers : [];
     payload[clatesKey] = Array.isArray(clates) ? clates : [];
     payload[drinksKey] = Array.isArray(drinks) ? drinks : [];
     payload[settingsKey] = sanitizeUserSettings(settings);
+    payload[archivesKey] = sanitizeYearArchives(yearlyArchives);
     return payload;
 }
 
@@ -1669,196 +1737,15 @@ let loginLockedUntil = 0;
 let onboardingStepIndex = 0;
 let onboardingVisible = false;
 let pendingOnboardingStart = false;
-let pendingSignupVerification = null;
-let pendingResetVerification = null;
 let forgotPinVisible = false;
-
-const AUTH_VERIFICATION_TTL_MS = 10 * 60 * 1000;
-const AUTH_CODE_REGEX = /^\d{6}$/;
-const AUTH_EMAIL_CLIENT_RATE_LIMIT_MS = 30 * 1000;
-const EMAILJS_CONFIG_STORAGE_KEY = 'maw_emailjs_config';
-const GOOGLE_CLIENT_ID_STORAGE_KEY = 'maw_google_client_id';
-const GOOGLE_OAUTH_STATE_STORAGE_KEY = 'maw_google_oauth_state';
-const authEmailClientLastSent = new Map();
-let emailJsInitialized = false;
-let googleIdentityInitialized = false;
-let googleIdentityClientId = '';
 
 function normalizePhone(phone) {
     return String(phone || '').replace(/\D/g, '');
 }
 
-function normalizeEmail(email) {
-    return String(email || '').trim().toLowerCase();
-}
-
-function isValidEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
-}
-
-function generateAuthCode() {
-    return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function loadSavedEmailJsConfig() {
-    try {
-        const raw = localStorage.getItem(EMAILJS_CONFIG_STORAGE_KEY);
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (_) {
-        return {};
-    }
-}
-
-function saveEmailJsConfig(config) {
-    try {
-        const next = {
-            publicKey: String(config?.publicKey || '').trim(),
-            serviceId: String(config?.serviceId || '').trim(),
-            templateId: String(config?.templateId || '').trim(),
-            fromName: String(config?.fromName || 'Make A Way').trim() || 'Make A Way'
-        };
-        localStorage.setItem(EMAILJS_CONFIG_STORAGE_KEY, JSON.stringify(next));
-        return true;
-    } catch (_) {
-        return false;
-    }
-}
-
-function loadSavedGoogleClientId() {
-    try {
-        return String(localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY) || '').trim();
-    } catch (_) {
-        return '';
-    }
-}
-
-function saveGoogleClientId(clientId) {
-    const normalized = String(clientId || '').trim();
-    if (!normalized) return false;
-    try {
-        localStorage.setItem(GOOGLE_CLIENT_ID_STORAGE_KEY, normalized);
-        return true;
-    } catch (_) {
-        return false;
-    }
-}
-
-function getGoogleAuthClientId() {
-    const raw = (typeof window !== 'undefined' && window.MAW_GOOGLE_OAUTH_CONFIG && typeof window.MAW_GOOGLE_OAUTH_CONFIG === 'object')
-        ? window.MAW_GOOGLE_OAUTH_CONFIG
-        : {};
-    return String(raw.clientId || loadSavedGoogleClientId() || '').trim();
-}
-
-function isValidGoogleClientIdFormat(clientId) {
-    const value = String(clientId || '').trim();
-    return /^[0-9]+-[a-zA-Z0-9_.-]+\.apps\.googleusercontent\.com$/.test(value);
-}
-
-function normalizeGoogleClientId(clientIdInput) {
-    const raw = String(clientIdInput || '').trim();
-    if (!raw) return '';
-    const match = raw.match(/[0-9]+-[a-zA-Z0-9_.-]+\.apps\.googleusercontent\.com/);
-    return match ? match[0] : raw;
-}
-
-function ensureGoogleAuthClientId() {
-    const existing = normalizeGoogleClientId(getGoogleAuthClientId());
-    if (existing && isValidGoogleClientIdFormat(existing)) {
-        saveGoogleClientId(existing);
-        if (typeof window !== 'undefined') {
-            window.MAW_GOOGLE_OAUTH_CONFIG = {
-                ...(window.MAW_GOOGLE_OAUTH_CONFIG || {}),
-                clientId: existing
-            };
-        }
-        return existing;
-    }
-
-    const prompted = window.prompt(t('googleClientIdPrompt'), existing || '');
-    if (prompted === null) return '';
-    const clientId = normalizeGoogleClientId(prompted);
-    if (!clientId) return '';
-
-    if (!isValidGoogleClientIdFormat(clientId)) {
-        alert(t('googleClientIdLooksWrong'));
-    }
-
-    saveGoogleClientId(clientId);
-    if (typeof window !== 'undefined') {
-        window.MAW_GOOGLE_OAUTH_CONFIG = {
-            ...(window.MAW_GOOGLE_OAUTH_CONFIG || {}),
-            clientId
-        };
-    }
-    initializeGoogleIdentityUi();
-    return clientId;
-}
-
-function getEmailJsConfig() {
-    const fromStorage = loadSavedEmailJsConfig();
-    const raw = (typeof window !== 'undefined' && window.MAW_EMAILJS_CONFIG && typeof window.MAW_EMAILJS_CONFIG === 'object')
-        ? window.MAW_EMAILJS_CONFIG
-        : {};
-
-    return {
-        publicKey: String(raw.publicKey || fromStorage.publicKey || '').trim(),
-        serviceId: String(raw.serviceId || fromStorage.serviceId || '').trim(),
-        templateId: String(raw.templateId || fromStorage.templateId || '').trim(),
-        fromName: String(raw.fromName || fromStorage.fromName || 'Make A Way').trim() || 'Make A Way'
-    };
-}
-
-function isEmailJsConfigured(config = getEmailJsConfig()) {
-    return Boolean(config.publicKey && config.serviceId && config.templateId);
-}
-
-function promptForEmailJsConfig() {
-    if (!window.confirm(t('authEmailSetupPrompt'))) return null;
-    const existing = getEmailJsConfig();
-    const publicKey = window.prompt(t('authEmailPublicKeyPrompt'), existing.publicKey || '');
-    if (publicKey === null) return null;
-    const serviceId = window.prompt(t('authEmailServiceIdPrompt'), existing.serviceId || '');
-    if (serviceId === null) return null;
-    const templateId = window.prompt(t('authEmailTemplateIdPrompt'), existing.templateId || '');
-    if (templateId === null) return null;
-    const fromName = window.prompt(t('authEmailFromNamePrompt'), existing.fromName || 'Make A Way');
-    if (fromName === null) return null;
-
-    const config = {
-        publicKey: String(publicKey || '').trim(),
-        serviceId: String(serviceId || '').trim(),
-        templateId: String(templateId || '').trim(),
-        fromName: String(fromName || '').trim() || 'Make A Way'
-    };
-    if (!isEmailJsConfigured(config)) {
-        alert(t('authEmailConfigIncomplete'));
-        return null;
-    }
-
-    saveEmailJsConfig(config);
-    if (typeof window !== 'undefined') {
-        window.MAW_EMAILJS_CONFIG = {
-            ...(window.MAW_EMAILJS_CONFIG || {}),
-            ...config
-        };
-    }
-    emailJsInitialized = false;
-    showSuccessToast(t('authEmailConfigSaved'));
-    return config;
-}
-
 function findUserByLoginIdentifier(identifierValue, users = getAuthUsers()) {
     const raw = String(identifierValue || '').trim();
     if (!raw) return null;
-
-    if (raw.includes('@')) {
-        const email = normalizeEmail(raw);
-        return users.find((u) => normalizeEmail(u.email) === email) || null;
-    }
-
     const phone = normalizePhone(raw);
     if (!phone) return null;
     return users.find((u) => normalizePhone(u.phone) === phone) || null;
@@ -1989,149 +1876,6 @@ async function handleAdminLogin(identifier, pin, users = getAuthUsers()) {
     await completeLoginForUser(user, { loginMode: 'admin' });
 }
 
-function buildGoogleOAuthState() {
-    if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
-        const bytes = new Uint8Array(16);
-        window.crypto.getRandomValues(bytes);
-        return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-    }
-    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-}
-
-function getGoogleOAuthRedirectUri() {
-    if (typeof window === 'undefined') return '';
-    const current = new URL(window.location.href);
-    return `${current.origin}${current.pathname}`;
-}
-
-function buildGoogleOAuthUrl(clientId, state) {
-    const redirectUri = getGoogleOAuthRedirectUri();
-    const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'token',
-        scope: 'openid email profile',
-        include_granted_scopes: 'true',
-        prompt: 'select_account',
-        state
-    });
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-}
-
-function decodeJwtPayload(token) {
-    const parts = String(token || '').split('.');
-    if (parts.length < 2) return null;
-    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = payload + '='.repeat((4 - (payload.length % 4 || 4)) % 4);
-    try {
-        return JSON.parse(atob(padded));
-    } catch (_) {
-        return null;
-    }
-}
-
-async function handleGoogleCredentialResponse(response) {
-    const credential = String(response?.credential || '').trim();
-    if (!credential) {
-        alert(t('googleLoginFailed'));
-        return;
-    }
-
-    try {
-        const payload = decodeJwtPayload(credential);
-        if (!payload || !payload.email || !payload.sub) {
-            throw new Error('GOOGLE_CREDENTIAL_INVALID');
-        }
-        await loginWithGoogleProfile({
-            email: payload.email,
-            sub: payload.sub,
-            name: payload.name || payload.given_name || '',
-            given_name: payload.given_name || '',
-            picture: payload.picture || ''
-        });
-    } catch (error) {
-        console.error('Google credential login failed:', error);
-        alert(t('googleLoginFailed'));
-    }
-}
-
-function initializeGoogleIdentityUi() {
-    const container = document.getElementById('googleOfficialSignIn');
-    if (!container) return;
-
-    if (authMode !== 'login' || forgotPinVisible) {
-        container.style.display = 'none';
-        return;
-    }
-
-    const clientId = normalizeGoogleClientId(getGoogleAuthClientId());
-    const hasGoogleSdk = Boolean(window.google && window.google.accounts && window.google.accounts.id);
-    if (!clientId || !isValidGoogleClientIdFormat(clientId) || !hasGoogleSdk) {
-        container.style.display = 'none';
-        return;
-    }
-
-    if (!googleIdentityInitialized || googleIdentityClientId !== clientId) {
-        window.google.accounts.id.initialize({
-            client_id: clientId,
-            callback: handleGoogleCredentialResponse,
-            auto_select: false,
-            cancel_on_tap_outside: true
-        });
-        googleIdentityInitialized = true;
-        googleIdentityClientId = clientId;
-    }
-
-    container.innerHTML = '';
-    window.google.accounts.id.renderButton(container, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-        width: 320
-    });
-    container.style.display = 'flex';
-}
-
-function scheduleGoogleIdentityUiInit(retries = 15) {
-    if (retries <= 0) return;
-    if (window.google && window.google.accounts && window.google.accounts.id) {
-        initializeGoogleIdentityUi();
-        return;
-    }
-    setTimeout(() => {
-        scheduleGoogleIdentityUiInit(retries - 1);
-    }, 300);
-}
-
-function getGoogleOAuthSetupHintText() {
-    try {
-        const redirectUri = getGoogleOAuthRedirectUri();
-        const origin = new URL(redirectUri).origin;
-        return `\n\nAuthorized JavaScript origin:\n${origin}\n\nAuthorized redirect URI:\n${redirectUri}`;
-    } catch (_) {
-        return '';
-    }
-}
-
-async function fetchGoogleUserProfile(accessToken) {
-    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: {
-            Authorization: `Bearer ${accessToken}`
-        }
-    });
-    if (!response.ok) {
-        throw new Error(`GOOGLE_USERINFO_HTTP_${response.status}`);
-    }
-    const data = await response.json();
-    if (!data || !data.email || !data.sub) {
-        throw new Error('GOOGLE_PROFILE_INCOMPLETE');
-    }
-    return data;
-}
-
 async function completeLoginForUser(user, options = {}) {
     failedLoginAttempts = 0;
     loginLockedUntil = 0;
@@ -2141,7 +1885,7 @@ async function completeLoginForUser(user, options = {}) {
     const requestedMode = String(options?.loginMode || '').trim().toLowerCase();
     activeLoginMode = (requestedMode === 'admin' && isAdminRoleUser(user)) ? 'admin' : 'user';
     activeUser = user;
-    appMeta.lastLoginPhone = user.phone || user.email || '';
+    appMeta.lastLoginPhone = user.phone || '';
     appMeta.activeSessionUserId = getAuthSessionUserId(user);
     appMeta.activeSessionLoginMode = activeLoginMode;
     await loadActiveUserData(user);
@@ -2150,219 +1894,8 @@ async function completeLoginForUser(user, options = {}) {
     updateActiveUserBadge();
     refreshAdminAccessUI();
     refreshDataManagementAccessUI();
-    showWelcomeAnimation();
-}
-
-async function loginWithGoogleProfile(googleProfile) {
-    const users = getAuthUsers();
-    const email = normalizeEmail(googleProfile.email);
-    const googleSub = String(googleProfile.sub || '').trim();
-
-    let user = users.find((u) => String(u.googleSub || '').trim() === googleSub);
-    if (!user) {
-        user = users.find((u) => normalizeEmail(u.email) === email);
-    }
-
-    const nowIso = new Date().toISOString();
-    if (!user) {
-        user = {
-            id: Date.now() + Math.floor(Math.random() * 1000),
-            name: String(googleProfile.name || googleProfile.given_name || email.split('@')[0] || 'User').trim(),
-            email,
-            phone: '',
-            pin: '',
-            role: users.length === 0 ? 'owner' : 'staff',
-            isActive: true,
-            authProvider: 'google',
-            googleSub,
-            avatarUrl: String(googleProfile.picture || '').trim(),
-            emailVerifiedAt: nowIso,
-            createdAt: nowIso
-        };
-        users.push(user);
-        appMeta.authUsers = users;
-        await initializeUserStorage({ id: user.id, phone: user.phone || '' });
-    } else {
-        user.name = String(user.name || googleProfile.name || googleProfile.given_name || email.split('@')[0] || 'User').trim();
-        user.email = email;
-        user.googleSub = googleSub;
-        user.authProvider = 'google';
-        if (String(googleProfile.picture || '').trim()) {
-            user.avatarUrl = String(googleProfile.picture || '').trim();
-        }
-        user.emailVerifiedAt = user.emailVerifiedAt || nowIso;
-        appMeta.authUsers = users;
-    }
-
-    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
-    await completeLoginForUser(user, { loginMode: 'user' });
-}
-
-async function handleGoogleOAuthRedirectIfNeeded() {
-    if (typeof window === 'undefined') return false;
-    const hashRaw = String(window.location.hash || '');
-    if (!hashRaw) return false;
-
-    const hashParams = new URLSearchParams(hashRaw.startsWith('#') ? hashRaw.slice(1) : hashRaw);
-    const accessToken = String(hashParams.get('access_token') || '').trim();
-    const error = String(hashParams.get('error') || '').trim();
-    const errorDescription = String(hashParams.get('error_description') || '').trim();
-    const returnedState = String(hashParams.get('state') || '').trim();
-
-    if (!accessToken && !error) return false;
-
-    let expectedState = '';
-    try {
-        expectedState = String(sessionStorage.getItem(GOOGLE_OAUTH_STATE_STORAGE_KEY) || '').trim();
-        sessionStorage.removeItem(GOOGLE_OAUTH_STATE_STORAGE_KEY);
-    } catch (_) {}
-
-    try {
-        const cleanUrl = getGoogleOAuthRedirectUri();
-        if (window.history && typeof window.history.replaceState === 'function') {
-            window.history.replaceState({}, document.title, cleanUrl);
-        }
-    } catch (_) {}
-
-    if (error || !accessToken || !returnedState || !expectedState || returnedState !== expectedState) {
-        if (error === 'invalid_client') {
-            const details = errorDescription ? `\n\nGoogle details:\n${errorDescription}` : '';
-            alert(`${t('googleInvalidClient')}${details}${getGoogleOAuthSetupHintText()}`);
-        } else {
-            alert(t('googleLoginFailed'));
-        }
-        return true;
-    }
-
-    try {
-        const googleProfile = await fetchGoogleUserProfile(accessToken);
-        await loginWithGoogleProfile(googleProfile);
-    } catch (e) {
-        console.error('Google redirect login failed:', e);
-        alert(t('googleLoginFailed'));
-    }
-    return true;
-}
-
-async function sendAuthCodeByEmailJs(email, code, purpose) {
-    if (typeof window === 'undefined' || !window.emailjs) {
-        return { success: false, code: 'EMAILJS_UNAVAILABLE' };
-    }
-
-    const config = getEmailJsConfig();
-    if (!isEmailJsConfigured(config)) {
-        return { success: false, code: 'EMAILJS_NOT_CONFIGURED' };
-    }
-
-    try {
-        if (!emailJsInitialized) {
-            window.emailjs.init({ publicKey: config.publicKey });
-            emailJsInitialized = true;
-        }
-
-        const normalizedPurpose = String(purpose || 'verification').trim().toLowerCase();
-        const purposeLabel = normalizedPurpose === 'reset'
-            ? 'PIN reset'
-            : (normalizedPurpose === 'signup' ? 'Account signup' : 'Account verification');
-
-        await window.emailjs.send(config.serviceId, config.templateId, {
-            to_email: email,
-            verification_code: String(code).trim(),
-            app_name: 'Make A Way',
-            purpose: normalizedPurpose,
-            purpose_label: purposeLabel,
-            from_name: config.fromName
-        });
-
-        return { success: true };
-    } catch (error) {
-        console.error('EmailJS send failed:', error);
-        return { success: false, code: 'EMAILJS_SEND_FAILED' };
-    }
-}
-
-async function sendAuthCodeByEmail(email, code, purpose) {
-    const normalizedEmail = normalizeEmail(email);
-    const normalizedPurpose = String(purpose || 'verification').trim().toLowerCase();
-    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
-        return { success: false, message: t('authEmailInvalid') };
-    }
-    if (!AUTH_CODE_REGEX.test(String(code || '').trim())) {
-        return { success: false, message: t('authVerificationCodeInvalid') };
-    }
-
-    const rateLimitKey = `${normalizedPurpose}:${normalizedEmail}`;
-    const lastSentAt = authEmailClientLastSent.get(rateLimitKey) || 0;
-    if (Date.now() - lastSentAt < AUTH_EMAIL_CLIENT_RATE_LIMIT_MS) {
-        return { success: false, message: t('authEmailRateLimited') };
-    }
-
-    // Browser-first path (works directly from index.html).
-    const emailJsResult = await sendAuthCodeByEmailJs(normalizedEmail, code, normalizedPurpose);
-    if (emailJsResult.success) {
-        authEmailClientLastSent.set(rateLimitKey, Date.now());
-        return { success: true };
-    }
-
-    if (emailJsResult.code === 'EMAILJS_NOT_CONFIGURED' || emailJsResult.code === 'EMAILJS_UNAVAILABLE') {
-        const config = promptForEmailJsConfig();
-        if (config && isEmailJsConfigured(config)) {
-            const retry = await sendAuthCodeByEmailJs(normalizedEmail, code, normalizedPurpose);
-            if (retry.success) {
-                authEmailClientLastSent.set(rateLimitKey, Date.now());
-                return { success: true };
-            }
-        }
-        // Do not block user if email provider is not set yet.
-        authEmailClientLastSent.set(rateLimitKey, Date.now());
-        return {
-            success: true,
-            message: `${t('authCodeSent').replace('{email}', normalizedEmail)} ${t('authCodeFallback').replace('{code}', String(code).trim())}`
-        };
-    }
-
-    // Electron fallback path.
-    if (window.electronAPI && typeof window.electronAPI.invoke === 'function') {
-        try {
-            const result = await window.electronAPI.invoke('send-auth-code-email', {
-                to: normalizedEmail,
-                code: String(code).trim(),
-                purpose: normalizedPurpose,
-                appName: 'Make A Way'
-            });
-            if (result && result.success) {
-                authEmailClientLastSent.set(rateLimitKey, Date.now());
-                return { success: true };
-            }
-
-            if (result && result.code === 'EMAIL_NOT_CONFIGURED') {
-                const missing = Array.isArray(result.missing) && result.missing.length > 0
-                    ? ` Missing: ${result.missing.join(', ')}`
-                    : '';
-                return { success: false, message: `${t('authEmailServiceUnavailable')}${missing}` };
-            }
-            if (result && result.code === 'EMAIL_RATE_LIMITED') {
-                return { success: false, message: t('authEmailRateLimited') };
-            }
-            return { success: false, message: t('authEmailSendFailed') };
-        } catch (_) {
-            return { success: false, message: t('authEmailSendFailed') };
-        }
-    }
-
-    return { success: false, message: t('authEmailSendFailed') };
-}
-
-function clearSignupVerification() {
-    pendingSignupVerification = null;
-    const signupCodeInput = document.getElementById('signupVerificationCode');
-    if (signupCodeInput) signupCodeInput.value = '';
-}
-
-function clearResetVerification() {
-    pendingResetVerification = null;
-    const resetCodeInput = document.getElementById('resetCode');
-    if (resetCodeInput) resetCodeInput.value = '';
+    const startPage = String(options?.startPage || '').trim() || 'home';
+    showWelcomeAnimation(startPage);
 }
 
 function normalizeAuthUsersData() {
@@ -2384,14 +1917,11 @@ function normalizeAuthUsersData() {
 
 function resetForgotPinFields() {
     const resetPhoneInput = document.getElementById('resetPhone');
-    const resetEmailInput = document.getElementById('resetEmail');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
     if (resetPhoneInput) resetPhoneInput.value = '';
-    if (resetEmailInput) resetEmailInput.value = '';
     if (resetNewPinInput) resetNewPinInput.value = '';
     if (resetConfirmPinInput) resetConfirmPinInput.value = '';
-    clearResetVerification();
 }
 
 function getAuthUsers() {
@@ -2405,7 +1935,7 @@ function getAuthSessionUserId(user) {
     if (scopedId) return scopedId;
     const fallbackId = String(user.id || '').trim();
     if (fallbackId) return fallbackId;
-    return normalizeEmail(user.email || '');
+    return normalizePhone(user.phone || '');
 }
 
 async function restoreActiveSessionFromMeta() {
@@ -2433,7 +1963,7 @@ async function restoreActiveSessionFromMeta() {
     failedLoginAttempts = 0;
     loginLockedUntil = 0;
     pendingOnboardingStart = false;
-    appMeta.lastLoginPhone = user.phone || user.email || appMeta.lastLoginPhone || '';
+    appMeta.lastLoginPhone = user.phone || appMeta.lastLoginPhone || '';
     appMeta.activeSessionLoginMode = activeLoginMode;
 
     await loadActiveUserData(user);
@@ -2444,10 +1974,10 @@ async function restoreActiveSessionFromMeta() {
     const loginScreen = document.getElementById('loginScreen');
     const app = document.getElementById('app');
     if (loginScreen) loginScreen.style.display = 'none';
-    if (app) app.style.display = 'block';
+    if (app) app.style.display = 'none';
 
-    showAppBackgroundLetters();
-    showPage('home');
+    const rememberedPage = getRememberedOpenPage(user);
+    showWelcomeAnimation(rememberedPage);
     return true;
 }
 
@@ -2480,6 +2010,43 @@ function updateAuthPrimaryButtons() {
     }
 }
 
+function updateSignupAdminPinVisibility() {
+    const roleSelect = document.getElementById('signupRole');
+    const adminPinGroup = document.getElementById('signupAdminPinGroup');
+    const adminPinConfirmGroup = document.getElementById('signupAdminPinConfirmGroup');
+    const adminPinInput = document.getElementById('signupAdminPin');
+    const adminPinConfirmInput = document.getElementById('signupAdminPinConfirm');
+    const users = getAuthUsers();
+    const canPickRole = Array.isArray(users) && users.length > 0;
+    const showAdminPin = authMode === 'signup' && canPickRole && roleSelect && roleSelect.value === 'admin';
+
+    if (adminPinGroup) adminPinGroup.style.display = showAdminPin ? 'block' : 'none';
+    if (adminPinConfirmGroup) adminPinConfirmGroup.style.display = showAdminPin ? 'block' : 'none';
+
+    if (!showAdminPin) {
+        if (adminPinInput) adminPinInput.value = '';
+        if (adminPinConfirmInput) adminPinConfirmInput.value = '';
+    }
+}
+
+function syncSignupRoleControls(users = getAuthUsers()) {
+    const roleGroup = document.getElementById('signupRoleGroup');
+    const roleSelect = document.getElementById('signupRole');
+    const canPickRole = Array.isArray(users) && users.length > 0;
+    const shouldShowRole = authMode === 'signup' && canPickRole;
+
+    if (roleGroup) roleGroup.style.display = shouldShowRole ? 'block' : 'none';
+    if (roleSelect) {
+        if (!canPickRole) {
+            roleSelect.value = 'staff';
+        } else if (roleSelect.value !== 'admin' && roleSelect.value !== 'staff') {
+            roleSelect.value = 'staff';
+        }
+    }
+
+    updateSignupAdminPinVisibility();
+}
+
 function toggleForgotPinPanel(show) {
     forgotPinVisible = Boolean(show);
 
@@ -2491,7 +2058,6 @@ function toggleForgotPinPanel(show) {
     const adminTab = document.getElementById('authAdminTab');
     const signupTab = document.getElementById('authSignupTab');
     const resetPhoneInput = document.getElementById('resetPhone');
-    const resetEmailInput = document.getElementById('resetEmail');
     const phoneInput = document.getElementById('phone');
 
     if (panel) panel.style.display = forgotPinVisible ? 'block' : 'none';
@@ -2507,9 +2073,6 @@ function toggleForgotPinPanel(show) {
         const matchedUser = findUserByLoginIdentifier(typedIdentifier, getAuthUsers());
         if (resetPhoneInput) {
             resetPhoneInput.value = normalizePhone(matchedUser?.phone || typedIdentifier || appMeta.lastLoginPhone || '');
-        }
-        if (resetEmailInput && matchedUser?.email) {
-            resetEmailInput.value = normalizeEmail(matchedUser.email);
         }
     } else {
         resetForgotPinFields();
@@ -2528,9 +2091,7 @@ function switchAuthMode(mode) {
     const isAdmin = authMode === 'admin';
 
     const signupNameGroup = document.getElementById('signupNameGroup');
-    const signupEmailGroup = document.getElementById('signupEmailGroup');
     const confirmPinGroup = document.getElementById('confirmPinGroup');
-    const signupVerificationGroup = document.getElementById('signupVerificationGroup');
     const loginBtn = document.getElementById('loginBtn');
     const signupBtn = document.getElementById('signupBtn');
     const loginTab = document.getElementById('authLoginTab');
@@ -2543,9 +2104,7 @@ function switchAuthMode(mode) {
     }
 
     if (signupNameGroup) signupNameGroup.style.display = isSignup ? 'block' : 'none';
-    if (signupEmailGroup) signupEmailGroup.style.display = isSignup ? 'block' : 'none';
     if (confirmPinGroup) confirmPinGroup.style.display = isSignup ? 'block' : 'none';
-    if (signupVerificationGroup) signupVerificationGroup.style.display = isSignup ? 'block' : 'none';
     if (loginBtn) loginBtn.style.display = isSignup ? 'none' : 'block';
     if (signupBtn) signupBtn.style.display = isSignup ? 'block' : 'none';
     if (forgotPinBtn) forgotPinBtn.style.display = (!isSignup && !isAdmin) ? 'inline-block' : 'none';
@@ -2556,7 +2115,7 @@ function switchAuthMode(mode) {
     if (adminTab) adminTab.disabled = false;
     if (signupTab) signupTab.disabled = false;
 
-    updateAuthPrimaryButtons();
+    syncSignupRoleControls(getAuthUsers());
     updateAuthPrimaryButtons();
     setAuthHintText();
 }
@@ -2711,70 +2270,22 @@ async function handleLogin() {
     await completeLoginForUser(user, { loginMode: 'user' });
 }
 
-async function sendSignupVerificationCode() {
-    const emailInput = document.getElementById('signupEmail');
-    const email = normalizeEmail(emailInput ? emailInput.value : '');
-    const users = getAuthUsers();
-    const sendSignupCodeBtn = document.getElementById('sendSignupCodeBtn');
-
-    if (!email) {
-        alert(t('authEmailRequired'));
-        return;
-    }
-    if (!isValidEmail(email)) {
-        alert(t('authEmailInvalid'));
-        return;
-    }
-    const exists = users.some((u) => normalizeEmail(u.email) === email);
-    if (exists) {
-        alert(t('authEmailExists'));
-        return;
-    }
-
-    const code = generateAuthCode();
-    if (sendSignupCodeBtn) sendSignupCodeBtn.disabled = true;
-    const emailSend = await sendAuthCodeByEmail(email, code, 'signup');
-    if (sendSignupCodeBtn) sendSignupCodeBtn.disabled = false;
-    if (!emailSend.success) {
-        alert(emailSend.message || t('authEmailSendFailed'));
-        return;
-    }
-
-    pendingSignupVerification = {
-        email,
-        code,
-        expiresAt: Date.now() + AUTH_VERIFICATION_TTL_MS
-    };
-
-    if (emailInput) emailInput.value = email;
-    showSuccessToast(emailSend.message || t('authCodeSent').replace('{email}', email));
-}
-
 async function handleSignup() {
     const nameInput = document.getElementById('signupName');
-    const emailInput = document.getElementById('signupEmail');
     const phoneInput = document.getElementById('phone');
     const pinInput = document.getElementById('pin');
     const confirmInput = document.getElementById('confirmPin');
-    const signupCodeInput = document.getElementById('signupVerificationCode');
+    const signupRoleSelect = document.getElementById('signupRole');
+    const signupAdminPinInput = document.getElementById('signupAdminPin');
+    const signupAdminPinConfirmInput = document.getElementById('signupAdminPinConfirm');
 
     const name = (nameInput ? nameInput.value : '').trim();
-    const email = normalizeEmail(emailInput ? emailInput.value : '');
     const phone = normalizePhone(phoneInput ? phoneInput.value : '');
     const pin = (pinInput ? pinInput.value : '').trim();
     const confirmPin = (confirmInput ? confirmInput.value : '').trim();
-    const verificationCode = (signupCodeInput ? signupCodeInput.value : '').trim();
 
     if (!name) {
         alert(t('authNameRequired'));
-        return;
-    }
-    if (!email) {
-        alert(t('authEmailRequired'));
-        return;
-    }
-    if (!isValidEmail(email)) {
-        alert(t('authEmailInvalid'));
         return;
     }
     if (phone.length < 10) {
@@ -2796,42 +2307,41 @@ async function handleSignup() {
         alert(t('authPhoneExists'));
         return;
     }
-    const emailExists = users.some((u) => normalizeEmail(u.email) === email);
-    if (emailExists) {
-        alert(t('authEmailExists'));
-        return;
-    }
-    if (!verificationCode) {
-        alert(t('authVerificationCodeRequired'));
-        return;
-    }
-    if (!AUTH_CODE_REGEX.test(verificationCode)) {
-        alert(t('authVerificationCodeInvalid'));
-        return;
-    }
-    if (!pendingSignupVerification || pendingSignupVerification.email !== email) {
-        alert(t('authVerificationSendFirst'));
-        return;
-    }
-    if (Date.now() > pendingSignupVerification.expiresAt) {
-        clearSignupVerification();
-        alert(t('authVerificationCodeExpired'));
-        return;
-    }
-    if (pendingSignupVerification.code !== verificationCode) {
-        alert(t('authVerificationCodeInvalid'));
-        return;
+
+    const requestedRole = users.length === 0
+        ? 'owner'
+        : (signupRoleSelect && signupRoleSelect.value === 'admin' ? 'admin' : 'staff');
+
+    const adminPin = (signupAdminPinInput ? signupAdminPinInput.value : '').trim();
+    const confirmAdminPin = (signupAdminPinConfirmInput ? signupAdminPinConfirmInput.value : '').trim();
+    if (requestedRole === 'admin') {
+        if (!/^\d{5}$/.test(adminPin)) {
+            alert(t('authPinRules'));
+            return;
+        }
+        if (!/^\d{5}$/.test(confirmAdminPin)) {
+            alert(t('authPinRules'));
+            return;
+        }
+        if (adminPin !== confirmAdminPin) {
+            alert(t('authPinMismatch'));
+            return;
+        }
+        if (adminPin === pin) {
+            alert(t('authAdminPinMustDiffer'));
+            return;
+        }
     }
 
     const createdUser = {
         id: Date.now() + Math.floor(Math.random() * 1000),
         name,
-        email,
+        email: '',
         phone,
         pin,
-        role: users.length === 0 ? 'owner' : 'staff',
+        role: requestedRole,
+        adminPin: requestedRole === 'admin' ? adminPin : '',
         isActive: true,
-        emailVerifiedAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
     };
     users.push(createdUser);
@@ -2841,11 +2351,13 @@ async function handleSignup() {
     await initializeUserStorage({ id: createdUser.id, phone });
     await optimizedSaveData();
 
-    clearSignupVerification();
     if (confirmInput) confirmInput.value = '';
     if (pinInput) pinInput.value = '';
+    if (signupRoleSelect) signupRoleSelect.value = 'staff';
+    if (signupAdminPinInput) signupAdminPinInput.value = '';
+    if (signupAdminPinConfirmInput) signupAdminPinConfirmInput.value = '';
+    updateSignupAdminPinVisibility();
     if (phoneInput) phoneInput.value = phone;
-    if (emailInput) emailInput.value = email;
     showSuccessToast(t('authAccountCreated'));
     switchAuthMode('login');
 }
@@ -2855,113 +2367,18 @@ function openForgotPinPanel() {
     toggleForgotPinPanel(true);
 }
 
-async function handleGoogleLoginShortcut() {
-    switchAuthMode('login');
-    toggleForgotPinPanel(false);
-
-    const googleLoginBtn = document.getElementById('googleLoginBtn');
-    if (googleLoginBtn) googleLoginBtn.disabled = true;
-
-    try {
-        const clientId = ensureGoogleAuthClientId();
-        if (!clientId) {
-            if (googleLoginBtn) googleLoginBtn.disabled = false;
-            return;
-        }
-        const state = buildGoogleOAuthState();
-        try {
-            sessionStorage.setItem(GOOGLE_OAUTH_STATE_STORAGE_KEY, state);
-        } catch (_) {}
-
-        const authUrl = buildGoogleOAuthUrl(clientId, state);
-        window.location.assign(authUrl);
-    } catch (error) {
-        console.error('Google login failed:', error);
-        alert(t('googleLoginFailed'));
-        if (googleLoginBtn) googleLoginBtn.disabled = false;
-    }
-}
-
-async function sendResetVerificationCode() {
-    const resetPhoneInput = document.getElementById('resetPhone');
-    const resetEmailInput = document.getElementById('resetEmail');
-    const sendResetCodeBtn = document.getElementById('sendResetCodeBtn');
-    const phone = normalizePhone(resetPhoneInput ? resetPhoneInput.value : '');
-    const email = normalizeEmail(resetEmailInput ? resetEmailInput.value : '');
-    const users = getAuthUsers();
-
-    if (phone.length < 10) {
-        alert(t('authPhoneRequired'));
-        return;
-    }
-    if (!email) {
-        alert(t('authEmailRequired'));
-        return;
-    }
-    if (!isValidEmail(email)) {
-        alert(t('authEmailInvalid'));
-        return;
-    }
-
-    const user = users.find((u) => normalizePhone(u.phone) === phone);
-    if (!user) {
-        alert(t('authUserNotFound'));
-        return;
-    }
-    if (normalizeEmail(user.email) && normalizeEmail(user.email) !== email) {
-        alert(t('authResetEmailMismatch'));
-        return;
-    }
-    const emailTakenByOther = users.some((u) => u.id !== user.id && normalizeEmail(u.email) === email);
-    if (emailTakenByOther) {
-        alert(t('authEmailExists'));
-        return;
-    }
-
-    const code = generateAuthCode();
-    if (sendResetCodeBtn) sendResetCodeBtn.disabled = true;
-    const emailSend = await sendAuthCodeByEmail(email, code, 'reset');
-    if (sendResetCodeBtn) sendResetCodeBtn.disabled = false;
-    if (!emailSend.success) {
-        alert(emailSend.message || t('authEmailSendFailed'));
-        return;
-    }
-
-    pendingResetVerification = {
-        userId: user.id,
-        phone,
-        email,
-        code,
-        expiresAt: Date.now() + AUTH_VERIFICATION_TTL_MS
-    };
-    if (resetEmailInput) resetEmailInput.value = email;
-    showSuccessToast(emailSend.message || t('authCodeSent').replace('{email}', email));
-}
-
 async function handleResetPin() {
     const resetPhoneInput = document.getElementById('resetPhone');
-    const resetEmailInput = document.getElementById('resetEmail');
-    const resetCodeInput = document.getElementById('resetCode');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
 
     const phone = normalizePhone(resetPhoneInput ? resetPhoneInput.value : '');
-    const email = normalizeEmail(resetEmailInput ? resetEmailInput.value : '');
-    const code = (resetCodeInput ? resetCodeInput.value : '').trim();
     const newPin = (resetNewPinInput ? resetNewPinInput.value : '').trim();
     const confirmPin = (resetConfirmPinInput ? resetConfirmPinInput.value : '').trim();
     const users = getAuthUsers();
 
     if (phone.length < 10) {
         alert(t('authPhoneRequired'));
-        return;
-    }
-    if (!email) {
-        alert(t('authEmailRequired'));
-        return;
-    }
-    if (!isValidEmail(email)) {
-        alert(t('authEmailInvalid'));
         return;
     }
     if (!/^\d{5}$/.test(newPin)) {
@@ -2972,56 +2389,19 @@ async function handleResetPin() {
         alert(t('authPinMismatch'));
         return;
     }
-    if (!code) {
-        alert(t('authVerificationCodeRequired'));
-        return;
-    }
-    if (!AUTH_CODE_REGEX.test(code)) {
-        alert(t('authVerificationCodeInvalid'));
-        return;
-    }
 
     const user = users.find((u) => normalizePhone(u.phone) === phone);
     if (!user) {
         alert(t('authUserNotFound'));
         return;
     }
-    if (normalizeEmail(user.email) && normalizeEmail(user.email) !== email) {
-        alert(t('authResetEmailMismatch'));
-        return;
-    }
-    const emailTakenByOther = users.some((u) => u.id !== user.id && normalizeEmail(u.email) === email);
-    if (emailTakenByOther) {
-        alert(t('authEmailExists'));
-        return;
-    }
-    if (
-        !pendingResetVerification ||
-        pendingResetVerification.userId !== user.id ||
-        pendingResetVerification.phone !== phone ||
-        pendingResetVerification.email !== email
-    ) {
-        alert(t('authVerificationSendFirst'));
-        return;
-    }
-    if (Date.now() > pendingResetVerification.expiresAt) {
-        clearResetVerification();
-        alert(t('authVerificationCodeExpired'));
-        return;
-    }
-    if (pendingResetVerification.code !== code) {
-        alert(t('authVerificationCodeInvalid'));
-        return;
-    }
 
     user.pin = newPin;
-    user.email = normalizeEmail(user.email) || email;
-    user.emailVerifiedAt = new Date().toISOString();
+    user.updatedAt = new Date().toISOString();
     appMeta.authUsers = users;
     appMeta.lastLoginPhone = phone;
     await saveNamedData(APP_META_STORAGE_KEY, appMeta);
 
-    clearResetVerification();
     toggleForgotPinPanel(false);
 
     const phoneInput = document.getElementById('phone');
@@ -3041,17 +2421,13 @@ function initializeAuthUI() {
     const signupBtn = document.getElementById('signupBtn');
     const pinInput = document.getElementById('pin');
     const confirmInput = document.getElementById('confirmPin');
-    const signupEmailInput = document.getElementById('signupEmail');
-    const signupCodeInput = document.getElementById('signupVerificationCode');
-    const sendSignupCodeBtn = document.getElementById('sendSignupCodeBtn');
+    const signupRoleSelect = document.getElementById('signupRole');
+    const signupAdminPinInput = document.getElementById('signupAdminPin');
+    const signupAdminPinConfirmInput = document.getElementById('signupAdminPinConfirm');
     const forgotPinBtn = document.getElementById('forgotPinBtn');
-    const sendResetCodeBtn = document.getElementById('sendResetCodeBtn');
     const resetPinBtn = document.getElementById('resetPinBtn');
     const cancelResetPinBtn = document.getElementById('cancelResetPinBtn');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
-    const resetCodeInput = document.getElementById('resetCode');
-    const resetPhoneInput = document.getElementById('resetPhone');
-    const resetEmailInput = document.getElementById('resetEmail');
 
     if (loginTab && !loginTab.dataset.bound) {
         loginTab.addEventListener('click', () => switchAuthMode('login'));
@@ -3073,17 +2449,13 @@ function initializeAuthUI() {
         signupBtn.addEventListener('click', handleSignup);
         signupBtn.dataset.bound = '1';
     }
-    if (sendSignupCodeBtn && !sendSignupCodeBtn.dataset.bound) {
-        sendSignupCodeBtn.addEventListener('click', sendSignupVerificationCode);
-        sendSignupCodeBtn.dataset.bound = '1';
+    if (signupRoleSelect && !signupRoleSelect.dataset.bound) {
+        signupRoleSelect.addEventListener('change', updateSignupAdminPinVisibility);
+        signupRoleSelect.dataset.bound = '1';
     }
     if (forgotPinBtn && !forgotPinBtn.dataset.bound) {
         forgotPinBtn.addEventListener('click', openForgotPinPanel);
         forgotPinBtn.dataset.bound = '1';
-    }
-    if (sendResetCodeBtn && !sendResetCodeBtn.dataset.bound) {
-        sendResetCodeBtn.addEventListener('click', sendResetVerificationCode);
-        sendResetCodeBtn.dataset.bound = '1';
     }
     if (resetPinBtn && !resetPinBtn.dataset.bound) {
         resetPinBtn.addEventListener('click', handleResetPin);
@@ -3111,50 +2483,25 @@ function initializeAuthUI() {
         });
         confirmInput.dataset.boundEnter = '1';
     }
-    if (signupCodeInput && !signupCodeInput.dataset.boundEnter) {
-        signupCodeInput.addEventListener('keypress', (e) => {
+    if (signupAdminPinInput && !signupAdminPinInput.dataset.boundEnter) {
+        signupAdminPinInput.addEventListener('keypress', (e) => {
+            if (e.key !== 'Enter') return;
+            const adminConfirm = document.getElementById('signupAdminPinConfirm');
+            if (adminConfirm) adminConfirm.focus();
+        });
+        signupAdminPinInput.dataset.boundEnter = '1';
+    }
+    if (signupAdminPinConfirmInput && !signupAdminPinConfirmInput.dataset.boundEnter) {
+        signupAdminPinConfirmInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleSignup();
         });
-        signupCodeInput.dataset.boundEnter = '1';
-    }
-    if (resetCodeInput && !resetCodeInput.dataset.boundEnter) {
-        resetCodeInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleResetPin();
-        });
-        resetCodeInput.dataset.boundEnter = '1';
+        signupAdminPinConfirmInput.dataset.boundEnter = '1';
     }
     if (resetConfirmPinInput && !resetConfirmPinInput.dataset.boundEnter) {
         resetConfirmPinInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleResetPin();
         });
         resetConfirmPinInput.dataset.boundEnter = '1';
-    }
-    if (signupEmailInput && !signupEmailInput.dataset.boundInput) {
-        signupEmailInput.addEventListener('input', () => {
-            if (!pendingSignupVerification) return;
-            if (pendingSignupVerification.email !== normalizeEmail(signupEmailInput.value)) {
-                clearSignupVerification();
-            }
-        });
-        signupEmailInput.dataset.boundInput = '1';
-    }
-    if (resetEmailInput && !resetEmailInput.dataset.boundInput) {
-        resetEmailInput.addEventListener('input', () => {
-            if (!pendingResetVerification) return;
-            if (pendingResetVerification.email !== normalizeEmail(resetEmailInput.value)) {
-                clearResetVerification();
-            }
-        });
-        resetEmailInput.dataset.boundInput = '1';
-    }
-    if (resetPhoneInput && !resetPhoneInput.dataset.boundInput) {
-        resetPhoneInput.addEventListener('input', () => {
-            if (!pendingResetVerification) return;
-            if (pendingResetVerification.phone !== normalizePhone(resetPhoneInput.value)) {
-                clearResetVerification();
-            }
-        });
-        resetPhoneInput.dataset.boundInput = '1';
     }
 
     if (phoneInput && appMeta.lastLoginPhone) {
@@ -3163,6 +2510,7 @@ function initializeAuthUI() {
 
     toggleForgotPinPanel(false);
     switchAuthMode(users.length === 0 ? 'signup' : 'login');
+    syncSignupRoleControls(users);
     if (!activeUser) {
         activeLoginMode = 'user';
     }
@@ -3284,21 +2632,22 @@ document.addEventListener('DOMContentLoaded', async function() {
             document.getElementById('phone').value = appMeta.lastLoginPhone || '';
             document.getElementById('pin').value = '';
             const signupName = document.getElementById('signupName');
-            const signupEmail = document.getElementById('signupEmail');
+            const signupRole = document.getElementById('signupRole');
+            const signupAdminPin = document.getElementById('signupAdminPin');
+            const signupAdminPinConfirm = document.getElementById('signupAdminPinConfirm');
             const confirmPin = document.getElementById('confirmPin');
             const resetPhone = document.getElementById('resetPhone');
-            const resetEmail = document.getElementById('resetEmail');
             const resetNewPin = document.getElementById('resetNewPin');
             const resetConfirmPin = document.getElementById('resetConfirmPin');
             if (signupName) signupName.value = '';
-            if (signupEmail) signupEmail.value = '';
+            if (signupRole) signupRole.value = 'staff';
+            if (signupAdminPin) signupAdminPin.value = '';
+            if (signupAdminPinConfirm) signupAdminPinConfirm.value = '';
             if (confirmPin) confirmPin.value = '';
             if (resetPhone) resetPhone.value = '';
-            if (resetEmail) resetEmail.value = '';
             if (resetNewPin) resetNewPin.value = '';
             if (resetConfirmPin) resetConfirmPin.value = '';
-            clearSignupVerification();
-            clearResetVerification();
+            updateSignupAdminPinVisibility();
             toggleForgotPinPanel(false);
             sales = [];
             customers = [];
@@ -3306,6 +2655,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             drinks = [];
             settings = getDefaultUserSettings();
             cart = [];
+            yearlyArchives = [];
             switchAuthMode(getAuthUsers().length === 0 ? 'signup' : 'login');
         });
     }
@@ -3398,8 +2748,9 @@ function showAppBackgroundLetters() {
 }
 
 // Welcome animation
-function showWelcomeAnimation() {
+function showWelcomeAnimation(startPage = 'home') {
     const overlay = document.getElementById('welcomeOverlay');
+    const targetPage = String(startPage || '').trim() || 'home';
     const completeLoginTransition = () => {
         if (overlay) {
             overlay.classList.remove('show');
@@ -3418,7 +2769,7 @@ function showWelcomeAnimation() {
         applyTheme(savedTheme);
         updateActiveUserBadge();
 
-        showPage('home');
+        showPage(targetPage);
     };
 
     if (!overlay) {
@@ -3855,6 +3206,8 @@ function refreshDataManagementAccessUI() {
     const clearBtn = document.getElementById('clearUserDataBtn');
     const clearQuickBtn = document.getElementById('adminClearDataQuickBtn');
     const warningText = document.getElementById('clearWarningText');
+    const archiveYearSelect = document.getElementById('archiveYearSelect');
+    const archiveYearBtn = document.getElementById('archiveYearBtn');
     const allowed = isAdminSessionActive();
 
     if (clearBtn) {
@@ -3874,6 +3227,143 @@ function refreshDataManagementAccessUI() {
         clearQuickBtn.style.cursor = allowed ? 'pointer' : 'not-allowed';
         clearQuickBtn.title = allowed ? '' : t('clearDataRequiresAdminLogin');
     }
+
+    if (archiveYearSelect) {
+        const hasYearValue = Boolean(String(archiveYearSelect.value || '').trim());
+        archiveYearSelect.disabled = !allowed || !hasYearValue;
+        archiveYearSelect.style.opacity = (!allowed || !hasYearValue) ? '0.6' : '1';
+    }
+
+    if (archiveYearBtn) {
+        const hasYearValue = Boolean(String(archiveYearSelect?.value || '').trim());
+        archiveYearBtn.disabled = !allowed || !hasYearValue;
+        archiveYearBtn.style.opacity = (!allowed || !hasYearValue) ? '0.55' : '1';
+        archiveYearBtn.style.cursor = (!allowed || !hasYearValue) ? 'not-allowed' : 'pointer';
+        archiveYearBtn.title = !allowed ? t('clearDataRequiresAdminLogin') : '';
+    }
+}
+
+function extractYearFromDateValue(value) {
+    if (!value) return null;
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.getFullYear();
+}
+
+function getArchiveYearFromSale(sale) {
+    return extractYearFromDateValue(sale?.date || sale?.createdAt || sale?.timestamp);
+}
+
+function getArchiveYearFromClate(item) {
+    return extractYearFromDateValue(item?.date || item?.createdAt || item?.updatedAt || item?.returnedDate || item?.returnDate);
+}
+
+function getArchiveCandidateYears() {
+    const years = new Set();
+
+    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+        const year = getArchiveYearFromSale(sale);
+        if (Number.isFinite(year)) years.add(year);
+    });
+
+    (Array.isArray(clates) ? clates : []).forEach((item) => {
+        const year = getArchiveYearFromClate(item);
+        if (Number.isFinite(year)) years.add(year);
+    });
+
+    return Array.from(years).sort((a, b) => b - a);
+}
+
+function renderArchiveYearOptions() {
+    const select = document.getElementById('archiveYearSelect');
+    if (!select) return;
+
+    const years = getArchiveCandidateYears();
+    const previousValue = String(select.value || '').trim();
+    select.innerHTML = '';
+
+    if (!years.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No year available';
+        select.appendChild(option);
+        select.disabled = true;
+        return;
+    }
+
+    years.forEach((year) => {
+        const option = document.createElement('option');
+        option.value = String(year);
+        option.textContent = String(year);
+        select.appendChild(option);
+    });
+
+    if (previousValue && years.includes(Number(previousValue))) {
+        select.value = previousValue;
+    } else {
+        select.value = String(years[0]);
+    }
+}
+
+async function archiveSelectedYear() {
+    if (!isAdminSessionActive()) {
+        alert(t('clearDataRequiresAdminLogin'));
+        return;
+    }
+
+    const select = document.getElementById('archiveYearSelect');
+    const selectedYear = Number(select ? select.value : '');
+    if (!Number.isFinite(selectedYear)) {
+        alert('Please choose a valid year to archive.');
+        return;
+    }
+
+    const salesToArchive = (Array.isArray(sales) ? sales : []).filter((sale) => getArchiveYearFromSale(sale) === selectedYear);
+    const clatesToArchive = (Array.isArray(clates) ? clates : []).filter((item) => getArchiveYearFromClate(item) === selectedYear);
+
+    if (!salesToArchive.length && !clatesToArchive.length) {
+        alert(`No transactions found for ${selectedYear}.`);
+        renderArchiveYearOptions();
+        refreshDataManagementAccessUI();
+        return;
+    }
+
+    const confirmed = await showUiConfirm({
+        title: 'Archive Year',
+        message: `Archive ${selectedYear} data and remove it from active workspace?`,
+        confirmText: 'Archive',
+        cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
+
+    const archivedEntry = {
+        year: selectedYear,
+        archivedAt: new Date().toISOString(),
+        sales: salesToArchive,
+        clates: clatesToArchive,
+        summary: {
+            salesCount: salesToArchive.length,
+            clatesCount: clatesToArchive.length,
+            salesTotal: salesToArchive.reduce((sum, sale) => sum + (Number(sale?.total) || 0), 0)
+        }
+    };
+
+    yearlyArchives = sanitizeYearArchives([
+        ...yearlyArchives.filter((entry) => Number(entry?.year) !== selectedYear),
+        archivedEntry
+    ]);
+
+    sales = sales.filter((sale) => getArchiveYearFromSale(sale) !== selectedYear);
+    clates = clates.filter((item) => getArchiveYearFromClate(item) !== selectedYear);
+
+    await optimizedSaveData();
+    updateHome();
+    displaySalesHistory();
+    displayKosiyo();
+    renderArchiveYearOptions();
+    refreshDataManagementAccessUI();
+
+    showSuccessToast(`Year ${selectedYear} archived. Active workspace now starts fresh for new records.`);
 }
 
 function normalizeUserRoleLabel(roleValue) {
@@ -4373,9 +3863,12 @@ function renderAdminGrowthPointDetails(analysis) {
         return;
     }
 
+    const previewIndex = Number(adminGrowthPreviewPointIndex);
+    const usePreview = Number.isFinite(previewIndex) && previewIndex >= 0 && previewIndex < series.length;
     const selectedIndex = Math.max(0, Math.min(series.length - 1, Number(selectedAdminGrowthPointIndex)));
-    const point = series[selectedIndex];
-    const previousPoint = selectedIndex > 0 ? series[selectedIndex - 1] : null;
+    const displayIndex = usePreview ? previewIndex : selectedIndex;
+    const point = series[displayIndex];
+    const previousPoint = displayIndex > 0 ? series[displayIndex - 1] : null;
     const tone = getAdminGrowthPointTone(point, previousPoint);
 
     const toneClass = tone.key === 'up' ? 'positive' : (tone.key === 'down' ? 'negative' : 'flat');
@@ -4429,6 +3922,31 @@ function renderAdminGrowthPointDetails(analysis) {
             ${escapeHtml(movingNote)}
         </div>
     `;
+}
+
+function hideAdminGrowthTooltip() {
+    const tooltip = document.getElementById('adminGrowthTooltip');
+    if (tooltip) tooltip.style.display = 'none';
+}
+
+function showAdminGrowthTooltip(point, clientX, clientY) {
+    const tooltip = document.getElementById('adminGrowthTooltip');
+    const wrap = document.querySelector('#adminGrowthChart .admin-growth-canvas');
+    if (!tooltip || !wrap || !point) return;
+
+    tooltip.textContent = `${point.label}: ${formatRwf(point.total)} | ${Number(point.transactions || 0)} tx | ${Number(point.quantity || 0)} cases`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = '0px';
+    tooltip.style.top = '0px';
+
+    const wrapRect = wrap.getBoundingClientRect();
+    const maxLeft = Math.max(8, wrap.clientWidth - tooltip.offsetWidth - 8);
+    const maxTop = Math.max(8, wrap.clientHeight - tooltip.offsetHeight - 8);
+    const left = Math.min(maxLeft, Math.max(8, clientX - wrapRect.left + 12));
+    const top = Math.min(maxTop, Math.max(8, clientY - wrapRect.top + 12));
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
 }
 
 function renderAdminGrowthChart(analysis) {
@@ -4485,7 +4003,12 @@ function renderAdminGrowthChart(analysis) {
     });
 
     const selectedIndex = Math.max(0, Math.min(points.length - 1, Number(selectedAdminGrowthPointIndex)));
-    const selectedPoint = points[selectedIndex] || points[points.length - 1];
+    const previewRaw = Number(adminGrowthPreviewPointIndex);
+    const previewIndex = Number.isFinite(previewRaw) && previewRaw >= 0 && previewRaw < points.length
+        ? previewRaw
+        : -1;
+    const focusIndex = previewIndex >= 0 ? previewIndex : selectedIndex;
+    const selectedPoint = points[focusIndex] || points[points.length - 1];
 
     const movingAveragePath = points
         .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.centerX.toFixed(2)} ${point.movingY.toFixed(2)}`)
@@ -4548,15 +4071,48 @@ function renderAdminGrowthChart(analysis) {
             ${movingAveragePoints}
             ${xLabels}
             </svg>
+            <div id="adminGrowthTooltip" class="admin-growth-tooltip" style="display:none;"></div>
         </div>
     `;
 
     container.querySelectorAll('.growth-bar[data-point-index]').forEach((bar) => {
+        const pointIndex = Number(bar.getAttribute('data-point-index'));
+        if (!Number.isFinite(pointIndex)) return;
+
+        const point = points[pointIndex];
+        if (!point) return;
+
         const selectPoint = () => {
-            const idx = Number(bar.getAttribute('data-point-index'));
-            if (!Number.isFinite(idx)) return;
-            selectAdminGrowthPoint(idx);
+            adminGrowthPreviewPointIndex = -1;
+            hideAdminGrowthTooltip();
+            selectAdminGrowthPoint(pointIndex);
         };
+
+        const previewPoint = () => {
+            if (adminGrowthPreviewPointIndex !== pointIndex) {
+                adminGrowthPreviewPointIndex = pointIndex;
+                renderAdminGrowthPointDetails(analysis);
+            }
+        };
+
+        const clearPreview = () => {
+            if (adminGrowthPreviewPointIndex !== -1) {
+                adminGrowthPreviewPointIndex = -1;
+                renderAdminGrowthPointDetails(analysis);
+            }
+            hideAdminGrowthTooltip();
+        };
+
+        bar.addEventListener('mouseenter', (event) => {
+            previewPoint();
+            showAdminGrowthTooltip(point, event.clientX, event.clientY);
+        });
+        bar.addEventListener('mousemove', (event) => {
+            showAdminGrowthTooltip(point, event.clientX, event.clientY);
+        });
+        bar.addEventListener('mouseleave', clearPreview);
+        bar.addEventListener('focus', previewPoint);
+        bar.addEventListener('blur', clearPreview);
         bar.addEventListener('click', selectPoint);
         bar.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -4575,6 +4131,8 @@ function setAdminGrowthWindow(days) {
     const parsed = Number(days);
     selectedAdminGrowthWindowDays = allowed.has(parsed) ? parsed : 30;
     selectedAdminGrowthPointIndex = -1;
+    adminGrowthPreviewPointIndex = -1;
+    hideAdminGrowthTooltip();
     renderAdminBusinessAnalysisTab();
     return selectedAdminGrowthWindowDays;
 }
@@ -4588,6 +4146,8 @@ function selectAdminGrowthPoint(index) {
     if (!series.length) {
         return renderAdminBusinessAnalysisTab();
     }
+    adminGrowthPreviewPointIndex = -1;
+    hideAdminGrowthTooltip();
     selectedAdminGrowthPointIndex = Math.max(0, Math.min(series.length - 1, Number(index) || 0));
     renderAdminGrowthChart(analysis);
     renderAdminGrowthPointDetails(analysis);
@@ -4603,14 +4163,19 @@ function renderAdminBusinessAnalysisTab() {
     const analysis = getAdminBusinessAnalysisData(selectedAdminGrowthWindowDays);
     cachedAdminGrowthAnalysis = analysis;
 
-    if (!Array.isArray(analysis.series) || analysis.series.length === 0) {
+    const seriesLength = Array.isArray(analysis.series) ? analysis.series.length : 0;
+    if (seriesLength === 0) {
         selectedAdminGrowthPointIndex = -1;
-    } else if (selectedAdminGrowthPointIndex < 0 || selectedAdminGrowthPointIndex >= analysis.series.length) {
+        adminGrowthPreviewPointIndex = -1;
+    } else if (selectedAdminGrowthPointIndex < 0 || selectedAdminGrowthPointIndex >= seriesLength) {
         const lastNonZeroIndex = [...analysis.series]
             .map((point, idx) => ({ idx, total: point.total }))
             .reverse()
             .find((entry) => Number(entry.total) > 0);
-        selectedAdminGrowthPointIndex = lastNonZeroIndex ? lastNonZeroIndex.idx : (analysis.series.length - 1);
+        selectedAdminGrowthPointIndex = lastNonZeroIndex ? lastNonZeroIndex.idx : (seriesLength - 1);
+    }
+    if (adminGrowthPreviewPointIndex < 0 || adminGrowthPreviewPointIndex >= seriesLength) {
+        adminGrowthPreviewPointIndex = -1;
     }
 
     const growthBadge = document.getElementById('adminGrowthTrendBadge');
@@ -4636,6 +4201,7 @@ function renderAdminBusinessAnalysisTab() {
         growthSummary.textContent = `${analysis.windowDays}-day sales: ${formatRwf(analysis.currentTotal)} (avg ${formatRwf(analysis.averageDaily)}/day). ${activeText}. Best day: ${bestDayText}.`;
     }
 
+    hideAdminGrowthTooltip();
     renderAdminGrowthChart(analysis);
     renderAdminGrowthPointDetails(analysis);
     const pieContainer = document.getElementById('adminDrinksPieContainer');
@@ -5747,6 +5313,33 @@ function exportAdminUsersPDF() {
 }
 
 // ================= PAGE NAVIGATION =================
+function getLastOpenPageCacheKey(user = activeUser) {
+    const userId = getUserStorageId(user);
+    return userId ? `last_open_page__${userId}` : '';
+}
+
+function getRememberedOpenPage(user = activeUser) {
+    let remembered = String(settings?.lastOpenPage || '').trim();
+    const cacheKey = getLastOpenPageCacheKey(user);
+    if (cacheKey) {
+        const cached = readLocalStorageKey(cacheKey);
+        if (typeof cached === 'string' && String(cached).trim()) {
+            remembered = String(cached).trim();
+        }
+    }
+    return remembered || 'home';
+}
+
+function rememberOpenPage(pageName, user = activeUser) {
+    if (!user) return;
+    const normalized = String(pageName || 'home').trim() || 'home';
+    settings.lastOpenPage = normalized;
+    const cacheKey = getLastOpenPageCacheKey(user);
+    if (cacheKey) {
+        writeLocalStorageKey(cacheKey, normalized);
+    }
+}
+
 function showPage(pageName) {
     refreshAdminAccessUI();
     const adminSession = isAdminSessionActive();
@@ -5812,6 +5405,8 @@ function showPage(pageName) {
         topSettingsBtn.classList.toggle('active', isSettingsPage);
         topSettingsBtn.setAttribute('aria-pressed', isSettingsPage ? 'true' : 'false');
     }
+
+    if (activeUser) rememberOpenPage(requestedPage, activeUser);
     
     // Load page-specific data
     switch(targetPage) {
@@ -9965,6 +9560,34 @@ function displaySalesHistory() {
 }
 
 // Delete an entire transaction by array of sale ids
+function requireAdminPasswordForAction(actionLabel = 'continue') {
+    if (!isAdminSessionActive()) {
+        alert(t('clearDataRequiresAdminLogin'));
+        return false;
+    }
+
+    const configuredAdminPin = String(activeUser?.adminPin || '').trim();
+    if (!/^\d{5}$/.test(configuredAdminPin)) {
+        alert(t('authAdminAccessDenied'));
+        return false;
+    }
+
+    const input = window.prompt(`Enter admin password to ${actionLabel}:`, '');
+    if (input === null) return false;
+
+    const enteredPin = String(input || '').trim();
+    if (!/^\d{5}$/.test(enteredPin)) {
+        alert(t('authPinRules'));
+        return false;
+    }
+
+    if (enteredPin !== configuredAdminPin) {
+        alert(t('authAdminInvalidCredentials'));
+        return false;
+    }
+    return true;
+}
+
 async function deleteTransaction(ids) {
     if (!ids || ids.length === 0) {
         alert('No transaction selected');
@@ -9972,6 +9595,7 @@ async function deleteTransaction(ids) {
     }
     
     if (!confirm('Delete this transaction and all its items? This cannot be undone.')) return;
+    if (!requireAdminPasswordForAction('delete this transaction')) return;
 
     // Remove matching sales and adjust customer owing if needed
     ids.forEach(id => {
@@ -9988,6 +9612,7 @@ async function deleteTransaction(ids) {
     await optimizedSaveData();
     displaySalesHistory();
     updateHome();
+    renderArchiveYearOptions();
     showSuccessToast('Transaction deleted successfully.');
 }
 
@@ -10250,6 +9875,7 @@ async function deleteSale(index) {
     if (index < 0 || index >= sales.length) return;
     
     if (confirm('Are you sure you want to delete this sale? This action cannot be undone.')) {
+        if (!requireAdminPasswordForAction('delete this sale')) return;
         const deletedSale = sales[index];
         
         // If it was a credit sale, reduce customer's debt
@@ -10261,6 +9887,7 @@ async function deleteSale(index) {
         await optimizedSaveData();
         displaySalesHistory();
         updateHome();
+        renderArchiveYearOptions();
         
         showSuccessToast('Sale deleted successfully.');
     }
@@ -10618,6 +10245,7 @@ function loadSettings() {
     renderDrinkProfitEditor();
     renderStockManagement();
     renderHomeStockWarning();
+    renderArchiveYearOptions();
     refreshDataManagementAccessUI();
     refreshProfitVisibilityUI();
 }
@@ -10762,34 +10390,34 @@ function updateLanguageUI() {
     setText('#authAdminTab', t('admin'));
     setText('#authSignupTab', t('signUp'));
     setText('#loginScreen label[for="signupName"]', t('fullName'));
-    setText('#loginScreen label[for="signupEmail"]', t('emailAddress'));
-    setText('#loginScreen label[for="phone"]', t('phoneOrEmail'));
+    setText('#loginScreen label[for="phone"]', t('phoneNumber'));
     setText('#loginScreen label[for="pin"]', t('pinLabel'));
     setText('#loginScreen label[for="confirmPin"]', t('confirmPin'));
-    setText('#loginScreen label[for="signupVerificationCode"]', t('verificationCode'));
-    setText('#sendSignupCodeBtn', t('sendCode'));
+    setText('#loginScreen label[for="signupRole"]', t('accountType'));
+    setText('#loginScreen label[for="signupAdminPin"]', t('adminPinLabel'));
+    setText('#loginScreen label[for="signupAdminPinConfirm"]', t('confirmAdminPin'));
     updateAuthPrimaryButtons();
     setText('#forgotPinBtn', t('forgotPin'));
     setText('#forgotPinTitle', t('resetPin'));
     setText('#loginScreen label[for="resetPhone"]', t('phoneNumber'));
-    setText('#loginScreen label[for="resetEmail"]', t('emailAddress'));
-    setText('#loginScreen label[for="resetCode"]', t('verificationCode'));
     setText('#loginScreen label[for="resetNewPin"]', t('resetNewPin'));
     setText('#loginScreen label[for="resetConfirmPin"]', t('resetConfirmPin'));
-    setText('#sendResetCodeBtn', t('sendCode'));
     setText('#resetPinBtn', t('resetPin'));
     setText('#cancelResetPinBtn', t('cancel'));
     setPlaceholder('#signupName', t('fullName'));
-    setPlaceholder('#signupEmail', t('emailAddress'));
-    setPlaceholder('#phone', t('phoneOrEmail'));
+    setPlaceholder('#phone', t('phoneNumber'));
     setPlaceholder('#pin', t('pinLabel'));
     setPlaceholder('#confirmPin', t('confirmPin'));
-    setPlaceholder('#signupVerificationCode', t('verificationCode'));
+    setPlaceholder('#signupAdminPin', t('adminPinLabel'));
+    setPlaceholder('#signupAdminPinConfirm', t('confirmAdminPin'));
     setPlaceholder('#resetPhone', t('phoneNumber'));
-    setPlaceholder('#resetEmail', t('emailAddress'));
-    setPlaceholder('#resetCode', t('verificationCode'));
     setPlaceholder('#resetNewPin', t('resetNewPin'));
     setPlaceholder('#resetConfirmPin', t('resetConfirmPin'));
+    const signupRoleStaffOption = document.querySelector('#signupRole option[value="staff"]');
+    const signupRoleAdminOption = document.querySelector('#signupRole option[value="admin"]');
+    if (signupRoleStaffOption) signupRoleStaffOption.textContent = t('signupRoleStaff');
+    if (signupRoleAdminOption) signupRoleAdminOption.textContent = t('signupRoleAdmin');
+    syncSignupRoleControls(getAuthUsers());
     setAuthHintText();
     updateActiveUserBadge();
 
@@ -11105,6 +10733,7 @@ async function confirmClearAllData(skipInputValidation = false) {
     drinks = [];
     settings = getDefaultUserSettings();
     cart = [];
+    yearlyArchives = [];
 
     await optimizedSaveData();
     updateHome();
@@ -11113,6 +10742,7 @@ async function confirmClearAllData(skipInputValidation = false) {
     updateCustomerDropdown();
     updateCartDisplay();
     renderStockManagement();
+    renderArchiveYearOptions();
     showPage('home');
     closeClearDataConfirmForm();
     showSuccessToast(t('clearDataConfirmSuccess'));
@@ -11184,6 +10814,7 @@ window.saveDrinkProfitsFromSettings = saveDrinkProfitsFromSettings;
 window.setTheme = setTheme;
 window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
 window.clearAllData = clearAllData;
+window.archiveSelectedYear = archiveSelectedYear;
 window.openClearDataConfirmForm = openClearDataConfirmForm;
 window.closeClearDataConfirmForm = closeClearDataConfirmForm;
 window.confirmClearAllData = confirmClearAllData;
