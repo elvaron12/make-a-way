@@ -292,10 +292,23 @@ let rwandaClockSyncInterval = null;
 let rwandaClockBaseEpochMs = null;
 let rwandaClockBasePerfMs = null;
 let autoBackupTimeout = null;
+let autoDailySalesPdfTimeout = null;
+let autoDailySalesPdfCheckInterval = null;
+let connectivityBannerHideTimeout = null;
 const AUTO_BACKUP_HOUR = 22;
+const DEFAULT_AUTO_DAILY_SALES_PDF_TIME = '21:00';
+const CONNECTIVITY_BANNER_HIDE_MS = 3200;
+const AUTO_DAILY_SALES_PDF_CHECK_INTERVAL_MS = 30000;
 
 const RWANDA_TIME_ZONE = 'Africa/Kigali';
 const RWANDA_TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const offlineSyncState = {
+    supported: false,
+    serviceWorkerRegistered: false,
+    syncInFlight: false,
+    lastSyncAt: 0,
+    lastError: ''
+};
 
 // ================= CART SYSTEM =================
 let cart = []; // Cart items array
@@ -429,6 +442,21 @@ const translations = {
         resetNewPin: 'New Password',
         resetConfirmPin: 'Confirm New Password', 
         cancel: 'Cancel',
+        authSubtitle: 'Business sales, stock, backup, and reporting in one workspace.',
+        authModeLoginTitle: 'Staff Login',
+        authModeLoginText: 'Use your phone number and password to open today\'s workspace.',
+        authModeAdminTitle: 'Admin Session',
+        authModeAdminText: 'Admin mode unlocks sales exports, account control, and protected settings.',
+        authModeSignupTitle: 'Create Owner Account',
+        authModeSignupText: 'Create the first owner account to secure the app before employees start using it.',
+        authResetDescription: 'Use the phone number registered on the account, then choose a new password.',
+        authResetPreviewEmpty: 'We will match the phone number to an existing account.',
+        authResetPreviewFound: 'Account found: {name} ({phone}). Set the new password below.',
+        authResetPreviewMissing: 'No saved account matches {phone} yet. Check the number and try again.',
+        adminAutoPdfToggle: 'Auto-download the day\'s sales PDF every day',
+        adminAutoPdfTimeLabel: 'Export Time',
+        adminAutoPdfSave: 'Save Auto Export',
+        connectivitySyncNow: 'Sync Now',
         authHintLogin: 'Welcome back to Make A Way!',
         authHintAdmin: 'Admin login uses your phone number and password.',
         authHintSignup: 'Admin sign-up only. Create the owner account to secure this app.',
@@ -1183,6 +1211,11 @@ function getAutoBackupStorageKey(user = activeUser, date = new Date()) {
     return id ? `auto_backup__${id}__${getAutoBackupDateKey(date)}` : '';
 }
 
+function getAutoDailySalesPdfCacheKey(user = activeUser) {
+    const id = getUserStorageId(user);
+    return id ? `auto_daily_sales_pdf__${id}` : '';
+}
+
 async function runAutoBackupForUser(user = activeUser, date = new Date()) {
     if (!user) return false;
     const backupKey = getAutoBackupStorageKey(user, date);
@@ -1226,6 +1259,246 @@ function scheduleAutoBackup() {
     }, delay);
 }
 
+function getDefaultAutoDailySalesPdfTime() {
+    return DEFAULT_AUTO_DAILY_SALES_PDF_TIME;
+}
+
+function isValidTimeValue(value) {
+    return /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(value || '').trim());
+}
+
+function getDateAtLocalTime(baseDate = new Date(), timeValue = DEFAULT_AUTO_DAILY_SALES_PDF_TIME) {
+    const normalizedTime = isValidTimeValue(timeValue) ? timeValue : DEFAULT_AUTO_DAILY_SALES_PDF_TIME;
+    const [hours, minutes] = normalizedTime.split(':').map((part) => Number(part) || 0);
+    const target = baseDate instanceof Date ? new Date(baseDate) : new Date(baseDate || Date.now());
+    target.setHours(hours, minutes, 0, 0);
+    return target;
+}
+
+function parseDayKeyToDate(dayKey) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey || '').trim());
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    const date = new Date(year, month, day);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatAutoDailySalesPdfLabel(value, withTime = true) {
+    const parsed = typeof value === 'string'
+        ? (parseDayKeyToDate(value) || new Date(value))
+        : new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Unknown';
+    return parsed.toLocaleString([], withTime
+        ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+        : { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+async function cacheAutoDailySalesPdfBackup(blob, filename, dayIso, user = activeUser) {
+    const cacheKey = getAutoDailySalesPdfCacheKey(user);
+    if (!cacheKey || !(blob instanceof Blob)) return false;
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64 = bufferToBase64(arrayBuffer);
+    await saveNamedData(cacheKey, {
+        filename: String(filename || '').trim() || `admin-daily-sales-${dayIso || getTodayISODate()}.pdf`,
+        dayIso: String(dayIso || '').trim() || getTodayISODate(),
+        mimeType: blob.type || 'application/pdf',
+        size: blob.size || 0,
+        createdAt: new Date().toISOString(),
+        base64
+    });
+    return true;
+}
+
+async function loadCachedAutoDailySalesPdfBackup(user = activeUser) {
+    const cacheKey = getAutoDailySalesPdfCacheKey(user);
+    if (!cacheKey) return null;
+    const cached = await loadNamedData(cacheKey, null);
+    if (!cached || typeof cached !== 'object' || !cached.base64) return null;
+    return cached;
+}
+
+function triggerPdfBlobDownload(blob, filename) {
+    const safeFilename = String(filename || '').trim() || `admin-daily-sales-${getTodayISODate()}.pdf`;
+    const blobUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = blobUrl;
+    anchor.download = safeFilename;
+    anchor.rel = 'noopener';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    setTimeout(() => {
+        if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
+        URL.revokeObjectURL(blobUrl);
+    }, 1200);
+}
+
+function hasAutoDailySalesPdfPrivileges(user = activeUser) {
+    return Boolean(user) && isAdminRoleUser(user);
+}
+
+function getAutoDailySalesPdfNextRun(now = new Date()) {
+    const scheduled = getDateAtLocalTime(now, settings?.autoDailySalesPdfTime || getDefaultAutoDailySalesPdfTime());
+    if (scheduled > now) return scheduled;
+    const next = new Date(scheduled);
+    next.setDate(next.getDate() + 1);
+    return next;
+}
+
+function getAutoDailySalesPdfStatusMessage(now = new Date()) {
+    const enabled = Boolean(settings?.autoDailySalesPdfEnabled);
+    const timeValue = settings?.autoDailySalesPdfTime || getDefaultAutoDailySalesPdfTime();
+    const todayKey = toLocalDayKey(now);
+    const lastAttemptDate = String(settings?.autoDailySalesPdfLastAttemptDate || '').trim();
+    const lastAttemptStatus = String(settings?.autoDailySalesPdfLastAttemptStatus || '').trim();
+    const lastExportDate = String(settings?.autoDailySalesPdfLastExportDate || '').trim();
+
+    if (!enabled) {
+        return 'Automatic daily PDF export is off.';
+    }
+    if (!hasAutoDailySalesPdfPrivileges()) {
+        return `Automatic export is saved for ${timeValue}, but it only runs while an admin account is open on this device.`;
+    }
+    if (lastAttemptDate === todayKey && lastAttemptStatus === 'success') {
+        return `Today&apos;s PDF backup was prepared. If your browser blocked the download, use Download Last Auto PDF. Next run ${formatAutoDailySalesPdfLabel(getAutoDailySalesPdfNextRun(now))}.`;
+    }
+    if (lastAttemptDate === todayKey && lastAttemptStatus === 'empty') {
+        return `Checked ${timeValue} today. No sales were available to export.`;
+    }
+    if (lastAttemptDate === todayKey && lastAttemptStatus === 'error') {
+        return 'The automatic export tried today but did not finish. Use Export Day PDF or Sync Now to retry.';
+    }
+
+    const nextRunLabel = formatAutoDailySalesPdfLabel(getAutoDailySalesPdfNextRun(now));
+    const lastExportText = lastExportDate
+        ? ` Last prepared PDF: ${formatAutoDailySalesPdfLabel(lastExportDate, false)}.`
+        : '';
+    return `Next auto-download: ${nextRunLabel}.${lastExportText} Keep the app open and allow automatic downloads in your browser.`;
+}
+
+function refreshAutoDailySalesPdfControls() {
+    const checkbox = document.getElementById('adminAutoPdfEnabled');
+    const timeInput = document.getElementById('adminAutoPdfTime');
+    const saveBtn = document.getElementById('saveAdminAutoPdfBtn');
+    const downloadBtn = document.getElementById('downloadLastAutoPdfBtn');
+    const status = document.getElementById('adminAutoPdfStatus');
+    const enabled = Boolean(settings?.autoDailySalesPdfEnabled);
+    const timeValue = settings?.autoDailySalesPdfTime || getDefaultAutoDailySalesPdfTime();
+    const hasCachedExport = Boolean(String(settings?.autoDailySalesPdfLastExportDate || '').trim());
+
+    if (checkbox) checkbox.checked = enabled;
+    if (timeInput) {
+        timeInput.value = isValidTimeValue(timeValue) ? timeValue : getDefaultAutoDailySalesPdfTime();
+        timeInput.disabled = !enabled;
+    }
+    if (saveBtn) saveBtn.disabled = !canAccessAdminPanel();
+    if (downloadBtn) {
+        downloadBtn.disabled = !hasCachedExport;
+        downloadBtn.style.opacity = hasCachedExport ? '1' : '0.55';
+        downloadBtn.style.cursor = hasCachedExport ? 'pointer' : 'not-allowed';
+    }
+    if (status) status.innerHTML = getAutoDailySalesPdfStatusMessage();
+}
+
+async function rememberAutoDailySalesPdfAttempt(status = '', dayKey = toLocalDayKey(new Date())) {
+    settings.autoDailySalesPdfLastAttemptDate = dayKey;
+    settings.autoDailySalesPdfLastAttemptStatus = String(status || '').trim();
+    if (status === 'success') {
+        settings.autoDailySalesPdfLastExportDate = dayKey;
+    }
+    await optimizedSaveData();
+    refreshAutoDailySalesPdfControls();
+}
+
+async function maybeRunAutoDailySalesPdfExport(now = new Date(), options = {}) {
+    const force = Boolean(options?.force);
+    if (!activeUser || !Boolean(settings?.autoDailySalesPdfEnabled) || !hasAutoDailySalesPdfPrivileges()) {
+        refreshAutoDailySalesPdfControls();
+        return false;
+    }
+
+    const todayKey = toLocalDayKey(now);
+    const scheduledAt = getDateAtLocalTime(now, settings?.autoDailySalesPdfTime || getDefaultAutoDailySalesPdfTime());
+    if (!force && now < scheduledAt) {
+        return false;
+    }
+    if (String(settings?.autoDailySalesPdfLastAttemptDate || '').trim() === todayKey) {
+        return false;
+    }
+
+    const result = await exportAdminDailySalesPDF(todayKey, {
+        silent: true,
+        bypassAdminSession: true,
+        source: 'auto'
+    });
+    const status = result?.success ? 'success' : (result?.reason === 'no-sales' ? 'empty' : 'error');
+    await rememberAutoDailySalesPdfAttempt(status, todayKey);
+
+    if (result?.success) {
+        showSuccessToast(`Automatic PDF backup prepared for ${todayKey}.`);
+    }
+    return Boolean(result?.success);
+}
+
+function scheduleAutoDailySalesPdfExport() {
+    if (autoDailySalesPdfTimeout) {
+        clearTimeout(autoDailySalesPdfTimeout);
+        autoDailySalesPdfTimeout = null;
+    }
+    if (autoDailySalesPdfCheckInterval) {
+        clearInterval(autoDailySalesPdfCheckInterval);
+        autoDailySalesPdfCheckInterval = null;
+    }
+
+    refreshAutoDailySalesPdfControls();
+
+    if (!activeUser || !Boolean(settings?.autoDailySalesPdfEnabled) || !hasAutoDailySalesPdfPrivileges()) {
+        return;
+    }
+
+    const now = new Date();
+    const todayKey = toLocalDayKey(now);
+    const scheduledAt = getDateAtLocalTime(now, settings?.autoDailySalesPdfTime || getDefaultAutoDailySalesPdfTime());
+    const alreadyAttemptedToday = String(settings?.autoDailySalesPdfLastAttemptDate || '').trim() === todayKey;
+    const nextRun = (!alreadyAttemptedToday && now >= scheduledAt)
+        ? new Date(now.getTime() + 1200)
+        : getAutoDailySalesPdfNextRun(now);
+    const delay = Math.max(1000, nextRun.getTime() - now.getTime());
+
+    autoDailySalesPdfCheckInterval = setInterval(() => {
+        void maybeRunAutoDailySalesPdfExport(new Date());
+    }, AUTO_DAILY_SALES_PDF_CHECK_INTERVAL_MS);
+
+    autoDailySalesPdfTimeout = setTimeout(async () => {
+        try {
+            await maybeRunAutoDailySalesPdfExport(new Date(), { force: true });
+        } catch (error) {
+            console.warn('Auto daily sales PDF export failed:', error);
+        }
+        scheduleAutoDailySalesPdfExport();
+    }, delay);
+}
+
+function bindAutoDailySalesPdfLifecycleEvents() {
+    if (typeof window === 'undefined' || window.__mawAutoPdfLifecycleBound) return;
+
+    const runCatchupCheck = () => {
+        void maybeRunAutoDailySalesPdfExport(new Date());
+    };
+
+    window.addEventListener('focus', runCatchupCheck);
+    window.addEventListener('pageshow', runCatchupCheck);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            runCatchupCheck();
+        }
+    });
+
+    window.__mawAutoPdfLifecycleBound = true;
+}
+
 // ================= ELECTRON + WEB STORAGE =================
 const APP_META_STORAGE_KEY = 'app_meta';
 
@@ -1247,7 +1520,12 @@ function getDefaultUserSettings() {
         language: 'en',
         currency: 'RWF',
         onboardingDone: true,
-        lastOpenPage: 'home'
+        lastOpenPage: 'home',
+        autoDailySalesPdfEnabled: false,
+        autoDailySalesPdfTime: DEFAULT_AUTO_DAILY_SALES_PDF_TIME,
+        autoDailySalesPdfLastExportDate: '',
+        autoDailySalesPdfLastAttemptDate: '',
+        autoDailySalesPdfLastAttemptStatus: ''
     };
 }
 
@@ -1315,7 +1593,7 @@ function getDefaultLowStockThreshold() {
     return 5;
 }
 
-const DEFAULT_NEW_STOCK_QTY = 30;
+const DEFAULT_NEW_STOCK_QTY = 0;
 
 function getDefaultNewDrinkStockQty() {
     return DEFAULT_NEW_STOCK_QTY;
@@ -2010,17 +2288,19 @@ function registerFailedLoginAttempt(messageKey = 'authInvalidCredentials') {
     if (failedLoginAttempts >= 5) {
         failedLoginAttempts = 0;
         loginLockedUntil = Date.now() + 60 * 1000;
-        alert(t('authTooManyAttempts'));
+        setAuthFeedback(t('authTooManyAttempts'), 'error');
         return;
     }
-    alert(t(messageKey));
+    setAuthFeedback(t(messageKey), 'error');
 }
 
 async function setupAdminPinForUser(user, currentUserPin) {
     if (!user || !isAdminRoleUser(user)) {
         return { success: false, cancelled: false, message: t('authAdminAccessDenied') };
     }
-    if (!/^\d{5}$/.test(String(currentUserPin || '').trim()) || String(user.pin || '').trim() !== String(currentUserPin || '').trim()) {
+    const currentPassword = normalizePasswordInput(currentUserPin);
+    const currentPasswordOk = await verifyUserPassword(user, currentPassword);
+    if (!currentPasswordOk) {
         return { success: false, cancelled: false, message: t('authAdminSetupRequiresUserPin') };
     }
 
@@ -2028,11 +2308,11 @@ async function setupAdminPinForUser(user, currentUserPin) {
     if (adminPinRaw === null) {
         return { success: false, cancelled: true, message: t('authAdminSetupCancelled') };
     }
-    const adminPin = String(adminPinRaw || '').trim();
-    if (!/^\d{5}$/.test(adminPin)) {
+    const adminPin = normalizePasswordInput(adminPinRaw);
+    if (!isPasswordValid(adminPin)) {
         return { success: false, cancelled: false, message: t('authPinRules') };
     }
-    if (adminPin === String(user.pin || '').trim()) {
+    if (adminPin === currentPassword) {
         return { success: false, cancelled: false, message: t('authAdminPinMustDiffer') };
     }
 
@@ -2040,12 +2320,15 @@ async function setupAdminPinForUser(user, currentUserPin) {
     if (confirmRaw === null) {
         return { success: false, cancelled: true, message: t('authAdminSetupCancelled') };
     }
-    const confirmAdminPin = String(confirmRaw || '').trim();
+    const confirmAdminPin = normalizePasswordInput(confirmRaw);
     if (confirmAdminPin !== adminPin) {
         return { success: false, cancelled: false, message: t('authPinMismatch') };
     }
 
-    user.adminPin = adminPin;
+    user.passwordHash = await hashPassword(adminPin);
+    delete user.pin;
+    delete user.adminPin;
+    user.authProvider = 'password';
     user.updatedAt = new Date().toISOString();
     appMeta.authUsers = getAuthUsers();
     await optimizedSaveData();
@@ -2060,11 +2343,11 @@ async function handleAdminLogin(identifier, pin, users = getAuthUsers()) {
         return;
     }
     if (!isUserAccountActive(user)) {
-        alert(t('authAccountInactive'));
+        setAuthFeedback(t('authAccountInactive'), 'error');
         return;
     }
     if (!isAdminRoleUser(user)) {
-        alert(t('authAdminAccessDenied'));
+        setAuthFeedback(t('authAdminAccessDenied'), 'error');
         return;
     }
     const passwordOk = await verifyUserPassword(user, pin);
@@ -2079,6 +2362,7 @@ async function handleAdminLogin(identifier, pin, users = getAuthUsers()) {
 async function completeLoginForUser(user, options = {}) {
     failedLoginAttempts = 0;
     loginLockedUntil = 0;
+    setAuthFeedback('');
     user.role = normalizeAuthRole(user.role, 'staff');
     user.isActive = user.isActive !== false;
     user.lastLoginAt = new Date().toISOString();
@@ -2095,6 +2379,8 @@ async function completeLoginForUser(user, options = {}) {
     refreshAdminAccessUI();
     refreshDataManagementAccessUI();
     scheduleAutoBackup();
+    scheduleAutoDailySalesPdfExport();
+    updateConnectivityUI();
     const startPage = String(options?.startPage || '').trim() || 'home';
     showWelcomeAnimation(startPage);
 }
@@ -2124,6 +2410,7 @@ function resetForgotPinFields() {
     if (resetPhoneInput) resetPhoneInput.value = '';
     if (resetNewPinInput) resetNewPinInput.value = '';
     if (resetConfirmPinInput) resetConfirmPinInput.value = '';
+    updateResetAccountPreview();
 }
 
 function getAuthUsers() {
@@ -2173,6 +2460,8 @@ async function restoreActiveSessionFromMeta() {
     refreshAdminAccessUI();
     refreshDataManagementAccessUI();
     scheduleAutoBackup();
+    scheduleAutoDailySalesPdfExport();
+    updateConnectivityUI();
 
     const loginScreen = document.getElementById('loginScreen');
     const app = document.getElementById('app');
@@ -2200,6 +2489,74 @@ function setAuthHintText() {
         return;
     }
     hint.textContent = t('authHintLogin');
+}
+
+function setAuthFeedback(message = '', tone = 'info') {
+    const feedback = document.getElementById('authFeedback');
+    if (!feedback) return;
+    const text = String(message || '').trim();
+    if (!text) {
+        feedback.style.display = 'none';
+        feedback.textContent = '';
+        feedback.className = 'auth-status';
+        return;
+    }
+
+    feedback.textContent = text;
+    feedback.className = `auth-status is-${tone === 'error' ? 'error' : (tone === 'success' ? 'success' : 'info')}`;
+    feedback.style.display = 'block';
+}
+
+function updateAuthModeSummary() {
+    const titleEl = document.getElementById('authModeSummaryTitle');
+    const textEl = document.getElementById('authModeSummaryText');
+    if (!titleEl || !textEl) return;
+
+    if (forgotPinVisible) {
+        titleEl.textContent = t('resetPin');
+        textEl.textContent = t('authResetDescription');
+        return;
+    }
+
+    if (authMode === 'signup') {
+        titleEl.textContent = t('authModeSignupTitle');
+        textEl.textContent = t('authModeSignupText');
+        return;
+    }
+
+    if (authMode === 'admin') {
+        titleEl.textContent = t('authModeAdminTitle');
+        textEl.textContent = t('authModeAdminText');
+        return;
+    }
+
+    titleEl.textContent = t('authModeLoginTitle');
+    textEl.textContent = t('authModeLoginText');
+}
+
+function updateResetAccountPreview() {
+    const preview = document.getElementById('resetAccountPreview');
+    if (!preview) return;
+
+    const resetPhoneInput = document.getElementById('resetPhone');
+    const phoneInput = document.getElementById('phone');
+    const rawValue = resetPhoneInput ? resetPhoneInput.value : (phoneInput ? phoneInput.value : '');
+    const normalized = normalizePhone(rawValue);
+    if (!normalized) {
+        preview.textContent = t('authResetPreviewEmpty');
+        return;
+    }
+
+    const user = findUserByLoginIdentifier(normalized, getAuthUsers());
+    if (!user) {
+        preview.textContent = t('authResetPreviewMissing').replace('{phone}', normalized);
+        return;
+    }
+
+    const name = String(user.name || 'Account').trim() || 'Account';
+    preview.textContent = t('authResetPreviewFound')
+        .replace('{name}', name)
+        .replace('{phone}', normalizePhone(user.phone || normalized));
 }
 
 function updateAuthPrimaryButtons() {
@@ -2266,10 +2623,14 @@ function toggleForgotPinPanel(show) {
         if (resetPhoneInput) {
             resetPhoneInput.value = normalizePhone(matchedUser?.phone || typedIdentifier || appMeta.lastLoginPhone || '');
         }
+        setAuthFeedback(t('authHintReset'), 'info');
     } else {
         resetForgotPinFields();
+        setAuthFeedback('');
     }
 
+    updateResetAccountPreview();
+    updateAuthModeSummary();
     setAuthHintText();
 }
 
@@ -2312,6 +2673,8 @@ function switchAuthMode(mode) {
 
     syncSignupRoleControls(getAuthUsers());
     updateAuthPrimaryButtons();
+    updateAuthModeSummary();
+    setAuthFeedback('');
     setAuthHintText();
 }
 
@@ -2430,8 +2793,9 @@ function startOnboardingTutorial(force = false) {
 
 async function handleLogin() {
     const now = Date.now();
+    setAuthFeedback('');
     if (now < loginLockedUntil) {
-        alert(t('authTooManyAttempts'));
+        setAuthFeedback(t('authTooManyAttempts'), 'error');
         return;
     }
 
@@ -2441,8 +2805,12 @@ async function handleLogin() {
     const pin = (pinInput ? pinInput.value : '').trim();
     const users = getAuthUsers();
 
+    if (normalizePhone(loginIdentifier).length < 10) {
+        setAuthFeedback(t('authPhoneRequired'), 'error');
+        return;
+    }
     if (!isPasswordValid(pin)) {
-        alert(t('authPinRules'));
+        setAuthFeedback(t('authPinRules'), 'error');
         return;
     }
 
@@ -2458,7 +2826,7 @@ async function handleLogin() {
         return;
     }
     if (!isUserAccountActive(user)) {
-        alert(t('authAccountInactive'));
+        setAuthFeedback(t('authAccountInactive'), 'error');
         return;
     }
 
@@ -2478,32 +2846,33 @@ async function handleSignup() {
     const phone = normalizePhone(phoneInput ? phoneInput.value : '');
     const pin = (pinInput ? pinInput.value : '').trim();
     const confirmPin = (confirmInput ? confirmInput.value : '').trim();
+    setAuthFeedback('');
 
     if (!name) {
-        alert(t('authNameRequired'));
+        setAuthFeedback(t('authNameRequired'), 'error');
         return;
     }
     if (phone.length < 10) {
-        alert(t('authPhoneRequired'));
+        setAuthFeedback(t('authPhoneRequired'), 'error');
         return;
     }
     if (!isPasswordValid(pin)) {
-        alert(t('authPinRules'));
+        setAuthFeedback(t('authPinRules'), 'error');
         return;
     }
     if (pin !== confirmPin) {
-        alert(t('authPinMismatch'));
+        setAuthFeedback(t('authPinMismatch'), 'error');
         return;
     }
 
     const users = getAuthUsers();
     if (users.length > 0) {
-        alert(t('authAdminOnlyCreate'));
+        setAuthFeedback(t('authAdminOnlyCreate'), 'error');
         return;
     }
     const phoneExists = users.some((u) => normalizePhone(u.phone) === phone);
     if (phoneExists) {
-        alert(t('authPhoneExists'));
+        setAuthFeedback(t('authPhoneExists'), 'error');
         return;
     }
     const requestedRole = 'owner';
@@ -2511,7 +2880,7 @@ async function handleSignup() {
     try {
         passwordHash = await hashPassword(pin);
     } catch (error) {
-        alert(error.message || 'Unable to secure this password.');
+        setAuthFeedback(error.message || 'Unable to secure this password.', 'error');
         return;
     }
 
@@ -2542,6 +2911,7 @@ async function handleSignup() {
     if (phoneInput) phoneInput.value = phone;
     showSuccessToast(t('authAccountCreated'));
     switchAuthMode('login');
+    setAuthFeedback(t('authAccountCreated'), 'success');
 }
 
 function openForgotPinPanel() {
@@ -2558,23 +2928,24 @@ async function handleResetPin() {
     const newPin = (resetNewPinInput ? resetNewPinInput.value : '').trim();
     const confirmPin = (resetConfirmPinInput ? resetConfirmPinInput.value : '').trim();
     const users = getAuthUsers();
+    setAuthFeedback('');
 
     if (phone.length < 10) {
-        alert(t('authPhoneRequired'));
+        setAuthFeedback(t('authPhoneRequired'), 'error');
         return;
     }
     if (!isPasswordValid(newPin)) {
-        alert(t('authPinRules'));
+        setAuthFeedback(t('authPinRules'), 'error');
         return;
     }
     if (newPin !== confirmPin) {
-        alert(t('authPinMismatch'));
+        setAuthFeedback(t('authPinMismatch'), 'error');
         return;
     }
 
     const user = users.find((u) => normalizePhone(u.phone) === phone);
     if (!user) {
-        alert(t('authUserNotFound'));
+        setAuthFeedback(t('authUserNotFound'), 'error');
         return;
     }
 
@@ -2588,7 +2959,7 @@ async function handleResetPin() {
         appMeta.lastLoginPhone = phone;
         await saveNamedData(APP_META_STORAGE_KEY, appMeta);
     } catch (error) {
-        alert(error.message || 'Unable to reset password.');
+        setAuthFeedback(error.message || 'Unable to reset password.', 'error');
         return;
     }
 
@@ -2598,6 +2969,7 @@ async function handleResetPin() {
     const pinInput = document.getElementById('pin');
     if (phoneInput) phoneInput.value = phone;
     if (pinInput) pinInput.value = '';
+    setAuthFeedback(t('authPinResetSuccess'), 'success');
     showSuccessToast(t('authPinResetSuccess'));
 }
 
@@ -2617,6 +2989,8 @@ function initializeAuthUI() {
     const forgotPinBtn = document.getElementById('forgotPinBtn');
     const resetPinBtn = document.getElementById('resetPinBtn');
     const cancelResetPinBtn = document.getElementById('cancelResetPinBtn');
+    const resetPhoneInput = document.getElementById('resetPhone');
+    const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
 
     const canPublicSignup = Array.isArray(users) && users.length === 0;
@@ -2660,6 +3034,24 @@ function initializeAuthUI() {
         cancelResetPinBtn.addEventListener('click', () => toggleForgotPinPanel(false));
         cancelResetPinBtn.dataset.bound = '1';
     }
+    if (phoneInput && !phoneInput.dataset.boundInput) {
+        phoneInput.addEventListener('input', () => {
+            if (forgotPinVisible) updateResetAccountPreview();
+            if (document.getElementById('authFeedback')?.style.display === 'block') {
+                setAuthFeedback('');
+            }
+        });
+        phoneInput.dataset.boundInput = '1';
+    }
+    if (resetPhoneInput && !resetPhoneInput.dataset.boundInput) {
+        resetPhoneInput.addEventListener('input', () => {
+            updateResetAccountPreview();
+            if (document.getElementById('authFeedback')?.style.display === 'block') {
+                setAuthFeedback('');
+            }
+        });
+        resetPhoneInput.dataset.boundInput = '1';
+    }
     if (pinInput && !pinInput.dataset.boundEnter) {
         pinInput.addEventListener('keypress', (e) => {
             if (e.key !== 'Enter') return;
@@ -2671,6 +3063,18 @@ function initializeAuthUI() {
             }
         });
         pinInput.dataset.boundEnter = '1';
+    }
+    if (phoneInput && !phoneInput.dataset.boundEnter) {
+        phoneInput.addEventListener('keypress', (e) => {
+            if (e.key !== 'Enter') return;
+            const passwordEl = document.getElementById('pin');
+            if (passwordEl && !String(passwordEl.value || '').trim()) {
+                passwordEl.focus();
+                return;
+            }
+            handleLogin();
+        });
+        phoneInput.dataset.boundEnter = '1';
     }
     if (confirmInput && !confirmInput.dataset.boundEnter) {
         confirmInput.addEventListener('keypress', (e) => {
@@ -2692,6 +3096,14 @@ function initializeAuthUI() {
         });
         signupAdminPinConfirmInput.dataset.boundEnter = '1';
     }
+    if (resetNewPinInput && !resetNewPinInput.dataset.boundEnter) {
+        resetNewPinInput.addEventListener('keypress', (e) => {
+            if (e.key !== 'Enter') return;
+            const confirmEl = document.getElementById('resetConfirmPin');
+            if (confirmEl) confirmEl.focus();
+        });
+        resetNewPinInput.dataset.boundEnter = '1';
+    }
     if (resetConfirmPinInput && !resetConfirmPinInput.dataset.boundEnter) {
         resetConfirmPinInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleResetPin();
@@ -2706,6 +3118,8 @@ function initializeAuthUI() {
     toggleForgotPinPanel(false);
     switchAuthMode(users.length === 0 ? 'signup' : 'login');
     syncSignupRoleControls(users);
+    updateAuthModeSummary();
+    updateResetAccountPreview();
     if (!activeUser) {
         activeLoginMode = 'user';
     }
@@ -2778,6 +3192,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     setRangeToThisMonth();
     initializeAuthUI();
     initializeMobileChromeAutoHide();
+    initializeAdminAutoDailySalesPdfUi();
+    bindAutoDailySalesPdfLifecycleEvents();
     if (!didRestoreSession && loginScreenEl) {
         loginScreenEl.style.visibility = 'visible';
         loginScreenEl.style.display = 'flex';
@@ -2788,6 +3204,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     ensureClearDataConfirmBindings();
     initializeAiAssistant();
     scheduleAutoBackup();
+    scheduleAutoDailySalesPdfExport();
+    void registerOfflineSupport();
     
     const logoutBtn = document.getElementById('logoutBtn');
     
@@ -2817,6 +3235,10 @@ document.addEventListener('DOMContentLoaded', async function() {
             updateActiveUserBadge();
             refreshAdminAccessUI();
             refreshDataManagementAccessUI();
+            if (autoDailySalesPdfTimeout) {
+                clearTimeout(autoDailySalesPdfTimeout);
+                autoDailySalesPdfTimeout = null;
+            }
             closeAiAssistantPanel();
             refreshAiAssistantAccessUI();
             closeOnboarding(false);
@@ -2856,6 +3278,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             cart = [];
             yearlyArchives = [];
             switchAuthMode(getAuthUsers().length === 0 ? 'signup' : 'login');
+            updateConnectivityUI();
         });
     }
     
@@ -2869,6 +3292,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Apply theme and settings
     const currentTheme = settings.theme || 'light';
     applyTheme(currentTheme);
+    updateConnectivityUI();
     
     // Setup search listeners after DOM is ready
     setTimeout(setupSearchListeners, 100);
@@ -3407,12 +3831,17 @@ function refreshDataManagementAccessUI() {
     const clearQuickBtn = document.getElementById('adminClearDataQuickBtn');
     const warningText = document.getElementById('clearWarningText');
     const archivePanel = document.getElementById('archiveYearPanel');
+    const adminAutomationCard = document.getElementById('settingsAdminAutomationCard');
     const archiveYearSelect = document.getElementById('archiveYearSelect');
     const archiveYearBtn = document.getElementById('archiveYearBtn');
     const archiveYearInfo = document.getElementById('archiveYearInfo');
     const allowed = isAdminSessionActive();
     const allowedYears = getArchiveAllowedYears();
     const hasAllowedArchive = allowedYears.length > 0;
+
+    if (adminAutomationCard) {
+        adminAutomationCard.style.display = allowed ? 'block' : 'none';
+    }
 
     if (archivePanel) {
         archivePanel.style.display = allowed ? 'block' : 'none';
@@ -4988,20 +5417,36 @@ function runAdminGrowthAnalysis(silent = false) {
     }
 }
 
-function exportAdminDailySalesPDF(dayIsoOverride = '') {
-    if (!canAccessAdminPanel()) {
-        alert('Only an active admin session can export daily sales.');
-        return;
+async function exportAdminDailySalesPDF(dayIsoOverride = '', options = {}) {
+    const runtimeOptions = (typeof dayIsoOverride === 'object' && dayIsoOverride !== null)
+        ? dayIsoOverride
+        : options;
+    const silent = Boolean(runtimeOptions?.silent);
+    const bypassAdminSession = Boolean(runtimeOptions?.bypassAdminSession);
+    const source = String(runtimeOptions?.source || 'manual').trim();
+
+    const hasPermission = bypassAdminSession ? hasAutoDailySalesPdfPrivileges() : canAccessAdminPanel();
+    if (!hasPermission) {
+        if (!silent) {
+            alert('Only an active admin session can export daily sales.');
+        }
+        return { success: false, reason: 'auth' };
     }
 
     const dateInput = document.getElementById('adminSalesExportDate');
-    const selectedDate = String(dayIsoOverride || dateInput?.value || getTodayISODate()).trim() || getTodayISODate();
+    const selectedDate = String(
+        (typeof dayIsoOverride === 'string' ? dayIsoOverride : runtimeOptions?.dayIso) ||
+        dateInput?.value ||
+        getTodayISODate()
+    ).trim() || getTodayISODate();
     if (dateInput) dateInput.value = selectedDate;
 
     const daySales = getSalesForSpecificDay(selectedDate);
     if (!daySales.length) {
-        alert(t('adminExportDayNoSales'));
-        return;
+        if (!silent) {
+            alert(t('adminExportDayNoSales'));
+        }
+        return { success: false, reason: 'no-sales', date: selectedDate };
     }
 
     const totalSales = daySales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
@@ -5070,11 +5515,34 @@ function exportAdminDailySalesPDF(dayIsoOverride = '') {
         }
 
         applyPdfBrandFooter(doc, reportTitle);
-        doc.save(`admin-daily-sales-${selectedDate}.pdf`);
-        showSuccessToast(`Daily sales PDF exported for ${selectedDate}.`);
+        const filename = `admin-daily-sales-${selectedDate}.pdf`;
+        let pdfBlob = null;
+        try {
+            pdfBlob = doc.output('blob');
+        } catch (blobError) {
+            pdfBlob = null;
+        }
+
+        if (pdfBlob instanceof Blob) {
+            if (source === 'auto') {
+                await cacheAutoDailySalesPdfBackup(pdfBlob, filename, selectedDate);
+            }
+            triggerPdfBlobDownload(pdfBlob, filename);
+        } else {
+            doc.save(filename);
+        }
+        if (!silent) {
+            showSuccessToast(`Daily sales PDF exported for ${selectedDate}.`);
+        } else if (source === 'auto') {
+            console.info(`Automatic daily sales PDF prepared for ${selectedDate}.`);
+        }
+        return { success: true, reason: 'exported', date: selectedDate };
     } catch (error) {
         console.error('Admin daily sales export failed:', error);
-        alert(`Could not export day PDF: ${error.message}`);
+        if (!silent) {
+            alert(`Could not export day PDF: ${error.message}`);
+        }
+        return { success: false, reason: 'error', date: selectedDate, error };
     }
 }
 
@@ -5206,6 +5674,8 @@ function renderAdminPanel() {
     }
 
     configureDatePickers();
+    initializeAdminAutoDailySalesPdfUi();
+    refreshAutoDailySalesPdfControls();
     renderAdminDailySalesSummary();
     renderAdminSalesStockManagement();
     setAdminMainTab(activeAdminMainTab);
@@ -10479,6 +10949,261 @@ async function refreshStorageStatus() {
     }
 }
 
+function supportsOfflineShellInstall() {
+    return typeof window !== 'undefined'
+        && 'serviceWorker' in navigator
+        && /^https?:$/i.test(String(window.location.protocol || ''));
+}
+
+function isAppOnline() {
+    return typeof navigator === 'undefined' ? true : navigator.onLine !== false;
+}
+
+function setConnectivityBannerState({ visible = false, mode = '', title = '', message = '' } = {}) {
+    const banner = document.getElementById('connectivityBanner');
+    const titleEl = document.getElementById('connectivityBannerTitle');
+    const messageEl = document.getElementById('connectivityBannerMessage');
+    if (!banner || !titleEl || !messageEl) return;
+
+    banner.classList.remove('is-syncing', 'is-online');
+    if (mode === 'syncing') banner.classList.add('is-syncing');
+    if (mode === 'online') banner.classList.add('is-online');
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    banner.style.display = visible ? 'flex' : 'none';
+}
+
+function updateConnectivityUI(options = {}) {
+    const flashOnline = Boolean(options?.flashOnline);
+    const online = isAppOnline();
+    const connectionEl = document.getElementById('connectivityStatusText');
+    const syncEl = document.getElementById('syncStatusText');
+    const syncButtons = ['syncNowBtn', 'connectivitySyncBtn']
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+
+    if (connectivityBannerHideTimeout) {
+        clearTimeout(connectivityBannerHideTimeout);
+        connectivityBannerHideTimeout = null;
+    }
+
+    if (connectionEl) {
+        connectionEl.textContent = offlineSyncState.syncInFlight
+            ? 'Online - syncing'
+            : (online ? 'Online' : 'Offline');
+    }
+
+    if (syncEl) {
+        if (!online) {
+            syncEl.textContent = 'Waiting for internet to sync online features.';
+        } else if (offlineSyncState.syncInFlight) {
+            syncEl.textContent = 'Syncing now...';
+        } else if (offlineSyncState.lastError) {
+            syncEl.textContent = `Last sync needs attention: ${offlineSyncState.lastError}`;
+        } else if (offlineSyncState.lastSyncAt) {
+            syncEl.textContent = `Last synced ${formatAutoDailySalesPdfLabel(offlineSyncState.lastSyncAt)}`;
+        } else if (supportsOfflineShellInstall()) {
+            syncEl.textContent = 'Ready. Local data already keeps working offline on this device.';
+        } else if (isElectron || (typeof window !== 'undefined' && String(window.location.protocol || '') === 'file:')) {
+            syncEl.textContent = 'Local storage works offline here. Installable offline caching needs http or https.';
+        } else {
+            syncEl.textContent = 'Online. Offline caching is limited on this setup.';
+        }
+    }
+
+    syncButtons.forEach((button) => {
+        button.disabled = offlineSyncState.syncInFlight || !online;
+    });
+
+    if (!online) {
+        setConnectivityBannerState({
+            visible: true,
+            mode: '',
+            title: 'Offline mode active',
+            message: 'Sales still save on this device. When internet comes back, the app will refresh online features and update the offline cache.'
+        });
+        return;
+    }
+
+    if (offlineSyncState.syncInFlight) {
+        setConnectivityBannerState({
+            visible: true,
+            mode: 'syncing',
+            title: 'Syncing saved work',
+            message: 'Refreshing the Rwanda clock, AI web features, and offline cache.'
+        });
+        return;
+    }
+
+    if (flashOnline) {
+        setConnectivityBannerState({
+            visible: true,
+            mode: 'online',
+            title: 'Back online',
+            message: 'The app is connected again. Local changes are saved and online features are refreshed.'
+        });
+        connectivityBannerHideTimeout = setTimeout(() => {
+            setConnectivityBannerState({ visible: false });
+        }, CONNECTIVITY_BANNER_HIDE_MS);
+        return;
+    }
+
+    setConnectivityBannerState({ visible: false });
+}
+
+async function syncAppAfterReconnect(options = {}) {
+    const silent = Boolean(options?.silent);
+    if (!isAppOnline()) {
+        updateConnectivityUI();
+        return false;
+    }
+    if (offlineSyncState.syncInFlight) {
+        return false;
+    }
+
+    offlineSyncState.syncInFlight = true;
+    offlineSyncState.lastError = '';
+    updateConnectivityUI();
+
+    try {
+        await waitForPendingSave();
+        if (activeUser) {
+            await optimizedSaveData();
+        }
+
+        if (supportsOfflineShellInstall()) {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration && typeof registration.update === 'function') {
+                await registration.update().catch(() => {});
+            }
+        }
+
+        const syncedClock = await syncRwandaClockFromServer().catch(() => false);
+        if (syncedClock) {
+            updateRwandaClock();
+        }
+
+        refreshAiAssistantInsights(true);
+        scheduleAutoBackup();
+        scheduleAutoDailySalesPdfExport();
+        offlineSyncState.lastSyncAt = Date.now();
+
+        if (!silent) {
+            showSuccessToast('Sync completed. Offline cache and online services are refreshed.');
+        }
+        return true;
+    } catch (error) {
+        offlineSyncState.lastError = error?.message || 'Unable to sync right now.';
+        console.warn('Reconnect sync failed:', error);
+        if (!silent) {
+            alert(`Could not finish sync: ${offlineSyncState.lastError}`);
+        }
+        return false;
+    } finally {
+        offlineSyncState.syncInFlight = false;
+        updateConnectivityUI({ flashOnline: isAppOnline() && !offlineSyncState.lastError });
+    }
+}
+
+async function triggerManualSync() {
+    return syncAppAfterReconnect({ silent: false });
+}
+
+async function registerOfflineSupport() {
+    offlineSyncState.supported = supportsOfflineShellInstall();
+
+    if (typeof window !== 'undefined' && !window.__mawConnectivityBound) {
+        window.addEventListener('online', () => {
+            updateConnectivityUI({ flashOnline: true });
+            void syncAppAfterReconnect({ silent: true });
+        });
+        window.addEventListener('offline', () => {
+            updateConnectivityUI();
+        });
+        window.__mawConnectivityBound = true;
+    }
+
+    if (offlineSyncState.supported) {
+        try {
+            await navigator.serviceWorker.register('./service-worker.js');
+            offlineSyncState.serviceWorkerRegistered = true;
+        } catch (error) {
+            offlineSyncState.serviceWorkerRegistered = false;
+            offlineSyncState.lastError = 'Offline cache could not be installed.';
+            console.warn('Service worker registration failed:', error);
+        }
+    }
+
+    updateConnectivityUI();
+
+    if (isAppOnline()) {
+        setTimeout(() => {
+            void syncAppAfterReconnect({ silent: true });
+        }, 1200);
+    }
+}
+
+function initializeAdminAutoDailySalesPdfUi() {
+    const checkbox = document.getElementById('adminAutoPdfEnabled');
+    const timeInput = document.getElementById('adminAutoPdfTime');
+    if (checkbox && !checkbox.dataset.boundAutoPdf) {
+        checkbox.addEventListener('change', () => {
+            if (timeInput) timeInput.disabled = !checkbox.checked;
+        });
+        checkbox.dataset.boundAutoPdf = '1';
+    }
+}
+
+async function saveAutoDailySalesPdfSettings() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can update automatic PDF exports.');
+        return false;
+    }
+
+    const checkbox = document.getElementById('adminAutoPdfEnabled');
+    const timeInput = document.getElementById('adminAutoPdfTime');
+    const enabled = Boolean(checkbox?.checked);
+    const timeValue = String(timeInput?.value || '').trim() || getDefaultAutoDailySalesPdfTime();
+    const previousEnabled = Boolean(settings?.autoDailySalesPdfEnabled);
+    const previousTime = String(settings?.autoDailySalesPdfTime || '').trim();
+
+    if (!isValidTimeValue(timeValue)) {
+        alert('Choose a valid export time.');
+        return false;
+    }
+
+    if (enabled && (!previousEnabled || previousTime !== timeValue)) {
+        const todayKey = toLocalDayKey(new Date());
+        if (String(settings?.autoDailySalesPdfLastAttemptDate || '').trim() === todayKey
+            && String(settings?.autoDailySalesPdfLastAttemptStatus || '').trim() !== 'success') {
+            settings.autoDailySalesPdfLastAttemptDate = '';
+            settings.autoDailySalesPdfLastAttemptStatus = '';
+        }
+    }
+
+    settings.autoDailySalesPdfEnabled = enabled;
+    settings.autoDailySalesPdfTime = timeValue;
+    await optimizedSaveData();
+    refreshAutoDailySalesPdfControls();
+    scheduleAutoDailySalesPdfExport();
+    await maybeRunAutoDailySalesPdfExport(new Date());
+    showSuccessToast('Automatic daily sales PDF schedule saved.');
+    return true;
+}
+
+async function downloadLastAutoDailySalesPdf() {
+    const cached = await loadCachedAutoDailySalesPdfBackup();
+    if (!cached?.base64) {
+        alert('No saved automatic PDF backup is available yet.');
+        return false;
+    }
+
+    const blob = new Blob([base64ToBuffer(cached.base64)], { type: cached.mimeType || 'application/pdf' });
+    triggerPdfBlobDownload(blob, cached.filename || `admin-daily-sales-${cached.dayIso || getTodayISODate()}.pdf`);
+    showSuccessToast('Last automatic PDF backup downloaded.');
+    return true;
+}
+
 function renderDrinkProfitEditor() {
     const container = document.getElementById('drinkProfitList');
     if (!container) return;
@@ -10554,8 +11279,8 @@ function loadSettings() {
         }
     }
     const addDrinkStockInput = document.getElementById('newDrinkStockQty');
-    if (addDrinkStockInput && !addDrinkStockInput.value) {
-        addDrinkStockInput.value = String(getDefaultNewDrinkStockQty());
+    if (addDrinkStockInput && addDrinkStockInput.value === String(30)) {
+        addDrinkStockInput.value = '';
     }
     const addDrinkLowStockInput = document.getElementById('newDrinkLowStockThreshold');
     if (addDrinkLowStockInput && !addDrinkLowStockInput.value) {
@@ -10586,6 +11311,9 @@ function loadSettings() {
     renderArchiveYearOptions();
     refreshDataManagementAccessUI();
     refreshProfitVisibilityUI();
+    initializeAdminAutoDailySalesPdfUi();
+    refreshAutoDailySalesPdfControls();
+    updateConnectivityUI();
 }
 
 function saveProfitPercentage() {
@@ -10731,6 +11459,7 @@ function updateLanguageUI() {
     setText('#authLoginTab', t('login'));
     setText('#authAdminTab', t('admin'));
     setText('#authSignupTab', t('signUp'));
+    setText('#authSubtitle', t('authSubtitle'));
     setText('#loginScreen label[for="signupName"]', t('fullName'));
     setText('#loginScreen label[for="phone"]', t('phoneNumber'));
     setText('#loginScreen label[for="pin"]', t('pinLabel'));
@@ -10741,6 +11470,7 @@ function updateLanguageUI() {
     updateAuthPrimaryButtons();
     setText('#forgotPinBtn', t('forgotPin'));
     setText('#forgotPinTitle', t('resetPin'));
+    setText('#forgotPinDescription', t('authResetDescription'));
     setText('#loginScreen label[for="resetPhone"]', t('phoneNumber'));
     setText('#loginScreen label[for="resetNewPin"]', t('resetNewPin'));
     setText('#loginScreen label[for="resetConfirmPin"]', t('resetConfirmPin'));
@@ -10760,6 +11490,8 @@ function updateLanguageUI() {
     if (signupRoleStaffOption) signupRoleStaffOption.textContent = t('signupRoleStaff');
     if (signupRoleAdminOption) signupRoleAdminOption.textContent = t('signupRoleAdmin');
     syncSignupRoleControls(getAuthUsers());
+    updateAuthModeSummary();
+    updateResetAccountPreview();
     setAuthHintText();
     updateActiveUserBadge();
 
@@ -10814,6 +11546,9 @@ function updateLanguageUI() {
     setText('#adminDailyExportDesc', t('adminDailyExportDesc'));
     setText('#adminExportDayPdfBtn', t('adminExportDayPdf'));
     setText('#adminExportAllSalesPdfBtn', t('adminExportAllSalesPdf'));
+    setText('#adminAutoPdfEnabled + span', t('adminAutoPdfToggle'));
+    setText('.admin-auto-pdf-field label[for="adminAutoPdfTime"]', t('adminAutoPdfTimeLabel'));
+    setText('#saveAdminAutoPdfBtn', t('adminAutoPdfSave'));
     setText('#adminStockAuditPdfBtn', t('adminStockAuditPdf'));
     setText('#adminStockSectionTitle', t('adminStockSectionTitle'));
     setText('#adminStockSectionDesc', t('adminStockSectionDesc'));
@@ -10930,6 +11665,8 @@ function updateLanguageUI() {
     setText('#settings label[for="currency"]', t('currencySymbol'));
     setText('#currencyInfoText', t('currencyInfo'));
     setText('#saveLanguageCurrencyBtn', t('saveLanguageCurrency'));
+    setText('#syncNowBtn', t('connectivitySyncNow'));
+    setText('#connectivitySyncBtn', t('connectivitySyncNow'));
     setText('#settings button[onclick="clearAllData()"]', t('clearAllData'));
     setText('#clearUserDataBtn', t('clearAllData'));
     setText('#clearWarningText', t('warningClearData'));
@@ -11680,6 +12417,68 @@ function shouldUseExternalAdvice(query) {
         .some((term) => query.includes(term));
 }
 
+function normalizeAiAssistantQuery(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function aiQueryHasAny(query, terms = []) {
+    return terms.some((term) => query.includes(String(term).toLowerCase()));
+}
+
+function getAiSalesRangeSummary(days = 1, label = 'selected period') {
+    const { start, end, windowDays } = getAiAssistantDateRange(days, new Date());
+    const list = getSalesWithinRange(start, end);
+    const totalSales = list.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const totalQty = list.reduce((sum, sale) => sum + (Number(sale.quantity) || 0), 0);
+    const cashSales = list
+        .filter((sale) => sale.type === 'normal')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const creditSales = list
+        .filter((sale) => sale.type === 'credit')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    return {
+        label,
+        windowDays,
+        list,
+        totalSales,
+        totalQty,
+        transactions: list.length,
+        cashSales,
+        creditSales
+    };
+}
+
+function getAiDepositInsights() {
+    const pending = (Array.isArray(clates) ? clates : []).filter((item) => !item?.returned);
+    const returned = (Array.isArray(clates) ? clates : []).filter((item) => item?.returned);
+    const pendingTotal = pending.reduce((sum, item) => sum + (Number(item?.amount) || 0), 0);
+    const latestPending = pending
+        .slice()
+        .sort((a, b) => new Date(b?.date || b?.createdAt || 0) - new Date(a?.date || a?.createdAt || 0))[0] || null;
+    return { pending, returned, pendingTotal, latestPending };
+}
+
+function buildAiAssistantActionPlan(analysis) {
+    const actionPlan = [];
+    if (analysis.restockAlerts[0]) {
+        actionPlan.push(`Restock ${analysis.restockAlerts[0].name} before it runs out.`);
+    }
+    if (analysis.growthAnalysis?.topDebtFollowUp?.name) {
+        actionPlan.push(`Follow up ${analysis.growthAnalysis.topDebtFollowUp.name} for ${formatAiCurrency(analysis.growthAnalysis.topDebtFollowUp.owing)}.`);
+    }
+    if (analysis.slowProducts[0]) {
+        actionPlan.push(`Bundle or discount ${analysis.slowProducts[0].name} to move slow stock.`);
+    }
+    if (analysis.topProducts[0]) {
+        actionPlan.push(`Keep ${analysis.topProducts[0].name} visible because it is leading sales.`);
+    }
+    return actionPlan.slice(0, 4);
+}
+
 function getExternalAdviceConfig() {
     const url = String(settings?.aiExternalAdviceUrl || appMeta?.aiExternalAdviceUrl || '').trim();
     const apiKey = String(settings?.aiExternalAdviceKey || appMeta?.aiExternalAdviceKey || '').trim();
@@ -11736,9 +12535,72 @@ async function generateAiAssistantResponse(prompt, analysis) {
     if (!text) {
         return { html: '<p>Please type a question so I can help.</p>' };
     }
-    const query = text.toLowerCase();
+    const query = normalizeAiAssistantQuery(text);
+    const asksRestock = aiQueryHasAny(query, ['restock', 'stock', 'inventory', 'out of stock', 'low stock']);
+    const asksTopProducts = aiQueryHasAny(query, ['most', 'best', 'top', 'fast', 'popular', 'sell the most', 'best seller']);
+    const asksSlowProducts = aiQueryHasAny(query, ['slow', 'not sell', 'unsold', 'dead stock', 'clearance']);
+    const asksProfit = aiQueryHasAny(query, ['profit', 'margin', 'leak', 'markup']);
+    const asksDrop = aiQueryHasAny(query, ['drop', 'decline', 'down', 'falling', 'decrease']);
+    const asksCustomers = aiQueryHasAny(query, ['customer', 'loyal', 'frequent', 'buyer']);
+    const asksHealth = aiQueryHasAny(query, ['health', 'status', 'score']);
+    const asksPriorities = aiQueryHasAny(query, ['priority', 'priorities', 'action', 'plan', 'next step', 'today']);
+    const asksSummary = aiQueryHasAny(query, ['report', 'summary', 'overview', 'snapshot']);
+    const asksBusiness = aiQueryHasAny(query, ['analyze', 'insight', 'business', 'performance']);
+    const asksDebt = aiQueryHasAny(query, ['debt', 'owing', 'credit', 'collect', 'payment']);
+    const asksDeposits = aiQueryHasAny(query, ['deposit', 'clate', 'crate', 'bottle']);
+    const asksGrowth = aiQueryHasAny(query, ['growth', 'grow', 'marketing', 'promotion', 'strategy', 'pricing', 'price']);
+    const asksSales = aiQueryHasAny(query, ['sales', 'revenue', 'cash', 'income', 'case']);
+    const wantsWeek = aiQueryHasAny(query, ['week', 'weekly', '7 day', 'last 7']);
+    const wantsMonth = aiQueryHasAny(query, ['month', 'monthly', '30 day', 'last 30']);
+    const wantsToday = aiQueryHasAny(query, ['today', 'daily', 'now']);
 
-    if (query.includes('restock') || query.includes('stock')) {
+    if (asksSales && (wantsWeek || wantsMonth || wantsToday || asksSummary)) {
+        const windowConfig = wantsMonth
+            ? { days: 30, label: 'last 30 days' }
+            : (wantsWeek ? { days: 7, label: 'last 7 days' } : { days: 1, label: 'today' });
+        const salesSummary = getAiSalesRangeSummary(windowConfig.days, windowConfig.label);
+        return {
+            html: `<p>Sales for ${escapeHtml(salesSummary.label)}:</p>${buildAiBulletList([
+                `Total sales: ${formatAiCurrency(salesSummary.totalSales)}`,
+                `Transactions: ${salesSummary.transactions}`,
+                `Cases sold: ${salesSummary.totalQty}`,
+                `Cash sales: ${formatAiCurrency(salesSummary.cashSales)}`,
+                `Credit sales: ${formatAiCurrency(salesSummary.creditSales)}`
+            ])}`
+        };
+    }
+
+    if (asksDebt) {
+        const topDebt = analysis.growthAnalysis?.topDebtFollowUp;
+        const overdueCount = Number(analysis.growthAnalysis?.overdueDebtCount) || 0;
+        const totalDebt = Number(analysis.growthAnalysis?.outstandingDebtTotal) || 0;
+        const creditShare = Number(analysis.growthAnalysis?.creditSharePercent) || 0;
+        const lines = [
+            `Outstanding debt: ${formatAiCurrency(totalDebt)}`,
+            `Credit share of sales: ${creditShare.toFixed(1)}%`,
+            `${overdueCount} customer account(s) are overdue by 7+ days`
+        ];
+        if (topDebt?.name) {
+            lines.push(`Top follow-up: ${topDebt.name} owes ${formatAiCurrency(topDebt.owing)}`);
+        }
+        return { html: `<p>Debt and credit snapshot:</p>${buildAiBulletList(lines)}` };
+    }
+
+    if (asksDeposits) {
+        const depositInsights = getAiDepositInsights();
+        const lines = [
+            `Pending deposits: ${depositInsights.pending.length}`,
+            `Pending deposit value: ${formatAiCurrency(depositInsights.pendingTotal)}`,
+            `Returned deposits: ${depositInsights.returned.length}`
+        ];
+        if (depositInsights.latestPending?.customerName || depositInsights.latestPending?.name) {
+            const label = depositInsights.latestPending.customerName || depositInsights.latestPending.name;
+            lines.push(`Latest pending deposit: ${label}`);
+        }
+        return { html: `<p>Deposit status:</p>${buildAiBulletList(lines)}` };
+    }
+
+    if (asksRestock) {
         const alerts = analysis.restockAlerts.slice(0, 5);
         if (!alerts.length) {
             return { html: '<p>All stock levels look healthy right now.</p>' };
@@ -11747,7 +12609,7 @@ async function generateAiAssistantResponse(prompt, analysis) {
         return { html: `<p>Top restock alerts:</p>${buildAiBulletList(lines)}` };
     }
 
-    if (query.includes('most') || query.includes('best') || query.includes('top')) {
+    if (asksTopProducts) {
         const topProducts = analysis.topProducts;
         if (!topProducts.length) {
             return { html: '<p>No sales yet. Record sales to see top products.</p>' };
@@ -11756,7 +12618,7 @@ async function generateAiAssistantResponse(prompt, analysis) {
         return { html: `<p>Best sellers:</p>${buildAiBulletList(lines)}` };
     }
 
-    if (query.includes('slow') || query.includes('not sell') || query.includes('unsold')) {
+    if (asksSlowProducts) {
         const slow = analysis.slowProducts;
         if (!slow.length) {
             return { html: '<p>No slow products detected in the last 30 days.</p>' };
@@ -11765,7 +12627,7 @@ async function generateAiAssistantResponse(prompt, analysis) {
         return { html: `<p>Slow movers:</p>${buildAiBulletList(lines)}` };
     }
 
-    if (query.includes('profit') || query.includes('margin') || query.includes('leak')) {
+    if (asksProfit) {
         if (!analysis.profitTrend.allowed) {
             const tips = [
                 'Keep best sellers fully stocked to protect revenue.',
@@ -11784,7 +12646,7 @@ async function generateAiAssistantResponse(prompt, analysis) {
         return { html: `<p>${escapeHtml(trendLine)}</p>${leaks}` };
     }
 
-    if (query.includes('drop') || query.includes('decline') || query.includes('down')) {
+    if (asksDrop) {
         const growth = Number(analysis.growthAnalysis?.growthPercent) || 0;
         const line = growth >= 0
             ? `Sales are up ${growth.toFixed(1)}% vs the previous ${analysis.windowDays} days.`
@@ -11794,7 +12656,7 @@ async function generateAiAssistantResponse(prompt, analysis) {
         return { html: `<p>${escapeHtml(line)}</p>${buildAiBulletList(lines)}` };
     }
 
-    if (query.includes('customer') || query.includes('loyal') || query.includes('frequent')) {
+    if (asksCustomers) {
         const topCustomers = analysis.customerInsights.topCustomers || [];
         if (!topCustomers.length) {
             return { html: '<p>No frequent buyers yet. Add customer-linked sales to see loyalty insights.</p>' };
@@ -11803,17 +12665,17 @@ async function generateAiAssistantResponse(prompt, analysis) {
         return { html: `<p>Frequent buyers:</p>${buildAiBulletList(lines)}<p>Consider a small loyalty reward for top customers.</p>` };
     }
 
-    if (query.includes('health')) {
+    if (asksHealth) {
         const score = analysis.healthScore;
         return { html: `<p>Business Health Score: <strong>${score.score}/100</strong></p>${buildAiBulletList(score.notes)}` };
     }
 
-    if (query.includes('priority') || query.includes('today')) {
-        const priorities = analysis.priorities.slice(0, AI_ASSISTANT_MAX_PRIORITIES);
-        return { html: `<p>Top priorities for today:</p>${buildAiBulletList(priorities)}` };
+    if (asksPriorities) {
+        const priorities = buildAiAssistantActionPlan(analysis);
+        return { html: `<p>Recommended action plan:</p>${buildAiBulletList(priorities.length ? priorities : analysis.priorities.slice(0, AI_ASSISTANT_MAX_PRIORITIES))}` };
     }
 
-    if (query.includes('report') || query.includes('summary')) {
+    if (asksSummary) {
         const summary = analysis.dailySummary;
         return {
             html: `<p>Today's Summary</p>${buildAiBulletList([
@@ -11825,20 +12687,37 @@ async function generateAiAssistantResponse(prompt, analysis) {
         };
     }
 
-    if (query.includes('analyze') || query.includes('insight') || query.includes('business')) {
+    if (asksGrowth) {
+        let externalAdvice = null;
+        if (shouldUseExternalAdvice(query) && isAppOnline()) {
+            externalAdvice = await fetchExternalBusinessAdvice(text);
+        }
+        const suggestions = getBusinessAiAdvisorSuggestions(analysis.growthAnalysis).slice(0, 4);
+        const lines = suggestions.map((item) => `${item.title}: ${item.detail}`);
+        let html = `<p>Growth suggestions based on your data:</p>${buildAiBulletList(lines)}`;
+        if (externalAdvice) {
+            html += `<p>${escapeHtml(externalAdvice)}</p>`;
+        } else if (!isAppOnline()) {
+            html += '<p>You are offline, so I used the on-device business analysis only.</p>';
+        }
+        return { html };
+    }
+
+    if (asksBusiness) {
         const suggestions = getBusinessAiAdvisorSuggestions(analysis.growthAnalysis).slice(0, 4);
         const lines = suggestions.map((item) => `${item.title}: ${item.detail}`);
         return {
             html: `<p>Here is the latest business snapshot:</p>${buildAiBulletList([
                 `Health score: ${analysis.healthScore.score}/100`,
                 `Top restock alert: ${analysis.restockAlerts[0]?.name || 'None'}`,
-                `Best seller: ${analysis.topProducts[0]?.name || 'No sales yet'}`
+                `Best seller: ${analysis.topProducts[0]?.name || 'No sales yet'}`,
+                `Outstanding debt: ${formatAiCurrency(analysis.growthAnalysis?.outstandingDebtTotal || 0)}`
             ])}${buildAiBulletList(lines)}`
         };
     }
 
     let externalAdvice = null;
-    if (shouldUseExternalAdvice(query)) {
+    if (shouldUseExternalAdvice(query) && isAppOnline()) {
         externalAdvice = await fetchExternalBusinessAdvice(text);
     }
 
@@ -11847,7 +12726,13 @@ async function generateAiAssistantResponse(prompt, analysis) {
     }
 
     return {
-        html: '<p>I can help with stock, sales, profit, and growth insights. Try a quick suggestion below.</p>'
+        html: `<p>I can answer with live business data from this app. Try one of these:</p>${buildAiBulletList([
+            'Show today\'s sales summary',
+            'What should I restock this week?',
+            'Who owes me money right now?',
+            'How are deposits looking?',
+            'Give me a growth action plan'
+        ])}${!isAppOnline() ? '<p>You are offline, so replies use on-device data only.</p>' : ''}`
     };
 }
 
@@ -12077,5 +12962,6 @@ window.selectAdminGrowthPoint = selectAdminGrowthPoint;
 window.exportAdminDailySalesPDF = exportAdminDailySalesPDF;
 window.exportAdminAllSalesPDF = exportAdminAllSalesPDF;
 window.exportAdminStockAuditPDF = exportAdminStockAuditPDF;
-
-
+window.saveAutoDailySalesPdfSettings = saveAutoDailySalesPdfSettings;
+window.downloadLastAutoDailySalesPdf = downloadLastAutoDailySalesPdf;
+window.triggerManualSync = triggerManualSync;
