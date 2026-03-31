@@ -14,11 +14,106 @@ function getPDFConstructor() {
     return null;
 }
 
+function hasPdfAutoTablePlugin() {
+    const jsPDF = getPDFConstructor();
+    return Boolean(
+        jsPDF?.API?.autoTable ||
+        window.jspdf?.jsPDF?.API?.autoTable ||
+        window.jsPDF?.API?.autoTable
+    );
+}
+
+function waitForPdfLibrary(check, timeoutMs = 1500, intervalMs = 100) {
+    return new Promise((resolve) => {
+        const startedAt = Date.now();
+
+        function poll() {
+            if (check()) {
+                resolve(true);
+                return;
+            }
+
+            if ((Date.now() - startedAt) >= timeoutMs) {
+                resolve(Boolean(check()));
+                return;
+            }
+
+            setTimeout(poll, intervalMs);
+        }
+
+        poll();
+    });
+}
+
+function loadPdfScriptAsset(src) {
+    return new Promise((resolve, reject) => {
+        if (typeof document === 'undefined') {
+            reject(new Error('Document is not available for loading PDF libraries.'));
+            return;
+        }
+
+        const script = document.createElement('script');
+        const normalizedSrc = String(src || '').trim();
+        script.src = normalizedSrc;
+        script.async = false;
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error(`Could not load ${normalizedSrc}`));
+        document.head.appendChild(script);
+    });
+}
+
+let pdfLibrariesReadyPromise = null;
+
+async function ensurePDFLibrariesReady() {
+    if (getPDFConstructor() && hasPdfAutoTablePlugin() && typeof window.html2canvas === 'function') {
+        return true;
+    }
+
+    if (pdfLibrariesReadyPromise) {
+        return pdfLibrariesReadyPromise;
+    }
+
+    pdfLibrariesReadyPromise = (async () => {
+        const alreadyLoaded = await waitForPdfLibrary(() => Boolean(getPDFConstructor()), 1200, 120);
+        if (!alreadyLoaded) {
+            await loadPdfScriptAsset('libs/jspdf.umd.min.js');
+            const loadedAfterRetry = await waitForPdfLibrary(() => Boolean(getPDFConstructor()), 1800, 120);
+            if (!loadedAfterRetry) {
+                throw new Error('jsPDF library is still unavailable after retrying.');
+            }
+        }
+
+        if (!hasPdfAutoTablePlugin()) {
+            try {
+                await loadPdfScriptAsset('libs/jspdf.plugin.autotable.min.js');
+                await waitForPdfLibrary(() => hasPdfAutoTablePlugin(), 1000, 120);
+            } catch (error) {
+                console.warn('autoTable plugin could not be reloaded. Falling back to simple PDF tables.', error);
+            }
+        }
+
+        if (typeof window.html2canvas !== 'function') {
+            try {
+                await loadPdfScriptAsset('libs/html2canvas.min.js');
+            } catch (error) {
+                console.warn('html2canvas could not be reloaded.', error);
+            }
+        }
+
+        return true;
+    })().catch((error) => {
+        pdfLibrariesReadyPromise = null;
+        throw error;
+    });
+
+    return pdfLibrariesReadyPromise;
+}
+
 function createPDFDocument(options = {}) {
     const jsPDF = getPDFConstructor();
     
     if (!jsPDF) {
-        throw new Error('jsPDF library is not loaded. Please refresh the app.');
+        throw new Error('jsPDF library is not loaded. The app will try to reload it automatically on the next export.');
     }
     
     try {
@@ -299,6 +394,7 @@ const AUTO_BACKUP_HOUR = 22;
 const DEFAULT_AUTO_DAILY_SALES_PDF_TIME = '21:00';
 const CONNECTIVITY_BANNER_HIDE_MS = 3200;
 const AUTO_DAILY_SALES_PDF_CHECK_INTERVAL_MS = 30000;
+let homeDebtNotificationRenderToken = 0;
 
 const RWANDA_TIME_ZONE = 'Africa/Kigali';
 const RWANDA_TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
@@ -318,7 +414,7 @@ let selectedStockFilter = 'all';
 let pendingStockAdjustContext = null;
 let selectedAdminUserFilter = 'all';
 let selectedAdminStockFilter = 'all';
-let activeAdminMainTab = 'sales';
+let activeAdminMainTab = 'accounts';
 let activeAdminSalesSubTab = 'daily';
 let selectedAdminGrowthWindowDays = 30;
 let selectedAdminGrowthPointIndex = -1;
@@ -336,6 +432,7 @@ const AI_ASSISTANT_RESTOCK_WINDOW_DAYS = 30;
 const AI_ASSISTANT_FAST_WINDOW_DAYS = 7;
 const AI_ASSISTANT_SLOW_WINDOW_DAYS = 30;
 const AI_ASSISTANT_MAX_PRIORITIES = 5;
+const ADMIN_AI_EMPTY_MESSAGE = 'No data available yet. Add sales to unlock insights.';
 const aiAssistantState = {
     isOpen: false,
     cacheAt: 0,
@@ -373,7 +470,7 @@ const translations = {
         adminSubTabDailySales: 'Daily Sales',
         adminSubTabStock: 'Stock',
         adminExportAccountsPdf: 'Export Accounts PDF',
-        adminSearchEmployersPlaceholder: 'Find employers by name, phone, or email...',
+        adminSearchEmployersPlaceholder: 'Find employers by name or phone',
         adminFilterPrivileged: 'Admin/Owner',
         adminFilterStaff: 'Employees',
         adminFilterInactive: 'Inactive',
@@ -390,14 +487,14 @@ const translations = {
         adminStockFilterLow: 'Low',
         adminStockFilterOut: 'Out',
         adminClearCurrentUserData: 'Clear Current User Data',
-        adminAccountsExportTitle: 'Account Exports',
-        adminAccountsExportDesc: 'Download employer/account data in PDF.',
+        adminAccountsExportTitle: 'Exports & Reports',
+        adminAccountsExportDesc: 'Keep exports separate from account management actions.',
         adminDataProtectionTitle: 'Data Protection',
-        adminDataProtectionDesc: 'Only admin login can clear current user data.',
-        adminAiTitle: 'Mini AI Growth Strategy',
-        adminAiDesc: 'AI-style analysis based on your real sales, stock, and credit trends.',
-        adminAnalyzeBusiness: 'Analyze Business',
-        adminAiPlaceholder: 'Run analysis to generate growth strategies.',
+        adminDataProtectionDesc: 'Type DELETE before clearing the current user workspace.',
+        adminAiTitle: 'AI Assistant',
+        adminAiDesc: 'Generate fresh insights first, then review health, summary, alerts, priorities, and quick commands.',
+        adminAnalyzeBusiness: 'Generate Insights',
+        adminAiPlaceholder: 'Run the AI to get a clear answer, a short explanation, and an action you can take next.',
         adminSummaryTotalAccounts: 'Total Accounts',
         adminSummaryAdminOwner: 'Admin + Owner',
         adminSummaryStaff: 'Employees',
@@ -408,7 +505,7 @@ const translations = {
         adminDailyHeadTotal: 'Total Sales',
         adminDailyHeadProfit: 'Profit',
         adminDailyHeadPrint: 'Print',
-        adminEmployerAccountsTitle: 'Employer Accounts',
+        adminEmployerAccountsTitle: 'User Management',
         adminNoSalesDataYet: 'No sales data yet.',
         adminNoStockMatch: 'No drinks match this filter.',
         adminNoEmployersMatch: 'No employers match this filter.',
@@ -449,7 +546,7 @@ const translations = {
         authModeAdminText: 'Admin mode unlocks sales exports, account control, and protected settings.',
         authModeSignupTitle: 'Create Owner Account',
         authModeSignupText: 'Create the first owner account to secure the app before employees start using it.',
-        authResetDescription: 'Use the phone number registered on the account, then choose a new password.',
+        authResetDescription: 'Use the phone number registered on the account, enter the admin reset code, then choose a new password.',
         authResetPreviewEmpty: 'We will match the phone number to an existing account.',
         authResetPreviewFound: 'Account found: {name} ({phone}). Set the new password below.',
         authResetPreviewMissing: 'No saved account matches {phone} yet. Check the number and try again.',
@@ -460,7 +557,7 @@ const translations = {
         authHintLogin: 'Phone number and password.',
         authHintAdmin: 'Admin access only.',
         authHintSignup: 'Create owner account.',
-        authHintReset: 'Enter phone and new password.',
+        authHintReset: 'Enter phone, reset code, and new password.',
         authInvalidCredentials: 'Incorrect phone number or password',
         authAccountInactive: 'This account is inactive. Please contact the owner.',
         authAdminInvalidCredentials: 'Incorrect admin phone number or password',
@@ -594,8 +691,13 @@ const translations = {
         rangeReportTitle: 'Date Range Report',
         rangeSummary: 'Range Summary',
         settingsPreferences: 'Settings & Preferences',
+        accountSecurity: 'Account & Security',
         businessSettings: 'Business Settings',
         interfaceSettings: 'Appearance, Language & Currency',
+        appearancePreferences: 'Appearance & Preferences',
+        systemStatus: 'System Status',
+        automationsReports: 'Automations & Reports',
+        aiAssistantSettings: 'AI Assistant',
         profitPercentage: 'Profit Percentage (%)',
         profitModeLabel: 'Profit Calculation Mode',
         profitModePercentage: 'Percentage of sale total',
@@ -625,7 +727,20 @@ const translations = {
         currencySymbol: 'Currency Symbol',
         currencyInfo: 'Default currency symbol (e.g., RWF, $, EUR)',
         saveLanguageCurrency: 'Save Language & Currency',
+        savePreferences: 'Save Preferences',
+        saveBusinessSettings: 'Save Business Settings',
+        saveAutomationSettings: 'Save Automation Settings',
         dataManagement: 'Data Management',
+        changePin: 'Change PIN',
+        generateResetCode: 'Generate Reset Code',
+        logoutLabel: 'Log Out',
+        connectionStatusLabel: 'Connection Status',
+        lastSyncLabel: 'Last Sync',
+        generateInsights: 'Generate Insights',
+        quickAnalyze: 'Analyze',
+        quickRestock: 'Restock',
+        quickProfitInsights: 'Profit Insights',
+        downloadLastAutoPdf: 'Download Last Auto PDF',
         exportData: 'Export Data (JSON)',
         importData: 'Import Data',
         clearAllData: 'Clear User Data',
@@ -696,7 +811,7 @@ const translations = {
         authHintLogin: 'Koresha konti yawe usanzwe ufite kugira ngo ukomeze.',
         authHintAdmin: 'Admin yinjirana nimero ya telefone n\'ijambobanga.',
         authHintSignup: 'Iyandikishe nka admin gusa kugira ngo urinde porogaramu.',
-        authHintReset: 'Hindura ijambobanga ukoresheje nimero ya telefone wandikishijeho konti.',
+        authHintReset: 'Andika telefone, kode yo gusubiramo, n ijambobanga rishya.',
         authInvalidCredentials: 'Nimero ya telefone cyangwa ijambobanga si byo',
         authAccountInactive: 'Iyi konti ntikora. Vugana na nyiri porogaramu.',
         authAdminInvalidCredentials: 'Nimero ya telefone ya admin cyangwa ijambobanga si byo',
@@ -830,8 +945,13 @@ const translations = {
         rangeReportTitle: 'Raporo y itariki wahisemo',
         rangeSummary: 'Incamake y itariki',
         settingsPreferences: 'Igenamiterere',
+        accountSecurity: 'Konti n umutekano',
         businessSettings: "Igenamiterere ry'ubucuruzi",
         interfaceSettings: 'Imigaragarire, ururimi n ifaranga',
+        appearancePreferences: 'Imigaragarire n ibyo ukunda',
+        systemStatus: 'Imiterere ya sisitemu',
+        automationsReports: 'Automatisasiyo na raporo',
+        aiAssistantSettings: 'Umufasha wa AI',
         profitPercentage: 'Ijanisha ry inyungu (%)',
         profitModeLabel: "Uburyo bwo kubara inyungu",
         profitModePercentage: "Ijanisha ku giteranyo cy'igurisha",
@@ -861,7 +981,20 @@ const translations = {
         currencySymbol: 'Ikimenyetso cy ifaranga',
         currencyInfo: 'Ikimenyetso gisanzwe cy ifaranga (urugero: RWF, $, EUR)',
         saveLanguageCurrency: 'Bika ururimi n ifaranga',
+        savePreferences: 'Bika ibyo ukunda',
+        saveBusinessSettings: "Bika igenamiterere ry'ubucuruzi",
+        saveAutomationSettings: 'Bika automatisasiyo',
         dataManagement: 'Gucunga amakuru',
+        changePin: 'Hindura PIN',
+        generateResetCode: 'Kora kode yo gusubiramo',
+        logoutLabel: 'Sohoka',
+        connectionStatusLabel: 'Imiterere y umuhora',
+        lastSyncLabel: 'Iheruka guhuza',
+        generateInsights: 'Kora insights',
+        quickAnalyze: 'Sesengura',
+        quickRestock: 'Ongera sitoki',
+        quickProfitInsights: 'Insights ku nyungu',
+        downloadLastAutoPdf: 'Kuramo PDF iheruka',
         exportData: 'Ohereza amakuru (JSON)',
         importData: 'Injiza amakuru',
         clearAllData: 'Siba amakuru y uwinjiye',
@@ -932,7 +1065,7 @@ cancel: 'Annuler',
 authHintLogin: 'Utilisez votre compte existant pour continuer.',
 authHintAdmin: 'L’admin utilise votre numéro de téléphone et votre mot de passe.',
 authHintSignup: 'Inscription admin uniquement pour sécuriser l’application.',
-authHintReset: 'Réinitialisez le mot de passe avec votre numéro de téléphone enregistré.',
+authHintReset: 'Entrez le telephone, le code de reinitialisation et le nouveau mot de passe.',
 authInvalidCredentials: 'Numéro de téléphone ou mot de passe incorrect',
 authAccountInactive: 'Ce compte est inactif. Contactez le propriétaire de l’application.',
 authAdminInvalidCredentials: 'Numéro de téléphone admin ou mot de passe incorrect',
@@ -1384,6 +1517,7 @@ function refreshAutoDailySalesPdfControls() {
     const saveBtn = document.getElementById('saveAdminAutoPdfBtn');
     const downloadBtn = document.getElementById('downloadLastAutoPdfBtn');
     const status = document.getElementById('adminAutoPdfStatus');
+    const allowed = canAccessAdminPanel();
     const enabled = Boolean(settings?.autoDailySalesPdfEnabled);
     const timeValue = settings?.autoDailySalesPdfTime || getDefaultAutoDailySalesPdfTime();
     const hasCachedExport = Boolean(String(settings?.autoDailySalesPdfLastExportDate || '').trim());
@@ -1391,15 +1525,20 @@ function refreshAutoDailySalesPdfControls() {
     if (checkbox) checkbox.checked = enabled;
     if (timeInput) {
         timeInput.value = isValidTimeValue(timeValue) ? timeValue : getDefaultAutoDailySalesPdfTime();
-        timeInput.disabled = !enabled;
+        timeInput.disabled = !allowed || !enabled;
     }
-    if (saveBtn) saveBtn.disabled = !canAccessAdminPanel();
+    if (saveBtn) saveBtn.disabled = !allowed;
     if (downloadBtn) {
-        downloadBtn.disabled = !hasCachedExport;
-        downloadBtn.style.opacity = hasCachedExport ? '1' : '0.55';
-        downloadBtn.style.cursor = hasCachedExport ? 'pointer' : 'not-allowed';
+        const canDownload = allowed && hasCachedExport;
+        downloadBtn.disabled = !canDownload;
+        downloadBtn.style.opacity = canDownload ? '1' : '0.55';
+        downloadBtn.style.cursor = canDownload ? 'pointer' : 'not-allowed';
     }
-    if (status) status.innerHTML = getAutoDailySalesPdfStatusMessage();
+    if (status) {
+        status.innerHTML = allowed
+            ? getAutoDailySalesPdfStatusMessage()
+            : 'Admin login required to change automation schedules or download the last automatic PDF.';
+    }
 }
 
 async function rememberAutoDailySalesPdfAttempt(status = '', dayKey = toLocalDayKey(new Date())) {
@@ -1508,7 +1647,8 @@ function getDefaultAppMeta() {
         lastLoginPhone: '',
         activeSessionUserId: '',
         activeSessionLoginMode: '',
-        legacyDataMigrated: false
+        legacyDataMigrated: false,
+        passwordResetCodes: []
     };
 }
 
@@ -1516,6 +1656,7 @@ function getDefaultUserSettings() {
     return {
         profitPercentage: 30,
         profitMode: 'percentage',
+        maxCustomerDebt: 0,
         theme: 'light',
         language: 'en',
         currency: 'RWF',
@@ -1542,6 +1683,8 @@ function sanitizeUserSettings(raw) {
     delete next.legacyMigratedUsers;
     delete next.legacyDataMigrated;
     delete next.profitPerCase;
+    const parsedMaxDebt = Number(next.maxCustomerDebt);
+    next.maxCustomerDebt = Number.isFinite(parsedMaxDebt) && parsedMaxDebt > 0 ? parsedMaxDebt : 0;
     return { ...getDefaultUserSettings(), ...next };
 }
 
@@ -1710,6 +1853,392 @@ function normalizeDrinksList(list) {
         .filter(Boolean);
 }
 
+const CUSTOMER_TYPE_LABELS = {
+    regular: 'Regular Customer',
+    loyal: 'Loyal Customer',
+    wholesale: 'Wholesale',
+    retail: 'Retail',
+    hotel: 'Hotel/Restaurant',
+    individual: 'Individual'
+};
+
+function normalizeCustomerType(value) {
+    const normalized = String(value || 'regular').trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(CUSTOMER_TYPE_LABELS, normalized)
+        ? normalized
+        : 'regular';
+}
+
+function formatCustomerTypeLabel(value) {
+    return CUSTOMER_TYPE_LABELS[normalizeCustomerType(value)] || CUSTOMER_TYPE_LABELS.regular;
+}
+
+function normalizeCustomerPromiseDate(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? '' : toLocalDayKey(parsed);
+}
+
+function normalizeCustomerDebtHistory(entries) {
+    if (!Array.isArray(entries)) return [];
+    return entries
+        .filter((entry) => entry && typeof entry === 'object')
+        .map((entry, index) => ({
+            id: String(entry.id || `${Date.now()}-debt-${index}`),
+            type: String(entry.type || 'note').trim() || 'note',
+            amount: Number(entry.amount) || 0,
+            note: String(entry.note || '').trim(),
+            date: typeof entry.date === 'string' ? entry.date : new Date().toISOString()
+        }));
+}
+
+function sanitizeCustomerEntry(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const name = String(raw.name || '').trim();
+    if (!name) return null;
+    const owingValue = Number(raw.owing ?? raw.debt ?? 0);
+    const owing = Number.isFinite(owingValue) ? Math.max(0, owingValue) : 0;
+    const promisedPaybackDate = owing > 0
+        ? normalizeCustomerPromiseDate(
+            raw.promisedPaybackDate
+            ?? raw.promiseDate
+            ?? raw.paybackDate
+            ?? raw.expectedPaymentDate
+        )
+        : '';
+    return {
+        id: raw.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        phone: String(raw.phone || '').trim(),
+        location: String(raw.location ?? raw.address ?? '').trim(),
+        type: normalizeCustomerType(raw.type),
+        notes: String(raw.notes || '').trim(),
+        owing,
+        promisedPaybackDate,
+        debtHistory: normalizeCustomerDebtHistory(raw.debtHistory),
+        createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString()
+    };
+}
+
+function normalizeCustomersData() {
+    if (!Array.isArray(customers)) {
+        customers = [];
+        return;
+    }
+    customers = customers
+        .map((customer) => sanitizeCustomerEntry(customer))
+        .filter(Boolean);
+}
+
+function normalizeCustomersList(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+        .map((customer) => sanitizeCustomerEntry(customer))
+        .filter(Boolean);
+}
+
+function getCustomerDebtLimit() {
+    const raw = Number(settings?.maxCustomerDebt);
+    return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+function getCustomerByReference(customerRef) {
+    if (customerRef === null || customerRef === undefined || customerRef === '') return null;
+    const refString = String(customerRef).trim();
+    if (refString) {
+        const byId = customers.find((customer) => String(customer?.id ?? '').trim() === refString);
+        if (byId) return byId;
+    }
+    const legacyIndex = Number(customerRef);
+    if (Number.isInteger(legacyIndex) && legacyIndex >= 0 && customers[legacyIndex]) {
+        return customers[legacyIndex];
+    }
+    return null;
+}
+
+function getCustomerIndexByReference(customerRef) {
+    if (customerRef === null || customerRef === undefined || customerRef === '') return -1;
+    const refString = String(customerRef).trim();
+    if (refString) {
+        const byIdIndex = customers.findIndex((customer) => String(customer?.id ?? '').trim() === refString);
+        if (byIdIndex >= 0) return byIdIndex;
+    }
+    const legacyIndex = Number(customerRef);
+    return Number.isInteger(legacyIndex) && legacyIndex >= 0 && customers[legacyIndex] ? legacyIndex : -1;
+}
+
+function getCustomerNameByReference(customerRef, fallback = 'Guest') {
+    const customer = getCustomerByReference(customerRef);
+    return customer?.name ? customer.name : fallback;
+}
+
+function isSaleLinkedToCustomer(sale, customer, customerIndex = -1) {
+    if (!sale || !customer) return false;
+    const saleRef = sale.customerId;
+    if (saleRef === null || saleRef === undefined || saleRef === '') return false;
+    const customerId = String(customer.id ?? '').trim();
+    if (customerId && String(saleRef).trim() === customerId) return true;
+    const legacyIndex = Number(saleRef);
+    return Number.isInteger(legacyIndex) && legacyIndex === customerIndex;
+}
+
+function adjustCustomerDebtByReference(customerRef, amountDelta = 0) {
+    const customer = getCustomerByReference(customerRef);
+    if (!customer) return false;
+    customer.owing = Math.max(0, (Number(customer.owing) || 0) + (Number(amountDelta) || 0));
+    clearCustomerPromiseDateIfSettled(customer);
+    return true;
+}
+
+function isLoyalCustomer(customer) {
+    return normalizeCustomerType(customer?.type) === 'loyal';
+}
+
+function shouldUsePromiseDate(customer) {
+    return isLoyalCustomer(customer) || Boolean(normalizeCustomerPromiseDate(customer?.promisedPaybackDate));
+}
+
+function getCustomerPromiseDate(customer) {
+    if (!customer) return '';
+    const owing = Number(customer.owing || 0);
+    if (owing <= 0) return '';
+    return normalizeCustomerPromiseDate(customer.promisedPaybackDate);
+}
+
+function clearCustomerPromiseDateIfSettled(customer) {
+    if (!customer) return;
+    if ((Number(customer.owing) || 0) <= 0) {
+        customer.promisedPaybackDate = '';
+    }
+}
+
+function isCustomerDebtOverdue(customer, referenceDate = new Date()) {
+    const promiseDate = getCustomerPromiseDate(customer);
+    if (!promiseDate) return false;
+    const todayKey = toLocalDayKey(referenceDate);
+    if (!todayKey) return false;
+    return promiseDate < todayKey;
+}
+
+function getCustomerDebtOverdueDays(customer, referenceDate = new Date()) {
+    const promiseDate = parseDayKeyToDate(getCustomerPromiseDate(customer));
+    const todayDate = parseDayKeyToDate(toLocalDayKey(referenceDate));
+    if (!promiseDate || !todayDate) return 0;
+    const diffMs = todayDate.getTime() - promiseDate.getTime();
+    if (diffMs <= 0) return 0;
+    return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+}
+
+function formatCustomerPromiseDate(value) {
+    const parsed = parseDayKeyToDate(normalizeCustomerPromiseDate(value));
+    return parsed ? parsed.toLocaleDateString() : '';
+}
+
+function getDebtLimitExceededMessage(customerName, nextOwing, limit) {
+    return `${customerName} cannot go above RWF ${limit.toLocaleString()} in debt. This action would make the balance RWF ${nextOwing.toLocaleString()}.`;
+}
+
+function getCustomerDebtRaiseError(customer, increaseAmount) {
+    const limit = getCustomerDebtLimit();
+    if (!customer || limit <= 0) return '';
+    const currentOwing = Number(customer.owing || 0);
+    const nextOwing = currentOwing + Math.max(0, Number(increaseAmount) || 0);
+    return nextOwing > limit
+        ? getDebtLimitExceededMessage(customer.name || 'This customer', nextOwing, limit)
+        : '';
+}
+
+function getCustomerDebtReminderEntries(list, context = {}) {
+    const now = new Date();
+    return normalizeCustomersList(list)
+        .filter((customer) => Number(customer.owing || 0) > 0 && isCustomerDebtOverdue(customer, now))
+        .map((customer) => ({
+            customerName: customer.name,
+            owing: Number(customer.owing || 0),
+            promisedPaybackDate: getCustomerPromiseDate(customer),
+            overdueDays: getCustomerDebtOverdueDays(customer, now),
+            accountLabel: String(context.accountLabel || '').trim()
+        }));
+}
+
+function buildCustomerDebtSummaryHtml(customer) {
+    const owing = Number(customer.owing || 0);
+    const promiseDate = getCustomerPromiseDate(customer);
+    const promiseLabel = formatCustomerPromiseDate(promiseDate);
+    const isOverdue = isCustomerDebtOverdue(customer);
+    const overdueDays = getCustomerDebtOverdueDays(customer);
+    const metaHtml = promiseDate
+        ? `<div class="customer-debt-tag ${isOverdue ? 'overdue' : ''}">${escapeHtml(
+            isOverdue
+                ? `Promise passed on ${promiseLabel} (${overdueDays} day${overdueDays === 1 ? '' : 's'} late)`
+                : `Promised payback: ${promiseLabel}`
+        )}</div>`
+        : '';
+    return `
+        <div class="customer-debt-summary ${owing > 0 ? 'owing' : 'cleared'}">
+            ${owing > 0 ? `&#128179; Owes: RWF ${owing.toLocaleString()}` : '&#9989; No debt'}
+        </div>
+        ${metaHtml}
+    `;
+}
+
+function buildCustomerItemMarkup(customer, index, options = {}) {
+    const includeDelete = options.includeDelete !== false;
+    const promiseDate = getCustomerPromiseDate(customer);
+    const promiseLabel = formatCustomerPromiseDate(promiseDate);
+    const overdue = isCustomerDebtOverdue(customer);
+    const overdueDays = getCustomerDebtOverdueDays(customer);
+    const overdueLoyal = overdue && isLoyalCustomer(customer);
+    return `
+        <div class="customer-info">
+            <div class="customer-title-row">
+                <strong>${escapeHtml(customer.name)}</strong>
+                ${overdueLoyal ? `<span class="customer-status-badge overdue">Payback Due</span>` : ''}
+            </div>
+            <div class="customer-details">
+                ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
+                ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
+                ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(formatCustomerTypeLabel(customer.type))}</div>` : ''}
+                ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
+                ${promiseDate ? `<div class="customer-detail-item ${overdue ? 'customer-detail-overdue' : ''}">&#128197; Promise Date: ${escapeHtml(promiseLabel)}${overdue ? ` (${overdueDays} day${overdueDays === 1 ? '' : 's'} late)` : ''}</div>` : ''}
+            </div>
+            ${buildCustomerDebtSummaryHtml(customer)}
+        </div>
+        <div class="customer-actions">
+            <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
+            <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
+            <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
+            <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
+            ${includeDelete ? `<button onclick="deleteCustomer(${index})" style="background: #ff4757;">Delete</button>` : ''}
+        </div>
+    `;
+}
+
+async function getAdminHomeDebtReminderEntries() {
+    const users = getAuthUsers();
+    const scopedUsers = [];
+    const requests = [];
+
+    users.forEach((user) => {
+        const key = userDataKey('customers', user);
+        if (!key) return;
+        scopedUsers.push({ user, key });
+        requests.push({ name: key, defaultValue: [] });
+    });
+
+    const loaded = requests.length ? await loadManyNamedData(requests) : {};
+    const reminders = [];
+
+    scopedUsers.forEach(({ user, key }) => {
+        const accountLabelBase = String(user?.name || user?.phone || 'User').trim() || 'User';
+        const accountLabel = isUserAccountActive(user)
+            ? accountLabelBase
+            : `${accountLabelBase} (inactive)`;
+        reminders.push(
+            ...getCustomerDebtReminderEntries(loaded[key], { accountLabel })
+        );
+    });
+
+    reminders.sort((a, b) => {
+        if (a.promisedPaybackDate && b.promisedPaybackDate && a.promisedPaybackDate !== b.promisedPaybackDate) {
+            return a.promisedPaybackDate.localeCompare(b.promisedPaybackDate);
+        }
+        return (b.overdueDays || 0) - (a.overdueDays || 0);
+    });
+
+    return reminders;
+}
+
+async function renderHomeDebtNotifications() {
+    const banner = document.getElementById('debtNotificationBanner');
+    if (!banner) return;
+
+    const renderToken = ++homeDebtNotificationRenderToken;
+    try {
+        const adminSession = isAdminSessionActive();
+        let reminders = [];
+
+        if (adminSession) {
+            reminders = await getAdminHomeDebtReminderEntries();
+        } else {
+            reminders = getCustomerDebtReminderEntries(customers);
+        }
+
+        if (renderToken !== homeDebtNotificationRenderToken) return;
+
+        if (!Array.isArray(reminders) || reminders.length === 0) {
+            banner.style.display = 'none';
+            banner.innerHTML = '';
+            return;
+        }
+
+        const totalOwing = reminders.reduce((sum, entry) => sum + (Number(entry.owing) || 0), 0);
+        const previewItems = reminders.slice(0, 5);
+
+        banner.innerHTML = `
+            <div class="debt-notification-header">
+                <strong>${escapeHtml(adminSession ? 'Overdue customer payback reminders across accounts' : 'Overdue customer payback reminders')}</strong>
+                <span>${reminders.length} customer(s) | RWF ${totalOwing.toLocaleString()}</span>
+            </div>
+            <p class="debt-notification-copy">These customers passed the date they promised to pay back.</p>
+            <div class="debt-notification-list">
+                ${previewItems.map((entry) => `
+                    <div class="debt-notification-item">
+                        <div>
+                            <strong>${escapeHtml(entry.customerName)}</strong>
+                            <span>${escapeHtml(formatCustomerPromiseDate(entry.promisedPaybackDate))} | ${entry.overdueDays} day${entry.overdueDays === 1 ? '' : 's'} late</span>
+                            ${entry.accountLabel ? `<span>${escapeHtml(entry.accountLabel)}</span>` : ''}
+                        </div>
+                        <strong>RWF ${Number(entry.owing || 0).toLocaleString()}</strong>
+                    </div>
+                `).join('')}
+            </div>
+            ${reminders.length > previewItems.length ? `<div class="debt-notification-more">+${reminders.length - previewItems.length} more overdue customer(s)</div>` : ''}
+        `;
+        banner.style.display = 'block';
+    } catch (error) {
+        console.warn('Unable to render debt reminders:', error);
+        if (renderToken === homeDebtNotificationRenderToken) {
+            banner.style.display = 'none';
+            banner.innerHTML = '';
+        }
+    }
+}
+
+async function maybeShowDebtReminderPopup() {
+    const sessionKey = getDebtReminderSessionKey(activeUser);
+    if (!sessionKey) return;
+    if (debtReminderPopupSessionKey !== sessionKey) {
+        debtReminderPopupSessionKey = sessionKey;
+        debtReminderPopupShownForSession = false;
+    }
+    if (debtReminderPopupShownForSession) return;
+    debtReminderPopupShownForSession = true;
+
+    try {
+        const adminSession = isAdminSessionActive();
+        const reminders = adminSession
+            ? await getAdminHomeDebtReminderEntries()
+            : getCustomerDebtReminderEntries(customers);
+
+        if (!Array.isArray(reminders) || reminders.length === 0) return;
+
+        const preview = reminders
+            .slice(0, 5)
+            .map((entry, index) => {
+                const accountLine = entry.accountLabel ? ` | Account: ${entry.accountLabel}` : '';
+                return `${index + 1}. ${entry.customerName} | RWF ${Number(entry.owing || 0).toLocaleString()} | Due ${formatCustomerPromiseDate(entry.promisedPaybackDate)} | ${entry.overdueDays} day(s) late${accountLine}`;
+            })
+            .join('\n');
+        const moreCount = reminders.length > 5 ? `\n+ ${reminders.length - 5} more overdue customer(s)` : '';
+        alert(`Payment reminder\n\nThese customers passed their promised payback date:\n\n${preview}${moreCount}`);
+    } catch (error) {
+        console.warn('Unable to show debt reminder popup:', error);
+    }
+}
+
 function getDrinkProfitPerCaseByName(drinkName) {
     const target = String(drinkName || '').toLowerCase().trim();
     const match = drinks.find((drink) => String(drink.name || '').toLowerCase() === target);
@@ -1768,19 +2297,35 @@ function localStorageKey(name) {
     return `makeaway_${name}`;
 }
 
+const INDEXED_DB_TIMEOUT_MS = 1800;
+
 async function readIndexedDbKey(name) {
     try {
         const db = await openAppDB();
         return await new Promise((resolve) => {
+            let settled = false;
+            const finish = (value) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeoutId);
+                try {
+                    db.close();
+                } catch (_) {}
+                resolve(value);
+            };
+            const timeoutId = setTimeout(() => {
+                finish(null);
+            }, INDEXED_DB_TIMEOUT_MS);
             const tx = db.transaction(DB_STORE, 'readonly');
             const req = tx.objectStore(DB_STORE).get(name);
             req.onsuccess = () => {
-                db.close();
-                resolve(req.result);
+                finish(req.result);
             };
             req.onerror = () => {
-                db.close();
-                resolve(null);
+                finish(null);
+            };
+            tx.onabort = () => {
+                finish(null);
             };
         });
     } catch (_) {
@@ -1792,15 +2337,33 @@ async function writeIndexedDbKey(name, value) {
     try {
         const db = await openAppDB();
         await new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (success, error = null) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeoutId);
+                try {
+                    db.close();
+                } catch (_) {}
+                if (success) {
+                    resolve(true);
+                    return;
+                }
+                reject(error || new Error('IndexedDB write failed'));
+            };
+            const timeoutId = setTimeout(() => {
+                finish(false, new Error('IndexedDB write timeout'));
+            }, INDEXED_DB_TIMEOUT_MS);
             const tx = db.transaction(DB_STORE, 'readwrite');
             tx.objectStore(DB_STORE).put(value, name);
             tx.oncomplete = () => {
-                db.close();
-                resolve(true);
+                finish(true);
             };
             tx.onerror = () => {
-                db.close();
-                reject(tx.error);
+                finish(false, tx.error);
+            };
+            tx.onabort = () => {
+                finish(false, tx.error);
             };
         });
         return true;
@@ -2015,6 +2578,7 @@ async function loadActiveUserData(user = activeUser) {
     drinks = Array.isArray(loadedDrinks) ? loadedDrinks : [];
     settings = sanitizeUserSettings(loadedSettings);
     yearlyArchives = sanitizeYearArchives(loadedArchives);
+    normalizeCustomersData();
     normalizeDrinksData();
 
     await migrateLegacyDataIfNeeded();
@@ -2058,6 +2622,7 @@ function buildCurrentSavePayload(user = activeUser) {
     };
 
     if (!user) return payload;
+    normalizeCustomersData();
     normalizeDrinksData();
 
     const salesKey = userDataKey('sales', user);
@@ -2107,6 +2672,8 @@ let onboardingStepIndex = 0;
 let onboardingVisible = false;
 let pendingOnboardingStart = false;
 let forgotPinVisible = false;
+let debtReminderPopupShownForSession = false;
+let debtReminderPopupSessionKey = '';
 
 function normalizePhone(phone) {
     return String(phone || '').replace(/\D/g, '');
@@ -2116,6 +2683,8 @@ const PASSWORD_MIN_LENGTH = 5;
 const PASSWORD_HASH_PREFIX = 'pbkdf2';
 const PASSWORD_HASH_ITERATIONS = 120000;
 const PASSWORD_SALT_BYTES = 16;
+const PASSWORD_RESET_CODE_LENGTH = 6;
+const PASSWORD_RESET_CODE_TTL_MS = 10 * 60 * 1000;
 
 function normalizePasswordInput(value) {
     return String(value || '').trim();
@@ -2362,6 +2931,8 @@ async function handleAdminLogin(identifier, pin, users = getAuthUsers()) {
 async function completeLoginForUser(user, options = {}) {
     failedLoginAttempts = 0;
     loginLockedUntil = 0;
+    debtReminderPopupShownForSession = false;
+    debtReminderPopupSessionKey = '';
     setAuthFeedback('');
     user.role = normalizeAuthRole(user.role, 'staff');
     user.isActive = user.isActive !== false;
@@ -2405,9 +2976,11 @@ function normalizeAuthUsersData() {
 
 function resetForgotPinFields() {
     const resetPhoneInput = document.getElementById('resetPhone');
+    const resetVerificationCodeInput = document.getElementById('resetVerificationCode');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
     if (resetPhoneInput) resetPhoneInput.value = '';
+    if (resetVerificationCodeInput) resetVerificationCodeInput.value = '';
     if (resetNewPinInput) resetNewPinInput.value = '';
     if (resetConfirmPinInput) resetConfirmPinInput.value = '';
     updateResetAccountPreview();
@@ -2425,6 +2998,112 @@ function getAuthSessionUserId(user) {
     const fallbackId = String(user.id || '').trim();
     if (fallbackId) return fallbackId;
     return normalizePhone(user.phone || '');
+}
+
+function getDebtReminderSessionKey(user = activeUser) {
+    const userId = getAuthSessionUserId(user);
+    const mode = String(activeLoginMode || 'user').trim().toLowerCase() || 'user';
+    return userId ? `${userId}|${mode}` : '';
+}
+
+function getStoredPasswordResetCodes() {
+    if (!Array.isArray(appMeta.passwordResetCodes)) {
+        appMeta.passwordResetCodes = [];
+    }
+    return appMeta.passwordResetCodes;
+}
+
+function cleanupExpiredPasswordResetCodes() {
+    const now = Date.now();
+    const existing = getStoredPasswordResetCodes();
+    const filtered = existing.filter((entry) => {
+        if (!entry || typeof entry !== 'object') return false;
+        const phone = normalizePhone(entry.phone);
+        const code = String(entry.code || '').replace(/\D/g, '');
+        const expiresAt = Number(entry.expiresAt) || 0;
+        return Boolean(phone) && Boolean(code) && !entry.usedAt && expiresAt > now;
+    });
+    if (filtered.length !== existing.length) {
+        appMeta.passwordResetCodes = filtered;
+    }
+    return appMeta.passwordResetCodes;
+}
+
+function generateNumericResetCode() {
+    if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        const buffer = new Uint32Array(1);
+        window.crypto.getRandomValues(buffer);
+        return String((buffer[0] % 900000) + 100000).padStart(PASSWORD_RESET_CODE_LENGTH, '0');
+    }
+    return String(Math.floor(100000 + Math.random() * 900000)).padStart(PASSWORD_RESET_CODE_LENGTH, '0');
+}
+
+function issuePasswordResetCodeForPhone(phone, issuedBy = activeUser) {
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return null;
+
+    const code = generateNumericResetCode();
+    const issuedAt = Date.now();
+    const nextEntry = {
+        phone: normalizedPhone,
+        code,
+        issuedAt,
+        expiresAt: issuedAt + PASSWORD_RESET_CODE_TTL_MS,
+        issuedBy: getAuthSessionUserId(issuedBy),
+        issuedByName: issuedBy?.name || issuedBy?.phone || 'Admin'
+    };
+
+    const activeCodes = cleanupExpiredPasswordResetCodes()
+        .filter((entry) => normalizePhone(entry.phone) !== normalizedPhone);
+    activeCodes.push(nextEntry);
+    appMeta.passwordResetCodes = activeCodes;
+    return nextEntry;
+}
+
+function getActivePasswordResetCodeEntry(phone) {
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return null;
+    return cleanupExpiredPasswordResetCodes()
+        .find((entry) => normalizePhone(entry.phone) === normalizedPhone) || null;
+}
+
+function validatePasswordResetCode(phone, code) {
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedCode = String(code || '').replace(/\D/g, '');
+    const entry = getActivePasswordResetCodeEntry(normalizedPhone);
+
+    if (!entry) {
+        return { ok: false, reason: 'missing' };
+    }
+
+    if (normalizedCode.length !== PASSWORD_RESET_CODE_LENGTH) {
+        return { ok: false, reason: 'invalid' };
+    }
+
+    if (!safeEqualStrings(String(entry.code || ''), normalizedCode)) {
+        return { ok: false, reason: 'invalid' };
+    }
+
+    return { ok: true, entry };
+}
+
+function consumePasswordResetCode(phone, code) {
+    const result = validatePasswordResetCode(phone, code);
+    if (!result.ok || !result.entry) {
+        return result;
+    }
+
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedCode = String(code || '').replace(/\D/g, '');
+    appMeta.passwordResetCodes = cleanupExpiredPasswordResetCodes().filter((entry) => {
+        return !(normalizePhone(entry.phone) === normalizedPhone && String(entry.code || '') === normalizedCode);
+    });
+
+    return { ok: true, entry: result.entry };
+}
+
+function formatPasswordResetExpiry(expiresAt) {
+    return formatAutoDailySalesPdfLabel(expiresAt);
 }
 
 async function restoreActiveSessionFromMeta() {
@@ -2681,6 +3360,10 @@ function switchAuthMode(mode) {
 function updateActiveUserBadge() {
     const badge = document.getElementById('activeUserBadge');
     const accountNameEl = document.getElementById('activeAccountName');
+    const sidebarNameEl = document.getElementById('sidebarAccountName');
+    const sidebarModeEl = document.getElementById('sidebarAccountMode');
+    const viewBadgeEl = document.getElementById('activeViewBadge');
+    const adminSession = isAdminSessionActive();
 
     if (!activeUser) {
         if (badge) {
@@ -2688,6 +3371,9 @@ function updateActiveUserBadge() {
             badge.textContent = '';
         }
         if (accountNameEl) accountNameEl.textContent = t('notLoggedIn');
+        if (sidebarNameEl) sidebarNameEl.textContent = t('notLoggedIn');
+        if (sidebarModeEl) sidebarModeEl.textContent = 'Guest';
+        if (viewBadgeEl) viewBadgeEl.textContent = 'Normal Account';
         return;
     }
 
@@ -2697,6 +3383,164 @@ function updateActiveUserBadge() {
         badge.style.display = 'inline-flex';
     }
     if (accountNameEl) accountNameEl.textContent = userLabel;
+    if (sidebarNameEl) sidebarNameEl.textContent = userLabel;
+    if (sidebarModeEl) sidebarModeEl.textContent = adminSession ? 'Admin' : 'User';
+    if (viewBadgeEl) viewBadgeEl.textContent = adminSession ? 'Admin Session' : 'Normal Account';
+}
+
+function toggleSidebarCollapsed() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    app.classList.toggle('sidebar-collapsed');
+    syncSidebarUtilityButtons();
+}
+
+function syncSidebarUtilityButtons() {
+    const app = document.getElementById('app');
+    const collapseBtn = document.getElementById('sidebarCollapseBtn');
+    const switchBtn = document.getElementById('sidebarSwitchBtn');
+    const collapsed = Boolean(app && app.classList.contains('sidebar-collapsed'));
+
+    if (switchBtn) {
+        switchBtn.title = 'Switch Account';
+        switchBtn.setAttribute('aria-label', 'Switch Account');
+    }
+
+    if (collapseBtn) {
+        const label = collapseBtn.querySelector('.nav-label');
+        const actionLabel = collapsed ? 'Expand' : 'Collapse';
+        if (label) {
+            label.textContent = actionLabel;
+        }
+        collapseBtn.title = `${actionLabel} Sidebar`;
+        collapseBtn.setAttribute('aria-label', `${actionLabel} Sidebar`);
+        collapseBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    }
+}
+
+function syncSidebarLabels() {
+    const adminSession = isAdminSessionActive();
+    const labels = adminSession
+        ? {
+            home: 'Dashboard',
+            adminSales: 'Sales',
+            stockManagement: 'Inventory',
+            customers: 'Customers',
+            salesHistory: 'Activity Log',
+            reports: 'Reports',
+            adminAccounts: 'Admin',
+            addSale: 'Sales',
+            clate: 'Deposits',
+            settings: 'Settings'
+        }
+        : {
+            home: 'Dashboard',
+            addSale: 'Sales',
+            stockManagement: 'Inventory',
+            customers: 'Customers',
+            salesHistory: 'Activity Log',
+            clate: 'Deposits',
+            reports: 'Reports',
+            adminSales: 'Sales',
+            adminAccounts: 'Admin',
+            settings: 'Settings'
+        };
+
+    document.querySelectorAll('.nav-btn[data-page]').forEach((btn) => {
+        const page = btn.dataset.page;
+        const label = btn.querySelector('.nav-label');
+        if (!label || !labels[page]) return;
+        label.textContent = labels[page];
+        btn.setAttribute('title', labels[page]);
+        btn.setAttribute('aria-label', labels[page]);
+    });
+
+    syncSidebarUtilityButtons();
+}
+
+async function logoutCurrentUser() {
+    const userAtLogout = activeUser;
+    if (userAtLogout) {
+        const payload = buildCurrentSavePayload(userAtLogout);
+        const entries = Object.entries(payload).map(([name, value]) => ({ name, value }));
+        await saveManyNamedData(entries);
+        flushDataSyncOnExit(userAtLogout);
+    }
+
+    const appLetters = document.getElementById('appBgLetters');
+    if (appLetters) {
+        appLetters.style.display = 'none';
+        appLetters.style.opacity = '0';
+    }
+
+    activeUser = null;
+    activeLoginMode = 'user';
+    appMeta.activeSessionUserId = '';
+    appMeta.activeSessionLoginMode = '';
+    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    failedLoginAttempts = 0;
+    loginLockedUntil = 0;
+    pendingOnboardingStart = false;
+    updateActiveUserBadge();
+    refreshAdminAccessUI();
+    refreshDataManagementAccessUI();
+    if (autoDailySalesPdfTimeout) {
+        clearTimeout(autoDailySalesPdfTimeout);
+        autoDailySalesPdfTimeout = null;
+    }
+    closeAiAssistantPanel();
+    refreshAiAssistantAccessUI();
+    closeOnboarding(false);
+
+    const app = document.getElementById('app');
+    if (app) {
+        app.style.display = 'none';
+        app.classList.remove('chrome-hidden');
+    }
+
+    const loginScreen = document.getElementById('loginScreen');
+    if (loginScreen) {
+        loginScreen.style.visibility = 'visible';
+        loginScreen.style.display = 'flex';
+    }
+
+    const phoneInput = document.getElementById('phone');
+    const pinInput = document.getElementById('pin');
+    if (phoneInput) phoneInput.value = appMeta.lastLoginPhone || '';
+    if (pinInput) pinInput.value = '';
+
+    const signupName = document.getElementById('signupName');
+    const signupRole = document.getElementById('signupRole');
+    const signupAdminPin = document.getElementById('signupAdminPin');
+    const signupAdminPinConfirm = document.getElementById('signupAdminPinConfirm');
+    const confirmPin = document.getElementById('confirmPin');
+    const resetPhone = document.getElementById('resetPhone');
+    const resetVerificationCode = document.getElementById('resetVerificationCode');
+    const resetNewPin = document.getElementById('resetNewPin');
+    const resetConfirmPin = document.getElementById('resetConfirmPin');
+
+    if (signupName) signupName.value = '';
+    if (signupRole) signupRole.value = 'admin';
+    if (signupAdminPin) signupAdminPin.value = '';
+    if (signupAdminPinConfirm) signupAdminPinConfirm.value = '';
+    if (confirmPin) confirmPin.value = '';
+    if (resetPhone) resetPhone.value = '';
+    if (resetVerificationCode) resetVerificationCode.value = '';
+    if (resetNewPin) resetNewPin.value = '';
+    if (resetConfirmPin) resetConfirmPin.value = '';
+
+    updateSignupAdminPinVisibility();
+    toggleForgotPinPanel(false);
+    sales = [];
+    customers = [];
+    clates = [];
+    drinks = [];
+    settings = getDefaultUserSettings();
+    cart = [];
+    yearlyArchives = [];
+    switchAuthMode(getAuthUsers().length === 0 ? 'signup' : 'login');
+    updateConnectivityUI();
+    initializeAuthUI();
 }
 
 function getOnboardingSteps() {
@@ -2921,10 +3765,12 @@ function openForgotPinPanel() {
 
 async function handleResetPin() {
     const resetPhoneInput = document.getElementById('resetPhone');
+    const resetVerificationCodeInput = document.getElementById('resetVerificationCode');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
 
     const phone = normalizePhone(resetPhoneInput ? resetPhoneInput.value : '');
+    const verificationCode = String(resetVerificationCodeInput ? resetVerificationCodeInput.value : '').replace(/\D/g, '');
     const newPin = (resetNewPinInput ? resetNewPinInput.value : '').trim();
     const confirmPin = (resetConfirmPinInput ? resetConfirmPinInput.value : '').trim();
     const users = getAuthUsers();
@@ -2949,12 +3795,27 @@ async function handleResetPin() {
         return;
     }
 
+    if (!verificationCode) {
+        setAuthFeedback(t('authVerificationCodeRequired'), 'error');
+        return;
+    }
+
+    const codeCheck = validatePasswordResetCode(phone, verificationCode);
+    if (!codeCheck.ok) {
+        const messageKey = codeCheck.reason === 'missing'
+            ? 'authVerificationSendFirst'
+            : 'authVerificationCodeInvalid';
+        setAuthFeedback(t(messageKey), 'error');
+        return;
+    }
+
     try {
         user.passwordHash = await hashPassword(newPin);
         delete user.pin;
         delete user.adminPin;
         user.authProvider = 'password';
         user.updatedAt = new Date().toISOString();
+        consumePasswordResetCode(phone, verificationCode);
         appMeta.authUsers = users;
         appMeta.lastLoginPhone = phone;
         await saveNamedData(APP_META_STORAGE_KEY, appMeta);
@@ -2990,6 +3851,7 @@ function initializeAuthUI() {
     const resetPinBtn = document.getElementById('resetPinBtn');
     const cancelResetPinBtn = document.getElementById('cancelResetPinBtn');
     const resetPhoneInput = document.getElementById('resetPhone');
+    const resetVerificationCodeInput = document.getElementById('resetVerificationCode');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
 
@@ -3052,6 +3914,15 @@ function initializeAuthUI() {
         });
         resetPhoneInput.dataset.boundInput = '1';
     }
+    if (resetVerificationCodeInput && !resetVerificationCodeInput.dataset.boundInput) {
+        resetVerificationCodeInput.addEventListener('input', () => {
+            resetVerificationCodeInput.value = String(resetVerificationCodeInput.value || '').replace(/\D/g, '').slice(0, PASSWORD_RESET_CODE_LENGTH);
+            if (document.getElementById('authFeedback')?.style.display === 'block') {
+                setAuthFeedback('');
+            }
+        });
+        resetVerificationCodeInput.dataset.boundInput = '1';
+    }
     if (pinInput && !pinInput.dataset.boundEnter) {
         pinInput.addEventListener('keypress', (e) => {
             if (e.key !== 'Enter') return;
@@ -3103,6 +3974,14 @@ function initializeAuthUI() {
             if (confirmEl) confirmEl.focus();
         });
         resetNewPinInput.dataset.boundEnter = '1';
+    }
+    if (resetVerificationCodeInput && !resetVerificationCodeInput.dataset.boundEnter) {
+        resetVerificationCodeInput.addEventListener('keypress', (e) => {
+            if (e.key !== 'Enter') return;
+            const nextEl = document.getElementById('resetNewPin');
+            if (nextEl) nextEl.focus();
+        });
+        resetVerificationCodeInput.dataset.boundEnter = '1';
     }
     if (resetConfirmPinInput && !resetConfirmPinInput.dataset.boundEnter) {
         resetConfirmPinInput.addEventListener('keypress', (e) => {
@@ -3184,102 +4063,45 @@ document.addEventListener('DOMContentLoaded', async function() {
         loginScreenEl.style.visibility = 'hidden';
     }
     
-    // Load data first
-    await loadAllData();
-    const didRestoreSession = await restoreActiveSessionFromMeta();
-    setAppLanguage(settings.language || 'en');
-    configureDatePickers();
-    setRangeToThisMonth();
-    initializeAuthUI();
-    initializeMobileChromeAutoHide();
-    initializeAdminAutoDailySalesPdfUi();
-    bindAutoDailySalesPdfLifecycleEvents();
-    if (!didRestoreSession && loginScreenEl) {
-        loginScreenEl.style.visibility = 'visible';
-        loginScreenEl.style.display = 'flex';
+    try {
+        // Load data first
+        await loadAllData();
+        const didRestoreSession = await restoreActiveSessionFromMeta();
+        setAppLanguage(settings.language || 'en');
+        configureDatePickers();
+        setRangeToThisMonth();
+        initializeAuthUI();
+        initializeMobileChromeAutoHide();
+        initializeAdminAutoDailySalesPdfUi();
+        bindAutoDailySalesPdfLifecycleEvents();
+        if (!didRestoreSession && loginScreenEl) {
+            loginScreenEl.style.visibility = 'visible';
+            loginScreenEl.style.display = 'flex';
+        }
+        startRwandaClock();
+        bindOnboardingControls();
+        ensureStockAdjustOverlayBindings();
+        ensureClearDataConfirmBindings();
+        initializeAiAssistant();
+        scheduleAutoBackup();
+        scheduleAutoDailySalesPdfExport();
+        void registerOfflineSupport();
+    } catch (error) {
+        console.error('App startup failed:', error);
+        try {
+            initializeAuthUI();
+        } catch (_) {}
+        if (loginScreenEl) {
+            loginScreenEl.style.visibility = 'visible';
+            loginScreenEl.style.display = 'flex';
+        }
+        setAuthFeedback('Startup took too long. Please refresh and try again.', 'error');
     }
-    startRwandaClock();
-    bindOnboardingControls();
-    ensureStockAdjustOverlayBindings();
-    ensureClearDataConfirmBindings();
-    initializeAiAssistant();
-    scheduleAutoBackup();
-    scheduleAutoDailySalesPdfExport();
-    void registerOfflineSupport();
     
     const logoutBtn = document.getElementById('logoutBtn');
     
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', async function() {
-            const userAtLogout = activeUser;
-            if (userAtLogout) {
-                const payload = buildCurrentSavePayload(userAtLogout);
-                const entries = Object.entries(payload).map(([name, value]) => ({ name, value }));
-                await saveManyNamedData(entries);
-                flushDataSyncOnExit(userAtLogout);
-            }
-            const appLetters = document.getElementById('appBgLetters');
-            if (appLetters) {
-                appLetters.style.display = 'none';
-                appLetters.style.opacity = '0';
-            }
-            
-            activeUser = null;
-            activeLoginMode = 'user';
-            appMeta.activeSessionUserId = '';
-            appMeta.activeSessionLoginMode = '';
-            await saveNamedData(APP_META_STORAGE_KEY, appMeta);
-            failedLoginAttempts = 0;
-            loginLockedUntil = 0;
-            pendingOnboardingStart = false;
-            updateActiveUserBadge();
-            refreshAdminAccessUI();
-            refreshDataManagementAccessUI();
-            if (autoDailySalesPdfTimeout) {
-                clearTimeout(autoDailySalesPdfTimeout);
-                autoDailySalesPdfTimeout = null;
-            }
-            closeAiAssistantPanel();
-            refreshAiAssistantAccessUI();
-            closeOnboarding(false);
-
-            document.getElementById('app').style.display = 'none';
-            document.getElementById('app').classList.remove('chrome-hidden');
-            const loginScreen = document.getElementById('loginScreen');
-            if (loginScreen) {
-                loginScreen.style.visibility = 'visible';
-                loginScreen.style.display = 'flex';
-            }
-            document.getElementById('phone').value = appMeta.lastLoginPhone || '';
-            document.getElementById('pin').value = '';
-            const signupName = document.getElementById('signupName');
-            const signupRole = document.getElementById('signupRole');
-            const signupAdminPin = document.getElementById('signupAdminPin');
-            const signupAdminPinConfirm = document.getElementById('signupAdminPinConfirm');
-            const confirmPin = document.getElementById('confirmPin');
-            const resetPhone = document.getElementById('resetPhone');
-            const resetNewPin = document.getElementById('resetNewPin');
-            const resetConfirmPin = document.getElementById('resetConfirmPin');
-            if (signupName) signupName.value = '';
-            if (signupRole) signupRole.value = 'admin';
-            if (signupAdminPin) signupAdminPin.value = '';
-            if (signupAdminPinConfirm) signupAdminPinConfirm.value = '';
-            if (confirmPin) confirmPin.value = '';
-            if (resetPhone) resetPhone.value = '';
-            if (resetNewPin) resetNewPin.value = '';
-            if (resetConfirmPin) resetConfirmPin.value = '';
-            updateSignupAdminPinVisibility();
-            toggleForgotPinPanel(false);
-            sales = [];
-            customers = [];
-            clates = [];
-            drinks = [];
-            settings = getDefaultUserSettings();
-            cart = [];
-            yearlyArchives = [];
-            switchAuthMode(getAuthUsers().length === 0 ? 'signup' : 'login');
-            updateConnectivityUI();
-        });
+        logoutBtn.addEventListener('click', logoutCurrentUser);
     }
     
     // Initialize the app
@@ -3382,7 +4204,7 @@ function showWelcomeAnimation(startPage = 'home') {
         const loginScreen = document.getElementById('loginScreen');
         const app = document.getElementById('app');
         if (loginScreen) loginScreen.style.display = 'none';
-        if (app) app.style.display = 'block';
+        if (app) app.style.display = 'grid';
         showAppBackgroundLetters();
 
         // Apply saved theme and language
@@ -3393,6 +4215,7 @@ function showWelcomeAnimation(startPage = 'home') {
         updateActiveUserBadge();
 
         showPage(targetPage);
+        void maybeShowDebtReminderPopup();
     };
 
     if (!overlay) {
@@ -3668,15 +4491,26 @@ function openAppDB() {
             return;
         }
 
+        let settled = false;
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            callback(value);
+        };
         const req = indexedDB.open(DB_NAME, 1);
+        const timeoutId = setTimeout(() => {
+            finish(reject, new Error('IndexedDB open timeout'));
+        }, INDEXED_DB_TIMEOUT_MS);
         req.onupgradeneeded = () => {
             const db = req.result;
             if (!db.objectStoreNames.contains(DB_STORE)) {
                 db.createObjectStore(DB_STORE);
             }
         };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        req.onsuccess = () => finish(resolve, req.result);
+        req.onerror = () => finish(reject, req.error || new Error('IndexedDB open failed'));
+        req.onblocked = () => finish(reject, new Error('IndexedDB open blocked'));
     });
 }
 
@@ -3737,23 +4571,22 @@ async function loadFromIndexedDB() {
 
 function refreshAdminAccessUI() {
     const adminSession = isAdminSessionActive();
-    const adminPanelAllowed = canAccessAdminPanel();
-    const adminVisiblePages = new Set(['home', 'reports', 'adminSales', 'adminAccounts', 'adminHub', 'settings']);
+    const adminVisiblePages = new Set(['home', 'reports', 'adminSales', 'adminAccounts', 'adminHub', 'settings', 'stockManagement', 'customers', 'salesHistory']);
     if (document.body) {
         document.body.classList.toggle('admin-session', adminSession);
     }
 
     document.querySelectorAll('.nav-btn[data-page]').forEach((btn) => {
         const page = btn.dataset.page;
+        if (page === 'settings') {
+            btn.style.display = activeUser ? 'inline-flex' : 'none';
+            return;
+        }
         if (adminSession) {
             btn.style.display = adminVisiblePages.has(page) ? 'inline-flex' : 'none';
             return;
         }
         if (page === 'adminPanel' || page === 'adminHub' || page === 'adminSales' || page === 'adminAccounts') {
-            btn.style.display = adminPanelAllowed ? 'inline-flex' : 'none';
-            return;
-        }
-        if (page === 'settings') {
             btn.style.display = 'none';
             return;
         }
@@ -3766,17 +4599,20 @@ function refreshAdminAccessUI() {
 
     const topSettingsBtn = document.getElementById('topSettingsBtn');
     if (topSettingsBtn) {
-        topSettingsBtn.style.display = adminSession ? 'none' : 'inline-flex';
+        topSettingsBtn.style.display = 'none';
     }
 
     const reportsNavLabel = document.querySelector('.nav-btn[data-page="reports"] .nav-label');
     if (reportsNavLabel) {
-        reportsNavLabel.textContent = adminSession ? 'Business Analysis' : t('reports');
+        reportsNavLabel.textContent = adminSession ? 'Reports' : t('reports');
     }
 
+    syncSidebarLabels();
+    updateActiveUserBadge();
     setReportsPageModeForRole();
     refreshProfitVisibilityUI();
     refreshAiAssistantAccessUI();
+    refreshSettingsAccountSecurityUI();
 }
 
 function setReportsPageModeForRole() {
@@ -3808,9 +4644,12 @@ function refreshProfitVisibilityUI() {
     const allowProfit = canViewProfitData();
 
     const todayProfitElement = document.getElementById('todayProfit');
-    const todayProfitCard = todayProfitElement ? todayProfitElement.closest('.stat-card') : null;
-    if (todayProfitCard) {
-        todayProfitCard.style.display = allowProfit ? '' : 'none';
+    const todayProfitCard = document.getElementById('homeSecondaryMetricCard') || (todayProfitElement ? todayProfitElement.closest('.stat-card') : null);
+    if (todayProfitElement) {
+        todayProfitElement.style.display = allowProfit && isAdminSessionActive() ? '' : 'none';
+    }
+    if (todayProfitCard && todayProfitCard.classList.contains('stat-card')) {
+        todayProfitCard.style.display = '';
     }
 
     const addSaleProfitInput = document.getElementById('newDrinkProfitPerCase');
@@ -3821,30 +4660,58 @@ function refreshProfitVisibilityUI() {
     }
 
     const settingsBusinessCard = document.getElementById('settingsBusinessCard');
+    const profitInput = document.getElementById('profitPercentage');
+    const profitMode = document.getElementById('profitMode');
+    const saveBusinessBtn = document.getElementById('saveBusinessSettingsBtn');
+    const saveDrinkBtn = document.getElementById('saveDrinkProfitBtn');
+    const profitAccessNote = document.getElementById('profitAccessNote');
     if (settingsBusinessCard) {
-        settingsBusinessCard.style.display = allowProfit ? '' : 'none';
+        settingsBusinessCard.style.display = '';
+    }
+
+    if (profitInput) profitInput.disabled = !allowProfit;
+    if (profitMode) profitMode.disabled = !allowProfit;
+    if (saveBusinessBtn) {
+        saveBusinessBtn.disabled = !allowProfit;
+        saveBusinessBtn.style.opacity = allowProfit ? '1' : '0.6';
+    }
+    if (saveDrinkBtn) {
+        saveDrinkBtn.disabled = !allowProfit;
+        saveDrinkBtn.style.opacity = allowProfit ? '1' : '0.6';
+    }
+    document.querySelectorAll('#drinkProfitList .drink-profit-input').forEach((input) => {
+        input.disabled = !allowProfit;
+    });
+    if (profitAccessNote) {
+        profitAccessNote.style.display = allowProfit ? 'none' : 'block';
     }
 }
 
 function refreshDataManagementAccessUI() {
     const clearBtn = document.getElementById('clearUserDataBtn');
     const clearQuickBtn = document.getElementById('adminClearDataQuickBtn');
+    const dangerInput = document.getElementById('adminDangerDeleteInput');
     const warningText = document.getElementById('clearWarningText');
     const archivePanel = document.getElementById('archiveYearPanel');
     const adminAutomationCard = document.getElementById('settingsAdminAutomationCard');
     const archiveYearSelect = document.getElementById('archiveYearSelect');
     const archiveYearBtn = document.getElementById('archiveYearBtn');
     const archiveYearInfo = document.getElementById('archiveYearInfo');
+    const autoPdfCheckbox = document.getElementById('adminAutoPdfEnabled');
+    const autoPdfTime = document.getElementById('adminAutoPdfTime');
+    const autoPdfSaveBtn = document.getElementById('saveAdminAutoPdfBtn');
+    const autoPdfDownloadBtn = document.getElementById('downloadLastAutoPdfBtn');
+    const autoPdfStatus = document.getElementById('adminAutoPdfStatus');
     const allowed = isAdminSessionActive();
     const allowedYears = getArchiveAllowedYears();
     const hasAllowedArchive = allowedYears.length > 0;
 
     if (adminAutomationCard) {
-        adminAutomationCard.style.display = allowed ? 'block' : 'none';
+        adminAutomationCard.style.display = 'block';
     }
 
     if (archivePanel) {
-        archivePanel.style.display = allowed ? 'block' : 'none';
+        archivePanel.style.display = 'block';
     }
 
     if (clearBtn) {
@@ -3859,10 +4726,16 @@ function refreshDataManagementAccessUI() {
     }
 
     if (clearQuickBtn) {
-        clearQuickBtn.disabled = !allowed;
-        clearQuickBtn.style.opacity = allowed ? '1' : '0.55';
-        clearQuickBtn.style.cursor = allowed ? 'pointer' : 'not-allowed';
         clearQuickBtn.title = allowed ? '' : t('clearDataRequiresAdminLogin');
+    }
+
+    if (dangerInput) {
+        if (!allowed) {
+            dangerInput.value = '';
+        }
+        dangerInput.disabled = !allowed;
+        dangerInput.style.opacity = allowed ? '1' : '0.55';
+        dangerInput.style.cursor = allowed ? 'text' : 'not-allowed';
     }
 
     if (archiveYearSelect) {
@@ -3891,6 +4764,31 @@ function refreshDataManagementAccessUI() {
             archiveYearInfo.textContent = 'Moves selected year sales and deposit records into archive and removes them from active workspace.';
         }
     }
+
+    if (autoPdfCheckbox) {
+        autoPdfCheckbox.disabled = !allowed;
+    }
+
+    if (autoPdfTime) {
+        autoPdfTime.disabled = !allowed || !Boolean(autoPdfCheckbox?.checked);
+    }
+
+    if (autoPdfSaveBtn) {
+        autoPdfSaveBtn.disabled = !allowed;
+        autoPdfSaveBtn.style.opacity = allowed ? '1' : '0.6';
+    }
+
+    if (autoPdfDownloadBtn) {
+        autoPdfDownloadBtn.disabled = !allowed;
+        autoPdfDownloadBtn.style.opacity = allowed ? '1' : '0.6';
+    }
+
+    if (autoPdfStatus && !allowed) {
+        autoPdfStatus.textContent = 'Admin login required to change automation schedules or download the last automatic PDF.';
+    }
+
+    refreshAutoDailySalesPdfControls();
+    handleAdminDangerDeleteInput();
 }
 
 function extractYearFromDateValue(value) {
@@ -4036,6 +4934,157 @@ function normalizeUserRoleLabel(roleValue) {
     if (role === 'owner') return 'Owner';
     if (role === 'admin') return 'Admin';
     return 'Employee';
+}
+
+function refreshSettingsAccountSecurityUI() {
+    const nameEl = document.getElementById('activeAccountName');
+    const metaEl = document.getElementById('activeAccountMeta');
+    const roleEl = document.getElementById('activeAccountRole');
+    const changeBtn = document.getElementById('changePinBtn');
+    const resetBtn = document.getElementById('generateResetCodeBtn');
+    const resetStatusEl = document.getElementById('resetCodeStatusText');
+
+    if (nameEl) {
+        nameEl.textContent = activeUser ? (activeUser.name || activeUser.phone || 'User') : t('notLoggedIn');
+    }
+
+    if (metaEl) {
+        if (!activeUser) {
+            metaEl.textContent = 'Phone login is required for every session.';
+        } else {
+            const phone = normalizePhone(activeUser.phone || '') || 'No phone saved';
+            metaEl.textContent = `${phone} | ${isAdminSessionActive() ? 'Admin session unlocked' : 'Standard account access'}`;
+        }
+    }
+
+    if (roleEl) {
+        roleEl.textContent = activeUser ? normalizeUserRoleLabel(activeUser.role) : 'Guest';
+    }
+
+    if (changeBtn) {
+        changeBtn.disabled = !activeUser;
+    }
+
+    if (resetBtn) {
+        resetBtn.style.display = canAccessAdminPanel() ? 'block' : 'none';
+    }
+
+    if (resetStatusEl) {
+        resetStatusEl.textContent = canAccessAdminPanel()
+            ? 'Generate a one-time reset code for any saved phone account. Each code expires in 10 minutes.'
+            : 'PIN reset codes can only be generated from an active admin session.';
+    }
+}
+
+async function changePinFromSettings() {
+    if (!activeUser) {
+        alert('No active account is signed in.');
+        return;
+    }
+
+    const currentPinRaw = window.prompt('Enter your current PIN:', '');
+    if (currentPinRaw === null) return;
+    const currentPin = normalizePasswordInput(currentPinRaw);
+    if (!currentPin) {
+        alert('Current PIN is required.');
+        return;
+    }
+
+    const currentPinOk = await verifyUserPassword(activeUser, currentPin);
+    if (!currentPinOk) {
+        alert('Current PIN is incorrect.');
+        return;
+    }
+
+    const nextPinRaw = window.prompt('Enter your new PIN:', '');
+    if (nextPinRaw === null) return;
+    const nextPin = normalizePasswordInput(nextPinRaw);
+    if (!isPasswordValid(nextPin)) {
+        alert(t('authPinRules'));
+        return;
+    }
+
+    const confirmPinRaw = window.prompt('Confirm your new PIN:', '');
+    if (confirmPinRaw === null) return;
+    const confirmPin = normalizePasswordInput(confirmPinRaw);
+    if (nextPin !== confirmPin) {
+        alert(t('authPinMismatch'));
+        return;
+    }
+
+    const users = getAuthUsers();
+    const activeId = getAuthSessionUserId(activeUser);
+    const target = users.find((user) => getAuthSessionUserId(user) === activeId);
+    if (!target) {
+        alert('Could not find the active account.');
+        return;
+    }
+
+    try {
+        target.passwordHash = await hashPassword(nextPin);
+        delete target.pin;
+        delete target.adminPin;
+        target.authProvider = 'password';
+        target.updatedAt = new Date().toISOString();
+        appMeta.authUsers = users;
+        activeUser = target;
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+        refreshSettingsAccountSecurityUI();
+        renderAdminPanel();
+        showSuccessToast('PIN updated successfully.');
+    } catch (error) {
+        alert(error.message || 'Unable to update PIN right now.');
+    }
+}
+
+async function generateResetCodeFromSettings() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can generate a reset code.');
+        return;
+    }
+
+    const defaultPhone = normalizePhone(activeUser?.phone || appMeta.lastLoginPhone || '');
+    const phoneRaw = window.prompt('Enter the phone number for the account that needs a reset code:', defaultPhone);
+    if (phoneRaw === null) return;
+
+    const phone = normalizePhone(phoneRaw);
+    if (phone.length < 10) {
+        alert(t('authPhoneRequired'));
+        return;
+    }
+
+    const users = getAuthUsers();
+    const target = users.find((user) => normalizePhone(user.phone) === phone);
+    if (!target) {
+        alert(t('authUserNotFound'));
+        return;
+    }
+
+    if (!canManageAdminAccounts() && isAdminRoleUser(target)) {
+        alert('Only the owner can issue reset codes for admin or owner accounts.');
+        return;
+    }
+
+    const entry = issuePasswordResetCodeForPhone(phone, activeUser);
+    if (!entry) {
+        alert('Could not generate a reset code right now.');
+        return;
+    }
+
+    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    refreshSettingsAccountSecurityUI();
+
+    const accountLabel = target.name || target.phone || 'this user';
+    alert(
+        `Reset code for ${accountLabel}: ${entry.code}\n` +
+        `Expires: ${formatPasswordResetExpiry(entry.expiresAt)}`
+    );
+    showSuccessToast('Reset code generated successfully.');
+}
+
+function logoutFromSettings() {
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.click();
 }
 
 function getAuthProviderLabel(user) {
@@ -5239,25 +6288,411 @@ function getBusinessAiAdvisorSuggestions(analysis) {
     return suggestions.slice(0, 9);
 }
 
+function getAdminAiEmptyStateHtml(title = 'No data yet') {
+    return `
+        <div class="advisor-empty-state">
+            <strong>${escapeHtml(title)}</strong>
+            <p>${escapeHtml(ADMIN_AI_EMPTY_MESSAGE)}</p>
+        </div>
+    `;
+}
+
+function getAdminAiSalesRecordCount(analysis) {
+    return Array.isArray(analysis?.stats30?.list) ? analysis.stats30.list.length : 0;
+}
+
+function hasAdminAiData(analysis) {
+    return getAdminAiSalesRecordCount(analysis) > 0;
+}
+
+function dedupeAdminAiText(items, maxItems = 6) {
+    const seen = new Set();
+    return (Array.isArray(items) ? items : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .filter((item) => {
+            const key = item.toLowerCase().replace(/\s+/g, ' ');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        })
+        .slice(0, maxItems);
+}
+
+function formatAdminAiSentenceList(items, maxItems = 3) {
+    return dedupeAdminAiText(items, maxItems)
+        .map((item) => (/[.!?]$/.test(item) ? item : `${item}.`))
+        .join(' ');
+}
+
+function buildAdminAiResponseCard(response) {
+    const supporting = dedupeAdminAiText(response?.supporting || [], 4);
+    return `
+        <article class="admin-ai-response-card">
+            <h4>${escapeHtml(response?.title || 'Insight')}</h4>
+            <div class="admin-ai-response-row">
+                <span>Insight</span>
+                <strong>${escapeHtml(response?.insight || ADMIN_AI_EMPTY_MESSAGE)}</strong>
+            </div>
+            <div class="admin-ai-response-row">
+                <span>Reason</span>
+                <p>${escapeHtml(response?.reason || 'No explanation available yet.')}</p>
+            </div>
+            <div class="admin-ai-response-row">
+                <span>Action</span>
+                <p>${escapeHtml(response?.action || 'Review your latest business data and try again.')}</p>
+            </div>
+            ${supporting.length ? `
+                <ul class="admin-ai-response-list">
+                    ${supporting.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+                </ul>
+            ` : ''}
+        </article>
+    `;
+}
+
+function buildAdminAiOutputHtml(responses, metaLabel = 'Updated now') {
+    const cards = Array.isArray(responses) ? responses : [];
+    return `
+        <div class="advisor-meta-row admin-ai-response-meta">
+            <span class="advisor-meta-pill">${escapeHtml(metaLabel)}</span>
+            <span class="advisor-meta-pill neutral">Real business data</span>
+        </div>
+        <div class="admin-ai-response-grid">
+            ${cards.map((item) => buildAdminAiResponseCard(item)).join('')}
+        </div>
+    `;
+}
+
+function getAdminAiFallbackResponse() {
+    return {
+        title: 'No data yet',
+        insight: ADMIN_AI_EMPTY_MESSAGE,
+        reason: 'There are no saved sales records in this workspace yet.',
+        action: 'Add sales, then generate insights again.'
+    };
+}
+
+function buildAdminAiHealthResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const priorities = dedupeAdminAiText(analysis?.priorities || [], AI_ASSISTANT_MAX_PRIORITIES);
+    return {
+        title: 'Business Health Score',
+        insight: `Business health score is ${analysis.healthScore.score}/100.`,
+        reason: formatAdminAiSentenceList(analysis.healthScore.notes, 2) || 'Recent activity is being tracked across sales, stock, and profit signals.',
+        action: priorities[0] || analysis.dailySummary.recommendation || 'Work through the top issue and refresh insights again.',
+        supporting: analysis.healthScore.notes
+    };
+}
+
+function buildAdminAiSummaryResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const summary = analysis.dailySummary || {};
+    const todaySales = getSalesForSpecificDay(getTodayISODate());
+    return {
+        title: "Today's Summary",
+        insight: `Today's sales total ${formatAiCurrency(summary.totalSales || 0)}.`,
+        reason: formatAdminAiSentenceList([
+            `Best product: ${summary.bestProduct || '--'}`,
+            `Slow product: ${summary.slowProduct || '--'}`,
+            `${todaySales.length} sale record(s) were captured today`
+        ], 3),
+        action: summary.recommendation || 'Keep recording sales today for a stronger recommendation.',
+        supporting: [
+            `Total sales: ${formatAiCurrency(summary.totalSales || 0)}`,
+            `Best product: ${summary.bestProduct || '--'}`,
+            `Slow product: ${summary.slowProduct || '--'}`
+        ]
+    };
+}
+
+function buildAdminAiRestockResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const alert = analysis.restockAlerts[0];
+    const bestSeller = analysis.topProducts[0];
+    if (!alert) {
+        return {
+            title: 'Smart Restock Alerts',
+            insight: 'Stock levels are healthy right now.',
+            reason: 'No product is currently flagged as low based on stock on hand and recent sales movement.',
+            action: `Keep a safety buffer for ${bestSeller?.name || 'your best seller'} before the next rush.`,
+            supporting: bestSeller?.name ? [`Best seller to protect: ${bestSeller.name}`] : []
+        };
+    }
+
+    return {
+        title: 'Smart Restock Alerts',
+        insight: `${alert.name} needs restocking soon.`,
+        reason: `${alert.name} has ${alert.stockQty} case(s) left and recent sales suggest only ${formatDaysRemaining(alert.daysRemaining)} of cover remaining.`,
+        action: `Reorder ${alert.name} now and keep extra stock ready before the next busy day.`,
+        supporting: analysis.restockAlerts.slice(0, 3).map((item) => `${item.name}: ${item.stockQty} case(s), ${formatDaysRemaining(item.daysRemaining)} left`)
+    };
+}
+
+function buildAdminAiTopProductsResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const top = analysis.topProducts[0];
+    const slow = analysis.slowProducts[0];
+    if (!top) {
+        return {
+            title: 'Top Products',
+            insight: ADMIN_AI_EMPTY_MESSAGE,
+            reason: 'Sales need to be recorded before product rankings can be calculated.',
+            action: 'Add today\'s sales and run this command again.'
+        };
+    }
+
+    return {
+        title: 'Top Products',
+        insight: `${top.name} is your best-selling product right now.`,
+        reason: `${top.name} sold ${top.qty} case(s) in the last ${analysis.windowDays} days${analysis.dailySummary.bestProduct === top.name ? ' and it also leads today\'s sales' : ''}.`,
+        action: `Keep ${top.name} visible and bundle it with ${slow?.name || 'slower items'} to lift total basket size.`,
+        supporting: analysis.topProducts.slice(0, 3).map((item) => `${item.name}: ${item.qty} case(s) sold`)
+    };
+}
+
+function buildAdminAiProfitResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const trend = analysis.profitTrend;
+    const firstLeak = analysis.profitLeaks[0];
+    if (!trend?.allowed) {
+        return {
+            title: 'Profit Insights',
+            insight: 'Profit values are not available for this view.',
+            reason: 'Profit visibility depends on admin-level access and saved profit settings.',
+            action: 'Open the admin session and review your profit settings to unlock exact profit insights.'
+        };
+    }
+
+    const insight = trend.deltaPercent > 2
+        ? `Profit is up ${trend.deltaPercent.toFixed(1)}% this week.`
+        : (trend.deltaPercent < -2
+            ? `Profit is down ${Math.abs(trend.deltaPercent).toFixed(1)}% this week.`
+            : 'Profit is flat this week.');
+    const reason = firstLeak
+        ? firstLeak
+        : (trend.deltaPercent < 1
+            ? 'No strong high-margin sales are lifting profit right now.'
+            : 'High-performing products are helping profit stay healthy.');
+    const action = firstLeak
+        ? 'Fix the leak first, then promote your highest-margin drink to recover profit faster.'
+        : 'Promote your highest-margin drink this week and track whether profit improves after the campaign.';
+
+    return {
+        title: 'Profit Insights',
+        insight,
+        reason,
+        action,
+        supporting: [
+            `Weekly profit change: ${formatSignedPercent(trend.deltaPercent)}`,
+            ...analysis.profitLeaks.slice(0, 2)
+        ]
+    };
+}
+
+function buildAdminAiPrioritiesResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const priorities = dedupeAdminAiText(
+        analysis.priorities.length ? analysis.priorities : buildAiAssistantActionPlan(analysis),
+        AI_ASSISTANT_MAX_PRIORITIES
+    );
+    const topPriority = priorities[0];
+    const nextPriority = priorities[1];
+    if (!topPriority) {
+        return {
+            title: "Today's Priorities",
+            insight: 'No urgent priorities are showing right now.',
+            reason: 'Current sales and stock data do not show a critical bottleneck.',
+            action: analysis.dailySummary.recommendation || 'Keep logging sales and refresh insights later today.'
+        };
+    }
+
+    return {
+        title: "Today's Priorities",
+        insight: `Your top priority today is ${topPriority}.`,
+        reason: 'This recommendation is based on current sales movement, stock levels, and recent business trends.',
+        action: nextPriority
+            ? `Complete "${topPriority}" first, then move to "${nextPriority}".`
+            : 'Complete the top priority first, then refresh insights for the next action.',
+        supporting: priorities
+    };
+}
+
+function buildAdminAiGeneralResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const growth = Number(analysis.growthAnalysis?.growthPercent) || 0;
+    const bestProduct = analysis.topProducts[0];
+    const slowProduct = analysis.slowProducts[0];
+    const trendLine = growth > 1
+        ? `Sales are up ${growth.toFixed(1)}% over the last ${analysis.windowDays} days.`
+        : (growth < -1
+            ? `Sales are down ${Math.abs(growth).toFixed(1)}% over the last ${analysis.windowDays} days.`
+            : 'Sales are stable across the current period.');
+
+    return {
+        title: 'Business Snapshot',
+        insight: `Business health is ${analysis.healthScore.score}/100. ${trendLine}`,
+        reason: formatAdminAiSentenceList([
+            analysis.healthScore.notes[0],
+            bestProduct?.name ? `${bestProduct.name} is leading product movement` : '',
+            slowProduct?.name ? `${slowProduct.name} is underperforming` : ''
+        ], 3),
+        action: analysis.priorities[0] || analysis.dailySummary.recommendation || 'Review today\'s sales and focus on the next bottleneck.',
+        supporting: [
+            `Total sales today: ${formatAiCurrency(analysis.dailySummary.totalSales || 0)}`,
+            `Best product: ${analysis.dailySummary.bestProduct || '--'}`,
+            `Slow product: ${analysis.dailySummary.slowProduct || '--'}`
+        ]
+    };
+}
+
+function buildAdminAiRiskResponse(analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+    const alert = analysis.restockAlerts[0];
+    const firstLeak = analysis.profitLeaks[0];
+    const debtFollowUp = analysis.growthAnalysis?.topDebtFollowUp;
+
+    if (alert) {
+        return buildAdminAiRestockResponse(analysis);
+    }
+    if (firstLeak) {
+        return buildAdminAiProfitResponse(analysis);
+    }
+    if (debtFollowUp?.name && Number(debtFollowUp.owing) > 0) {
+        return {
+            title: 'Risk Watch',
+            insight: `${debtFollowUp.name} is the top follow-up account right now.`,
+            reason: `${debtFollowUp.name} still owes ${formatAiCurrency(debtFollowUp.owing)} and late collections can squeeze cash flow.`,
+            action: `Contact ${debtFollowUp.name} today and agree on a payment date.`,
+            supporting: [`Outstanding debt: ${formatAiCurrency(analysis.growthAnalysis?.outstandingDebtTotal || 0)}`]
+        };
+    }
+    return {
+        title: 'Risk Watch',
+        insight: 'No major operational risk is showing right now.',
+        reason: 'Stock, debt, and product movement look stable in the latest saved data.',
+        action: analysis.dailySummary.recommendation || 'Keep monitoring sales and rerun insights after the next sync.'
+    };
+}
+
+function buildAdminAiOverviewResponses(analysis) {
+    return [
+        buildAdminAiHealthResponse(analysis),
+        buildAdminAiSummaryResponse(analysis),
+        buildAdminAiRiskResponse(analysis)
+    ];
+}
+
+function getAdminAiStructuredResponse(prompt, analysis) {
+    if (!hasAdminAiData(analysis)) return getAdminAiFallbackResponse();
+
+    const query = normalizeAiAssistantQuery(prompt);
+    if (aiQueryHasAny(query, ['priority', 'priorities', 'next step'])) {
+        return buildAdminAiPrioritiesResponse(analysis);
+    }
+    if (aiQueryHasAny(query, ['health', 'score', 'status'])) {
+        return buildAdminAiHealthResponse(analysis);
+    }
+    if (aiQueryHasAny(query, ['restock', 'stock', 'inventory'])) {
+        return buildAdminAiRestockResponse(analysis);
+    }
+    if (aiQueryHasAny(query, ['profit', 'margin', 'leak'])) {
+        return buildAdminAiProfitResponse(analysis);
+    }
+    if (aiQueryHasAny(query, ['sell the most', 'best seller', 'best-selling', 'top', 'most', 'popular'])) {
+        return buildAdminAiTopProductsResponse(analysis);
+    }
+    if (aiQueryHasAny(query, ['summary', 'report', 'overview', 'today'])) {
+        return buildAdminAiSummaryResponse(analysis);
+    }
+    return buildAdminAiGeneralResponse(analysis);
+}
+
+function renderAdminAiPanel(force = false) {
+    const panel = document.querySelector('#adminPanel .admin-ai-panel');
+    if (!panel) return null;
+
+    const output = document.getElementById('businessAiAdvisorOutput');
+    const scoreValue = document.getElementById('adminAiHealthScoreValue');
+    const explanation = document.getElementById('adminAiHealthExplanation');
+    const totalEl = document.getElementById('adminAiTotalSales');
+    const bestEl = document.getElementById('adminAiBestProduct');
+    const slowEl = document.getElementById('adminAiSlowProduct');
+    const recommendationEl = document.getElementById('adminAiRecommendationText');
+    const restockList = document.getElementById('adminAiRestockAlertsList');
+    const leakList = document.getElementById('adminAiProfitLeakList');
+    const prioritiesList = document.getElementById('adminAiPrioritiesList');
+
+    if (!activeUser || !canAccessAdminPanel()) {
+        if (scoreValue) scoreValue.textContent = '--';
+        if (explanation) explanation.textContent = 'Admin access is required to unlock AI insights.';
+        if (totalEl) totalEl.textContent = '--';
+        if (bestEl) bestEl.textContent = '--';
+        if (slowEl) slowEl.textContent = '--';
+        if (recommendationEl) recommendationEl.textContent = 'Sign in with admin access to unlock insights.';
+        if (restockList) restockList.innerHTML = `<li>${escapeHtml('Admin access is required to unlock AI insights.')}</li>`;
+        if (leakList) leakList.innerHTML = `<li>${escapeHtml('Admin access is required to unlock AI insights.')}</li>`;
+        if (prioritiesList) prioritiesList.innerHTML = `<li>${escapeHtml('Admin access is required to unlock AI insights.')}</li>`;
+        if (output && !output.classList.contains('is-generating')) {
+            output.innerHTML = getAdminAiEmptyStateHtml('Admin access required');
+        }
+        return null;
+    }
+
+    const analysis = getAiAssistantAnalysis(force);
+    const hasData = hasAdminAiData(analysis);
+    const healthResponse = hasData ? buildAdminAiHealthResponse(analysis) : getAdminAiFallbackResponse();
+    const summary = analysis.dailySummary || {};
+
+    if (scoreValue) scoreValue.textContent = hasData ? `${analysis.healthScore.score}/100` : '--';
+    if (explanation) explanation.textContent = hasData ? formatAdminAiSentenceList([healthResponse.reason, healthResponse.action], 2) : ADMIN_AI_EMPTY_MESSAGE;
+    if (totalEl) totalEl.textContent = hasData ? formatAiCurrency(summary.totalSales || 0) : '--';
+    if (bestEl) bestEl.textContent = hasData ? (summary.bestProduct || '--') : '--';
+    if (slowEl) slowEl.textContent = hasData ? (summary.slowProduct || '--') : '--';
+    if (recommendationEl) recommendationEl.textContent = hasData ? (summary.recommendation || 'No recommendation available yet.') : ADMIN_AI_EMPTY_MESSAGE;
+
+    if (restockList) {
+        const restockItems = hasData
+            ? analysis.restockAlerts.slice(0, 4).map((item) => `${item.name}: ${item.stockQty} case(s), ${formatDaysRemaining(item.daysRemaining)} left`)
+            : [ADMIN_AI_EMPTY_MESSAGE];
+        restockList.innerHTML = buildAiListItemsHtml(restockItems, ADMIN_AI_EMPTY_MESSAGE);
+    }
+
+    if (leakList) {
+        const leakItems = hasData
+            ? (analysis.profitLeaks.length ? analysis.profitLeaks : ['No obvious profit leaks detected.'])
+            : [ADMIN_AI_EMPTY_MESSAGE];
+        leakList.innerHTML = buildAiListItemsHtml(leakItems, ADMIN_AI_EMPTY_MESSAGE);
+    }
+
+    if (prioritiesList) {
+        const priorityItems = hasData
+            ? dedupeAdminAiText(
+                analysis.priorities.length ? analysis.priorities : buildAiAssistantActionPlan(analysis),
+                AI_ASSISTANT_MAX_PRIORITIES
+            )
+            : [ADMIN_AI_EMPTY_MESSAGE];
+        prioritiesList.innerHTML = buildAiListItemsHtml(priorityItems, ADMIN_AI_EMPTY_MESSAGE);
+    }
+
+    if (output && !hasData && !output.classList.contains('is-generating')) {
+        output.innerHTML = getAdminAiEmptyStateHtml();
+    }
+
+    return analysis;
+}
+
 async function runBusinessAiAdvisor(silent = false) {
     const output = document.getElementById('businessAiAdvisorOutput');
     const trigger = document.getElementById('runBusinessAiAdvisorBtn');
 
     if (!canAccessAdminPanel()) {
         if (output) {
-            output.innerHTML = '<p style="margin: 0; color: #c64545;">Permission Denied</p>';
+            output.innerHTML = getAdminAiEmptyStateHtml('Permission denied');
         }
         if (!silent) {
             alert('Permission Denied');
         }
-        return 'Permission Denied';
-    }
-
-    const refreshedAnalysis = renderAdminBusinessAnalysisTab();
-    const analysis = (refreshedAnalysis && typeof refreshedAnalysis === 'object')
-        ? refreshedAnalysis
-        : (cachedAdminGrowthAnalysis || getAdminBusinessAnalysisData(selectedAdminGrowthWindowDays));
-    if (!analysis || typeof analysis !== 'object') {
         return 'Permission Denied';
     }
 
@@ -5275,44 +6710,67 @@ async function runBusinessAiAdvisor(silent = false) {
     if (trigger) {
         trigger.disabled = true;
         trigger.classList.add('is-generating');
-        trigger.dataset.defaultLabel = trigger.dataset.defaultLabel || trigger.textContent || 'Generate Suggestions';
+        trigger.dataset.defaultLabel = trigger.dataset.defaultLabel || trigger.textContent || 'Generate Insights';
         trigger.textContent = 'Generating...';
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 760));
+    await new Promise((resolve) => setTimeout(resolve, 420));
 
-    const suggestions = getBusinessAiAdvisorSuggestions(analysis);
+    const analysis = renderAdminAiPanel(true);
+    const responses = analysis && hasAdminAiData(analysis)
+        ? buildAdminAiOverviewResponses(analysis)
+        : [getAdminAiFallbackResponse()];
     if (output) {
-        const generatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        output.innerHTML = `
-            <div class="advisor-meta-row">
-                <span class="advisor-meta-pill">Updated ${escapeHtml(generatedAt)}</span>
-                <span class="advisor-meta-pill neutral">${analysis.windowDays}-day model</span>
-            </div>
-            <div class="advisor-insight-grid">
-                ${suggestions.map((item) => `
-                    <article class="advisor-insight-card ${escapeHtml(item.tone || 'neutral')}">
-                        <div class="advisor-insight-head">
-                            <h5>${escapeHtml(item.title || 'Suggestion')}</h5>
-                            <span class="advisor-insight-metric">${escapeHtml(String(item.metric || ''))}</span>
-                        </div>
-                        <p>${escapeHtml(item.detail || '')}</p>
-                    </article>
-                `).join('')}
-            </div>
-        `;
+        const updatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        output.innerHTML = buildAdminAiOutputHtml(responses, `Updated ${updatedAt}`);
         output.classList.remove('is-generating');
     }
     if (trigger) {
         trigger.disabled = false;
         trigger.classList.remove('is-generating');
-        trigger.textContent = trigger.dataset.defaultLabel || 'Generate Suggestions';
+        trigger.textContent = trigger.dataset.defaultLabel || 'Generate Insights';
     }
 
     if (!silent) {
-        showSuccessToast('Business advisor updated.');
+        showSuccessToast('AI insights updated.');
     }
-    return suggestions;
+    return responses;
+}
+
+async function runAdminAiQuickCommand(prompt) {
+    const output = document.getElementById('businessAiAdvisorOutput');
+    if (!canAccessAdminPanel()) {
+        if (output) {
+            output.innerHTML = getAdminAiEmptyStateHtml('Permission denied');
+        }
+        alert('Permission Denied');
+        return getAdminAiFallbackResponse();
+    }
+
+    if (output) {
+        output.classList.add('is-generating');
+        output.innerHTML = `
+            <div class="advisor-loading">
+                <div class="advisor-loading-line w50"></div>
+                <div class="advisor-loading-line w85"></div>
+                <div class="advisor-loading-line w70"></div>
+            </div>
+        `;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 240));
+
+    const analysis = renderAdminAiPanel(true);
+    const response = analysis
+        ? getAdminAiStructuredResponse(prompt, analysis)
+        : getAdminAiFallbackResponse();
+
+    if (output) {
+        output.innerHTML = buildAdminAiOutputHtml([response], String(prompt || 'Quick command').trim() || 'Quick command');
+        output.classList.remove('is-generating');
+    }
+
+    return response;
 }
 
 function getAdminGrowthInsights() {
@@ -5459,6 +6917,7 @@ async function exportAdminDailySalesPDF(dayIsoOverride = '', options = {}) {
     const totalProfit = calculateProfitFromSales(daySales);
 
     try {
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const reportTitle = `Daily Sales ${selectedDate}`;
         let y = applyPdfBrandHeader(doc, reportTitle);
@@ -5485,11 +6944,12 @@ async function exportAdminDailySalesPDF(dayIsoOverride = '', options = {}) {
             const customerName = sale.type === 'credit'
                 ? (typeof getSafeCustomerName === 'function' ? getSafeCustomerName(sale.customerId) : 'Customer')
                 : 'Guest';
+            const unitPrice = Number(sale.unitPrice ?? sale.price) || 0;
             return [
                 saleDate ? saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--',
                 String(sale.drinkName || 'Unknown'),
                 String(Number(sale.quantity) || 0),
-                `RWF ${Number(sale.unitPrice || 0).toLocaleString()}`,
+                `RWF ${unitPrice.toLocaleString()}`,
                 `RWF ${Number(sale.total || 0).toLocaleString()}`,
                 sale.type === 'credit' ? 'Credit' : 'Cash',
                 String(customerName || 'Guest')
@@ -5546,7 +7006,7 @@ async function exportAdminDailySalesPDF(dayIsoOverride = '', options = {}) {
     }
 }
 
-function exportAdminAllSalesPDF() {
+async function exportAdminAllSalesPDF() {
     if (!canAccessAdminPanel()) {
         alert('Only an active admin session can export sales.');
         return;
@@ -5583,6 +7043,7 @@ function exportAdminAllSalesPDF() {
     const rangeLabel = firstDay && lastDay ? `${formatPdfDate(firstDay)} - ${formatPdfDate(lastDay)}` : 'All time';
 
     try {
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const reportTitle = 'All Sales';
         let y = applyPdfBrandHeaderFirstPageOnly(doc, reportTitle);
@@ -5612,12 +7073,13 @@ function exportAdminAllSalesPDF() {
             const customerName = sale.type === 'credit'
                 ? (typeof getSafeCustomerName === 'function' ? getSafeCustomerName(sale.customerId) : 'Customer')
                 : 'Guest';
+            const unitPrice = Number(sale.unitPrice ?? sale.price) || 0;
             return [
                 dayIso ? formatPdfDate(dayIso) : '-',
                 saleDate ? saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--',
                 String(sale.drinkName || 'Unknown'),
                 String(Number(sale.quantity) || 0),
-                `RWF ${Number(sale.unitPrice || 0).toLocaleString()}`,
+                `RWF ${unitPrice.toLocaleString()}`,
                 `RWF ${Number(sale.total || 0).toLocaleString()}`,
                 sale.type === 'credit' ? 'Credit' : 'Cash',
                 String(customerName || 'Guest')
@@ -5697,6 +7159,8 @@ function renderAdminPanel() {
     privilegedEl.textContent = String(privilegedCount);
     staffEl.textContent = String(staffCount);
     inactiveEl.textContent = String(inactiveCount);
+    renderAdminAiPanel();
+    handleAdminDangerDeleteInput();
 
     if (!canAccessAdminPanel()) {
         body.innerHTML = '<tr><td colspan="6" style="padding: 30px; text-align: center; color: #789;">Only admin/owner accounts can view this page.</td></tr>';
@@ -5726,9 +7190,8 @@ function renderAdminPanel() {
         const canResetPin = canManage || (!canManage && !isAdminRoleUser(user));
         const canToggleRole = canManage && !isSelf;
         const canToggleStatus = canManage && !isSelf;
-        const canClearEmployeeData = role === 'staff' && !isSelf;
-        const roleToggleLabel = role === 'staff' ? 'Make Admin' : 'Make Employee';
         const statusToggleLabel = isActive ? 'Deactivate' : 'Activate';
+        const statusButtonClass = isActive ? 'admin-action-btn danger' : 'admin-action-btn secondary';
 
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -5743,11 +7206,10 @@ function renderAdminPanel() {
             <td>${escapeHtml(formatAppDateTime(user.lastLoginAt, 'Never'))}</td>
             <td>
                 <div class="admin-action-row">
-                    <button class="admin-action-btn secondary" onclick="viewUserDataSnapshot(${index})">Data</button>
+                    <button class="admin-action-btn secondary" onclick="viewUserDataSnapshot(${index})">View Data</button>
                     <button class="admin-action-btn" onclick="adminResetUserPin(${index})" ${canResetPin ? '' : 'disabled'}>Reset Password</button>
-                    <button class="admin-action-btn danger" onclick="clearEmployeeData(${index})" ${canClearEmployeeData ? '' : 'disabled'}>Clear Data</button>
-                    <button class="admin-action-btn" onclick="toggleUserRole(${index})" ${canToggleRole ? '' : 'disabled'}>${roleToggleLabel}</button>
-                    <button class="admin-action-btn danger" onclick="toggleUserActiveStatus(${index})" ${canToggleStatus ? '' : 'disabled'}>${statusToggleLabel}</button>
+                    <button class="admin-action-btn" onclick="toggleUserRole(${index})" ${canToggleRole ? '' : 'disabled'}>Change Role</button>
+                    <button class="${statusButtonClass}" onclick="toggleUserActiveStatus(${index})" ${canToggleStatus ? '' : 'disabled'}>${statusToggleLabel}</button>
                 </div>
             </td>
         `;
@@ -5865,6 +7327,15 @@ async function toggleUserRole(index) {
         }
     }
 
+    const nextRoleLabel = normalizeUserRoleLabel(nextRole);
+    const confirmed = await showUiConfirm({
+        title: 'Change Role',
+        message: `Change ${target.name || target.phone || 'this user'} to ${nextRoleLabel}?`,
+        confirmText: 'Change Role',
+        cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
+
     target.role = nextRole;
     if (nextRole === 'staff') {
         target.adminPin = '';
@@ -5898,6 +7369,15 @@ async function toggleUserActiveStatus(index) {
             return;
         }
     }
+
+    const actionLabel = nextActive ? 'Activate' : 'Deactivate';
+    const confirmed = await showUiConfirm({
+        title: `${actionLabel} Account`,
+        message: `${actionLabel} ${target.name || target.phone || 'this user'}?`,
+        confirmText: actionLabel,
+        cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
 
     target.isActive = nextActive;
     target.updatedAt = new Date().toISOString();
@@ -5937,6 +7417,46 @@ async function adminResetUserPin(index) {
     } catch (error) {
         alert(error.message || 'Unable to reset password.');
     }
+}
+
+async function adminPromptResetUserPassword() {
+    if (!canAccessAdminPanel()) {
+        alert('You do not have admin access.');
+        return;
+    }
+
+    const phoneRaw = window.prompt('Enter the phone number for the account you want to reset:', '');
+    if (phoneRaw === null) return;
+
+    const phone = normalizePhone(phoneRaw);
+    if (phone.length < 10) {
+        alert(t('authPhoneRequired'));
+        return;
+    }
+
+    const users = getAuthUsers();
+    const userIndex = users.findIndex((user) => normalizePhone(user.phone) === phone);
+    if (userIndex === -1) {
+        alert(t('authUserNotFound'));
+        return;
+    }
+
+    await adminResetUserPin(userIndex);
+}
+
+function handleAdminDangerDeleteInput() {
+    const input = document.getElementById('adminDangerDeleteInput');
+    const button = document.getElementById('adminClearDataQuickBtn');
+    const allowed = isAdminSessionActive();
+    const confirmed = allowed && String(input?.value || '').trim() === 'DELETE';
+
+    if (button) {
+        button.disabled = !confirmed;
+        button.style.opacity = confirmed ? '1' : '0.55';
+        button.style.cursor = confirmed ? 'pointer' : 'not-allowed';
+    }
+
+    return confirmed;
 }
 
 async function clearEmployeeData(index) {
@@ -6037,7 +7557,7 @@ function getAdminExportUserRows() {
     }));
 }
 
-function exportAdminUsersPDF() {
+async function exportAdminUsersPDF() {
     if (!canAccessAdminPanel()) {
         alert('Only an active admin session can export account data.');
         return;
@@ -6050,6 +7570,7 @@ function exportAdminUsersPDF() {
             return;
         }
 
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         const reportTitle = 'Admin Accounts';
         let y = applyPdfBrandHeader(doc, reportTitle);
@@ -6137,10 +7658,31 @@ function rememberOpenPage(pageName, user = activeUser) {
     }
 }
 
+function resetVisiblePagePosition(pageElement = null) {
+    const pageContainer = document.querySelector('.page-container');
+    const targetPage = pageElement && pageElement.nodeType === 1 ? pageElement : null;
+
+    if (pageContainer) {
+        pageContainer.scrollTop = 0;
+    }
+    if (document.body) {
+        document.body.scrollTop = 0;
+    }
+    if (document.documentElement) {
+        document.documentElement.scrollTop = 0;
+    }
+    if (typeof window.scrollTo === 'function') {
+        window.scrollTo(0, 0);
+    }
+    if (targetPage && typeof targetPage.scrollIntoView === 'function') {
+        targetPage.scrollIntoView({ block: 'start', behavior: 'auto' });
+    }
+}
+
 function showPage(pageName) {
     refreshAdminAccessUI();
     const adminSession = isAdminSessionActive();
-    const adminVisiblePages = new Set(['home', 'reports', 'adminSales', 'adminAccounts', 'adminHub', 'settings']);
+    const adminVisiblePages = new Set(['home', 'reports', 'adminSales', 'adminAccounts', 'adminHub', 'settings', 'stockManagement', 'customers', 'salesHistory']);
     let requestedPage = pageName;
     let targetPage = pageName;
 
@@ -6250,6 +7792,10 @@ function showPage(pageName) {
     // Re-setup search listeners when switching pages
     setTimeout(setupSearchListeners, 50);
     configureDatePickers();
+    resetVisiblePagePosition(page);
+    requestAnimationFrame(() => {
+        resetVisiblePagePosition(page);
+    });
 }
 
 // Add export/import buttons to reports page
@@ -6662,6 +8208,7 @@ async function exportStockManagementPDF() {
     try {
         await optimizedSaveData();
         await waitForPendingSave();
+        await ensurePDFLibrariesReady();
         const exportDrinks = await getPersistedDrinksSnapshot();
         if (!exportDrinks.length) {
             alert('No stock data to export.');
@@ -7193,6 +8740,25 @@ async function confirmSale() {
             return;
         }
     }
+
+    const pendingTotalAmount = cart.reduce((sum, item) => {
+        return sum + ((Number(item.price) || 0) * (Number(item.quantity) || 0));
+    }, 0);
+    const selectedCustomer = selectedCustomerId !== null ? customers[selectedCustomerId] : null;
+    const selectedCustomerRef = selectedCustomer ? selectedCustomer.id : null;
+    const creditPromiseDate = normalizeCustomerPromiseDate(document.getElementById('creditPromiseDate')?.value);
+
+    if (currentSaleType === 'credit' && selectedCustomer) {
+        const errorMessage = getCustomerDebtRaiseError(selectedCustomer, pendingTotalAmount);
+        if (errorMessage) {
+            alert(errorMessage);
+            return;
+        }
+        if (shouldUsePromiseDate(selectedCustomer) && !creditPromiseDate && !getCustomerPromiseDate(selectedCustomer)) {
+            alert(`Select the payback date ${selectedCustomer.name} promised to pay.`);
+            return;
+        }
+    }
     
     let totalAmount = 0;
     const saleItems = [];
@@ -7217,10 +8783,11 @@ async function confirmSale() {
             drinkName: item.drinkName,
             quantity: item.quantity,
             price: item.price,
+            unitPrice: item.price,
             profitPerCase: Number(item.profitPerCase || getDrinkProfitPerCaseByName(item.drinkName)),
             total: itemTotal,
             type: currentSaleType,
-            customerId: currentSaleType === 'credit' ? selectedCustomerId : null,
+            customerId: currentSaleType === 'credit' ? selectedCustomerRef : null,
             date: nowIso
         };
         
@@ -7236,6 +8803,9 @@ async function confirmSale() {
     // Update customer debt if credit sale
     if (currentSaleType === 'credit' && selectedCustomerId !== null && customers[selectedCustomerId]) {
         customers[selectedCustomerId].owing = (customers[selectedCustomerId].owing || 0) + totalAmount;
+        if (creditPromiseDate) {
+            customers[selectedCustomerId].promisedPaybackDate = creditPromiseDate;
+        }
     }
     
     await optimizedSaveData();
@@ -7258,6 +8828,8 @@ async function confirmSale() {
     if (customerSelectContainer) customerSelectContainer.style.display = 'none';
     const customerSelect = document.getElementById('customerSelect');
     if (customerSelect) customerSelect.value = '';
+    const creditPromiseDateInput = document.getElementById('creditPromiseDate');
+    if (creditPromiseDateInput) creditPromiseDateInput.value = '';
     selectedCustomerId = null;
     currentSaleType = 'normal';
     resetQuickDrinkSelection();
@@ -7266,6 +8838,8 @@ async function confirmSale() {
     updateDrinkList();
     renderStockManagement();
     updateHome();
+    syncCreditPromiseDateVisibility();
+    refreshAiAssistantInsights(true);
 
     const lowStock = getLowStockDrinks();
     if (lowStock.length > 0) {
@@ -7409,6 +8983,7 @@ function changeSaleType(type) {
     } else {
         selectedCustomerId = null;
     }
+    syncCreditPromiseDateVisibility();
 }
 
 function updateCustomerDropdown() {
@@ -7420,13 +8995,72 @@ function updateCustomerDropdown() {
     customers.forEach((customer, index) => {
         const option = document.createElement('option');
         option.value = index;
-        option.textContent = `${customer.name} ${customer.owing > 0 ? `(Owes: RWF ${customer.owing.toLocaleString()})` : ''}`;
+        const owingLabel = customer.owing > 0 ? `(Owes: RWF ${customer.owing.toLocaleString()})` : '';
+        const promiseDate = getCustomerPromiseDate(customer);
+        const promiseLabel = promiseDate
+            ? (isCustomerDebtOverdue(customer)
+                ? ` | Overdue since ${formatCustomerPromiseDate(promiseDate)}`
+                : ` | Promise ${formatCustomerPromiseDate(promiseDate)}`)
+            : '';
+        option.textContent = `${customer.name} ${owingLabel}${promiseLabel}`;
         select.appendChild(option);
     });
+
+    if (selectedCustomerId !== null && customers[selectedCustomerId]) {
+        select.value = String(selectedCustomerId);
+    }
     
     select.onchange = function() {
         selectedCustomerId = this.value ? parseInt(this.value) : null;
+        syncCreditPromiseDateVisibility();
     };
+}
+
+function syncCustomerPaybackDateVisibility() {
+    const typeSelect = document.getElementById('customerType');
+    const group = document.getElementById('customerPaybackDateGroup');
+    const input = document.getElementById('customerPaybackDate');
+    if (!typeSelect || !group || !input) return;
+
+    const show = normalizeCustomerType(typeSelect.value) === 'loyal';
+    group.style.display = show ? 'block' : 'none';
+    input.disabled = !show;
+    if (!show) input.value = '';
+}
+
+function syncDebtPromiseDateVisibility() {
+    const group = document.getElementById('debtPromiseDateGroup');
+    const input = document.getElementById('debtPromiseDate');
+    const customer = currentCustomerIndex === null ? null : customers[currentCustomerIndex];
+    if (!group || !input) return;
+
+    const show = debtAction === 'add' && shouldUsePromiseDate(customer);
+    group.style.display = show ? 'block' : 'none';
+    input.disabled = !show;
+    if (show) {
+        input.value = normalizeCustomerPromiseDate(customer?.promisedPaybackDate);
+    } else {
+        input.value = '';
+    }
+}
+
+function syncCreditPromiseDateVisibility() {
+    const container = document.getElementById('creditPromiseDateContainer');
+    const input = document.getElementById('creditPromiseDate');
+    const customer = selectedCustomerId === null ? null : customers[selectedCustomerId];
+    const show = currentSaleType === 'credit' && shouldUsePromiseDate(customer);
+
+    if (container) {
+        container.style.display = show ? 'block' : 'none';
+    }
+    if (input) {
+        input.disabled = !show;
+        if (show) {
+            input.value = normalizeCustomerPromiseDate(customer?.promisedPaybackDate);
+        } else {
+            input.value = '';
+        }
+    }
 }
 
 // ================= FORM MANAGEMENT FUNCTIONS =================
@@ -7438,6 +9072,7 @@ function openCustomerForm() {
     const typeSelect = document.getElementById('customerType');
     const notesInput = document.getElementById('customerNotes');
     const debtInput = document.getElementById('customerDebt');
+    const paybackDateInput = document.getElementById('customerPaybackDate');
     
     if (nameInput) nameInput.value = '';
     if (phoneInput) phoneInput.value = '';
@@ -7445,6 +9080,8 @@ function openCustomerForm() {
     if (typeSelect) typeSelect.value = 'regular';
     if (notesInput) notesInput.value = '';
     if (debtInput) debtInput.value = '0';
+    if (paybackDateInput) paybackDateInput.value = '';
+    syncCustomerPaybackDateVisibility();
     
     const overlay = document.getElementById('customerFormOverlay');
     if (overlay) overlay.style.display = 'block';
@@ -7486,6 +9123,7 @@ function openAddDebtForm(index) {
         amountInput.value = '';
         amountInput.readOnly = false;
     }
+    syncDebtPromiseDateVisibility();
     
     const overlay = document.getElementById('debtFormOverlay');
     if (overlay) overlay.style.display = 'block';
@@ -7504,6 +9142,7 @@ function openReduceDebtForm(index) {
         amountInput.value = '';
         amountInput.readOnly = false;
     }
+    syncDebtPromiseDateVisibility();
     
     const overlay = document.getElementById('debtFormOverlay');
     if (overlay) overlay.style.display = 'block';
@@ -7522,6 +9161,7 @@ function openClearDebtForm(index) {
         amountInput.value = customers[index].owing;
         amountInput.readOnly = true;
     }
+    syncDebtPromiseDateVisibility();
     
     const overlay = document.getElementById('debtFormOverlay');
     if (overlay) overlay.style.display = 'block';
@@ -7532,6 +9172,13 @@ function closeDebtForm() {
     if (overlay) overlay.style.display = 'none';
     const amountInput = document.getElementById('debtAmount');
     if (amountInput) amountInput.readOnly = false;
+    const promiseInput = document.getElementById('debtPromiseDate');
+    if (promiseInput) {
+        promiseInput.value = '';
+        promiseInput.disabled = true;
+    }
+    const promiseGroup = document.getElementById('debtPromiseDateGroup');
+    if (promiseGroup) promiseGroup.style.display = 'none';
 }
 
 function appendDebtHistory(customer, type, amount, note = '') {
@@ -7550,12 +9197,29 @@ async function saveCustomer() {
     const name = document.getElementById('customerName').value.trim();
     const phone = document.getElementById('customerPhone').value.trim();
     const location = document.getElementById('customerLocation').value.trim();
-    const type = document.getElementById('customerType').value;
+    const type = normalizeCustomerType(document.getElementById('customerType').value);
     const notes = document.getElementById('customerNotes').value.trim();
     const debt = parseFloat(document.getElementById('customerDebt').value) || 0;
+    const promisedPaybackDate = normalizeCustomerPromiseDate(document.getElementById('customerPaybackDate')?.value);
     
     if (!name) {
         alert('Please enter customer name');
+        return;
+    }
+
+    if (debt < 0) {
+        alert('Initial debt cannot be negative.');
+        return;
+    }
+
+    const debtLimit = getCustomerDebtLimit();
+    if (debtLimit > 0 && debt > debtLimit) {
+        alert(getDebtLimitExceededMessage(name, debt, debtLimit));
+        return;
+    }
+
+    if (type === 'loyal' && debt > 0 && !promisedPaybackDate) {
+        alert(`Select the payback date ${name} promised to pay.`);
         return;
     }
     
@@ -7567,6 +9231,7 @@ async function saveCustomer() {
         type,
         notes,
         owing: debt,
+        promisedPaybackDate: debt > 0 ? promisedPaybackDate : '',
         debtHistory: debt > 0 ? [{
             id: `${Date.now()}-initial`,
             type: 'initial',
@@ -7621,6 +9286,7 @@ async function saveDeposit() {
 
 async function confirmDebt() {
     const amount = parseFloat(document.getElementById('debtAmount').value);
+    const promisedPaybackDate = normalizeCustomerPromiseDate(document.getElementById('debtPromiseDate')?.value);
     
     if (isNaN(amount) || amount <= 0) {
         alert('Please enter a valid amount');
@@ -7637,7 +9303,21 @@ async function confirmDebt() {
 
     switch(debtAction) {
         case 'add':
+            {
+                const errorMessage = getCustomerDebtRaiseError(customer, amount);
+                if (errorMessage) {
+                    alert(errorMessage);
+                    return;
+                }
+                if (shouldUsePromiseDate(customer) && !promisedPaybackDate && !getCustomerPromiseDate(customer)) {
+                    alert(`Select the payback date ${customer.name} promised to pay.`);
+                    return;
+                }
+            }
             customer.owing = currentOwing + amount;
+            if (promisedPaybackDate) {
+                customer.promisedPaybackDate = promisedPaybackDate;
+            }
             appendDebtHistory(customer, 'add', amount, 'Debt added manually');
             showSuccessToast(`Debt added for ${customer.name}: RWF ${amount.toLocaleString()}`);
             break;
@@ -7646,12 +9326,14 @@ async function confirmDebt() {
                 const reducedBy = Math.min(amount, currentOwing);
                 customer.owing = Math.max(0, currentOwing - amount);
                 appendDebtHistory(customer, 'reduce', -reducedBy, 'Debt reduced');
+                clearCustomerPromiseDateIfSettled(customer);
                 showSuccessToast(`Debt reduced for ${customer.name}: RWF ${reducedBy.toLocaleString()}`);
             }
             break;
         case 'clear':
             appendDebtHistory(customer, 'clear', -currentOwing, 'Debt cleared');
             customer.owing = 0;
+            clearCustomerPromiseDateIfSettled(customer);
             showSuccessToast(`Debt cleared for ${customer.name}`);
             break;
     }
@@ -7676,28 +9358,8 @@ function displayCustomers() {
     
     customers.forEach((customer, index) => {
         const item = document.createElement('div');
-        item.className = 'customer-item';
-        item.innerHTML = `
-            <div class="customer-info">
-                <strong>${escapeHtml(customer.name)}</strong>
-                <div class="customer-details">
-                    ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
-                    ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
-                    ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(customer.type)}</div>` : ''}
-                    ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
-                </div>
-                <div style="color: ${customer.owing > 0 ? '#ff4757' : '#2ed573'}; font-weight: bold; margin-top: 10px;">
-                    ${customer.owing > 0 ? `&#128179; Owes: RWF ${customer.owing.toLocaleString()}` : '&#9989; No debt'}
-                </div>
-            </div>
-            <div class="customer-actions">
-                <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
-                <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
-                <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
-                <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
-                <button onclick="deleteCustomer(${index})" style="background: #ff4757;">Delete</button>
-            </div>
-        `;
+        item.className = `customer-item${isCustomerDebtOverdue(customer) && isLoyalCustomer(customer) ? ' customer-item-overdue' : ''}`;
+        item.innerHTML = buildCustomerItemMarkup(customer, index, { includeDelete: true });
         list.appendChild(item);
     });
 }
@@ -7744,27 +9406,8 @@ function filterCustomers(type) {
         if (index === -1) return;
         
         const item = document.createElement('div');
-        item.className = 'customer-item';
-        item.innerHTML = `
-            <div class="customer-info">
-                <strong>${escapeHtml(customer.name)}</strong>
-                <div class="customer-details">
-                    ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
-                    ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
-                    ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(customer.type)}</div>` : ''}
-                    ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
-                </div>
-                <div style="color: ${customer.owing > 0 ? '#ff4757' : '#2ed573'}; font-weight: bold; margin-top: 10px;">
-                    ${customer.owing > 0 ? `&#128179; Owes: RWF ${customer.owing.toLocaleString()}` : '&#9989; No debt'}
-                </div>
-            </div>
-            <div class="customer-actions">
-                <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
-                <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
-                <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
-                <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
-            </div>
-        `;
+        item.className = `customer-item${isCustomerDebtOverdue(customer) && isLoyalCustomer(customer) ? ' customer-item-overdue' : ''}`;
+        item.innerHTML = buildCustomerItemMarkup(customer, index, { includeDelete: false });
         list.appendChild(item);
     });
 }
@@ -7795,27 +9438,8 @@ const debouncedFilterCustomers = debounce(function(value) {
         if (index === -1) return;
         
         const item = document.createElement('div');
-        item.className = 'customer-item';
-        item.innerHTML = `
-            <div class="customer-info">
-                <strong>${escapeHtml(customer.name)}</strong>
-                <div class="customer-details">
-                    ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
-                    ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
-                    ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(customer.type)}</div>` : ''}
-                    ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
-                </div>
-                <div style="color: ${customer.owing > 0 ? '#ff4757' : '#2ed573'}; font-weight: bold; margin-top: 10px;">
-                    ${customer.owing > 0 ? `&#128179; Owes: RWF ${customer.owing.toLocaleString()}` : '&#9989; No debt'}
-                </div>
-            </div>
-            <div class="customer-actions">
-                <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
-                <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
-                <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
-                <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
-            </div>
-        `;
+        item.className = `customer-item${isCustomerDebtOverdue(customer) && isLoyalCustomer(customer) ? ' customer-item-overdue' : ''}`;
+        item.innerHTML = buildCustomerItemMarkup(customer, index, { includeDelete: false });
         list.appendChild(item);
     });
 }, 300);
@@ -8029,51 +9653,309 @@ function filterDeposits(type, event) {
 }
 
 // ================= DASHBOARD FUNCTIONS =================
+let dashboardChartResizeTimer = null;
+let dashboardChartResizeBound = false;
+
+function getDashboardGreeting(date = new Date()) {
+    const hour = date.getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+}
+
+function getDashboardDateLabel(date = new Date()) {
+    return new Intl.DateTimeFormat(getClockLocale(), {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    }).format(date);
+}
+
+function formatDashboardCompactValue(value) {
+    const amount = Math.max(0, Number(value) || 0);
+    if (amount >= 1000000) return `${(amount / 1000000).toFixed(1)}M`;
+    if (amount >= 1000) return `${Math.round(amount / 1000)}k`;
+    return String(Math.round(amount));
+}
+
+function bindDashboardChartResize() {
+    if (dashboardChartResizeBound) return;
+    window.addEventListener('resize', () => {
+        clearTimeout(dashboardChartResizeTimer);
+        dashboardChartResizeTimer = setTimeout(() => {
+            renderHomeSalesChart();
+        }, 120);
+    });
+    dashboardChartResizeBound = true;
+}
+
+function getCurrentMonthChartSeries() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const revenue = Array(daysInMonth).fill(0);
+    const profit = Array(daysInMonth).fill(0);
+    const allowProfit = canViewProfitData();
+
+    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+        const dt = getSaleDateTimeOrNull(sale);
+        if (!dt || dt.getFullYear() !== year || dt.getMonth() !== month) return;
+        const index = dt.getDate() - 1;
+        revenue[index] += Number(sale.total) || 0;
+        if (allowProfit) {
+            profit[index] += calculateProfitFromSales([sale]);
+        }
+    });
+
+    const combinedValues = allowProfit ? revenue.concat(profit) : revenue.slice();
+    const maxValue = Math.max(1, ...combinedValues);
+    return { year, month, daysInMonth, revenue, profit, maxValue, allowProfit };
+}
+
+function drawDashboardBars(ctx, x, y, width, height, color) {
+    if (height <= 0 || width <= 0) return;
+    const radius = Math.min(8, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x, y + height);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+
+function renderHomeSalesChart() {
+    const canvas = document.getElementById('homeSalesChart');
+    if (!canvas) return;
+    const wrap = canvas.parentElement;
+    if (!wrap) return;
+    const width = Math.round(wrap.clientWidth || canvas.clientWidth || 0);
+    if (!width) return;
+
+    const height = 320;
+    const ratio = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const chart = getCurrentMonthChartSeries();
+    const { revenue, profit, daysInMonth, maxValue, allowProfit } = chart;
+    const top = 24;
+    const right = 16;
+    const bottom = 40;
+    const left = 58;
+    const plotWidth = Math.max(10, width - left - right);
+    const plotHeight = Math.max(10, height - top - bottom);
+    const maxTicks = 4;
+    const hasActivity = revenue.some((value) => value > 0) || (allowProfit && profit.some((value) => value > 0));
+
+    ctx.strokeStyle = '#e5ebf4';
+    ctx.fillStyle = '#7287a1';
+    ctx.font = '12px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    for (let tick = 0; tick <= maxTicks; tick += 1) {
+        const value = (maxValue / maxTicks) * (maxTicks - tick);
+        const y = top + (plotHeight / maxTicks) * tick;
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(width - right, y);
+        ctx.stroke();
+        ctx.fillText(formatDashboardCompactValue(value), left - 10, y);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const step = daysInMonth > 10 ? Math.ceil(daysInMonth / 8) : 1;
+    for (let day = 1; day <= daysInMonth; day += 1) {
+        if (day !== 1 && day !== daysInMonth && (day - 1) % step !== 0) continue;
+        const x = left + ((day - 0.5) / daysInMonth) * plotWidth;
+        ctx.fillText(String(day), x, height - bottom + 14);
+    }
+
+    if (!hasActivity) {
+        ctx.fillStyle = '#8aa0ba';
+        ctx.font = '600 15px "Space Grotesk", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('No sales recorded this month yet.', left + (plotWidth / 2), top + (plotHeight / 2));
+        return;
+    }
+
+    const barGroupWidth = plotWidth / daysInMonth;
+    const singleBarWidth = allowProfit
+        ? Math.max(4, Math.min(10, barGroupWidth * 0.34))
+        : Math.max(5, Math.min(14, barGroupWidth * 0.52));
+    const revenueColor = '#132b4d';
+    const profitColor = '#ff9f1a';
+
+    for (let index = 0; index < daysInMonth; index += 1) {
+        const groupX = left + index * barGroupWidth;
+        const revenueHeight = (revenue[index] / maxValue) * plotHeight;
+        if (allowProfit) {
+            const revenueX = groupX + (barGroupWidth * 0.5) - singleBarWidth - 1;
+            const profitX = groupX + (barGroupWidth * 0.5) + 1;
+            drawDashboardBars(ctx, revenueX, top + plotHeight - revenueHeight, singleBarWidth, revenueHeight, revenueColor);
+            const profitHeight = (profit[index] / maxValue) * plotHeight;
+            drawDashboardBars(ctx, profitX, top + plotHeight - profitHeight, singleBarWidth, profitHeight, profitColor);
+        } else {
+            const revenueX = groupX + (barGroupWidth * 0.5) - (singleBarWidth / 2);
+            drawDashboardBars(ctx, revenueX, top + plotHeight - revenueHeight, singleBarWidth, revenueHeight, revenueColor);
+        }
+    }
+}
+
+function renderDashboardLowStockList(lowStockItems = []) {
+    const list = document.getElementById('dashboardLowStockList');
+    if (!list) return;
+
+    const alerts = Array.isArray(lowStockItems)
+        ? lowStockItems.slice().sort((a, b) => getDrinkStockQty(a) - getDrinkStockQty(b)).slice(0, 4)
+        : [];
+
+    if (!alerts.length) {
+        list.innerHTML = '<div class="dashboard-alert-empty">All stock levels look healthy right now.</div>';
+        return;
+    }
+
+    list.innerHTML = alerts.map((drink) => {
+        const status = getDrinkStockStatus(drink);
+        const qty = getDrinkStockQty(drink);
+        const threshold = getDrinkLowStockThreshold(drink);
+        return `
+            <div class="dashboard-alert-item">
+                <div class="dashboard-alert-copy">
+                    <strong>${escapeHtml(drink.name || 'Unnamed Drink')}</strong>
+                    <span>${status === 'out' ? 'Out of stock' : 'Low stock alert'}</span>
+                </div>
+                <div class="dashboard-alert-meta">
+                    <strong>${qty} case(s)</strong>
+                    <span>min: ${threshold}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateHomeDashboardChrome(todaySalesList = [], lowStockItems = [], customerDebtCount = 0) {
+    const adminSession = isAdminSessionActive();
+    const showProfit = adminSession && canViewProfitData();
+    const greetingEl = document.getElementById('dashboardGreeting');
+    const dateEl = document.getElementById('dashboardDate');
+    const eyebrowEl = document.getElementById('homeDashboardEyebrow');
+    const secondaryLabelEl = document.getElementById('homeSecondaryMetricLabel');
+    const secondaryValueEl = document.getElementById('homeSecondaryMetricValue');
+    const secondaryMetaEl = document.getElementById('homeSecondaryMetricMeta');
+    const profitValueEl = document.getElementById('todayProfit');
+    const profitLegendEl = document.getElementById('dashboardProfitLegend');
+    const salesIcon = document.querySelector('.metric-icon-sales');
+    const profitIcon = document.querySelector('.metric-icon-profit');
+    const revenueMetaEl = document.getElementById('homeRevenueMeta');
+    const lowStockMetaEl = document.getElementById('homeLowStockMeta');
+    const creditMetaEl = document.getElementById('homeCreditMetricMeta');
+    const lowStockCountEl = document.getElementById('homeLowStockCount');
+
+    if (greetingEl) greetingEl.textContent = getDashboardGreeting();
+    if (dateEl) dateEl.textContent = getDashboardDateLabel();
+    if (eyebrowEl) eyebrowEl.textContent = adminSession ? 'Admin Dashboard' : 'Dashboard';
+    if (revenueMetaEl) {
+        const label = todaySalesList.length === 1 ? 'sale' : 'sales';
+        revenueMetaEl.textContent = `${todaySalesList.length} ${label}`;
+    }
+    if (lowStockCountEl) lowStockCountEl.textContent = String(lowStockItems.length);
+    if (lowStockMetaEl) {
+        const outCount = lowStockItems.filter((drink) => getDrinkStockStatus(drink) === 'out').length;
+        lowStockMetaEl.textContent = outCount > 0 ? `${outCount} out of stock` : 'Need restocking';
+    }
+    if (creditMetaEl) {
+        creditMetaEl.textContent = `${customerDebtCount} customer${customerDebtCount === 1 ? '' : 's'}`;
+    }
+
+    if (secondaryLabelEl) {
+        secondaryLabelEl.textContent = showProfit ? "Today's Profit" : "Today's Sales";
+    }
+    if (secondaryMetaEl) {
+        secondaryMetaEl.textContent = showProfit ? 'Net earnings' : 'Transactions';
+    }
+    if (secondaryValueEl) {
+        secondaryValueEl.textContent = String(todaySalesList.length);
+        secondaryValueEl.style.display = showProfit ? 'none' : 'block';
+    }
+    if (profitValueEl) {
+        profitValueEl.style.display = showProfit ? 'block' : 'none';
+    }
+    if (profitLegendEl) {
+        profitLegendEl.style.display = showProfit ? 'inline-flex' : 'none';
+    }
+    if (salesIcon) {
+        salesIcon.style.display = showProfit ? 'none' : 'block';
+    }
+    if (profitIcon) {
+        profitIcon.style.display = showProfit ? 'block' : 'none';
+    }
+}
+
+function openDashboardInventory() {
+    showPage('stockManagement');
+}
+
 function updateHome() {
     const allowProfit = canViewProfitData();
-    // Today's sales
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const todaySales = sales.filter(sale => {
+
+    const todaySales = sales.filter((sale) => {
         const saleDate = new Date(sale.date);
         return saleDate >= today;
     });
-    
+
     const todayTotal = todaySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
     const todaySalesElement = document.getElementById('todaySales');
     if (todaySalesElement) {
         todaySalesElement.textContent = `RWF ${todayTotal.toLocaleString()}`;
     }
-    
+
     const todayProfitElement = document.getElementById('todayProfit');
-    const todayProfitCard = todayProfitElement ? todayProfitElement.closest('.stat-card') : null;
-    if (todayProfitCard) {
-        todayProfitCard.style.display = allowProfit ? '' : 'none';
-    }
-    if (allowProfit && todayProfitElement) {
-        const todayProfit = calculateProfitFromSales(todaySales);
+    if (todayProfitElement) {
+        const todayProfit = allowProfit ? calculateProfitFromSales(todaySales) : 0;
         todayProfitElement.textContent = `RWF ${todayProfit.toLocaleString()}`;
     }
-    
-    // Total customer debt
-    const totalDebt = customers.reduce((sum, customer) => sum + (customer.owing || 0), 0);
+
+    const customersInDebt = customers.filter((customer) => Number(customer.owing) > 0);
+    const totalDebt = customersInDebt.reduce((sum, customer) => sum + (customer.owing || 0), 0);
     const customersOwingElement = document.getElementById('customersOwing');
     if (customersOwingElement) {
         customersOwingElement.textContent = `RWF ${totalDebt.toLocaleString()}`;
     }
-    
-    // Pending deposits
+
     const pendingDeposits = clates
-        .filter(clate => !clate.returned)
+        .filter((clate) => !clate.returned)
         .reduce((sum, clate) => sum + (clate.amount || 0), 0);
-    
+
     const clatesPendingElement = document.getElementById('clatesPending');
     if (clatesPendingElement) {
         clatesPendingElement.textContent = `RWF ${pendingDeposits.toLocaleString()}`;
     }
 
+    const lowStockItems = getLowStockDrinks();
+    updateHomeDashboardChrome(todaySales, lowStockItems, customersInDebt.length);
+    renderDashboardLowStockList(lowStockItems);
+    bindDashboardChartResize();
+    renderHomeSalesChart();
     renderHomeStockWarning();
+    void renderHomeDebtNotifications();
     refreshAiAssistantInsights();
 }
 
@@ -8422,7 +10304,7 @@ function showCustomRangeReport() {
     `;
 }
 
-function exportCustomRangePDF() {
+async function exportCustomRangePDF() {
     const allowProfit = canViewProfitData();
     const selection = getValidatedRangeSelection(true);
     if (!selection) return;
@@ -8434,6 +10316,7 @@ function exportCustomRangePDF() {
     }
 
     try {
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument();
         const reportTitle = 'Date Range Report';
         const margin = 15;
@@ -8928,8 +10811,9 @@ function showFullReport() {
 }
 
 // ================= PDF EXPORT FUNCTIONS =================
-function exportReportToPDF(reportType = 'full') {
+async function exportReportToPDF(reportType = 'full') {
     try {
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument();
         const reportTitleMap = {
             daily: 'Daily Report',
@@ -8965,7 +10849,7 @@ function exportReportToPDF(reportType = 'full') {
 }
 
 // ================= DEBT SUMMARY PDF EXPORT =================
-function exportDebtSummaryPDF() {
+async function exportDebtSummaryPDF() {
     try {
         // Filter customers with debt
         const customersWithDebt = customers.filter(c => c.owing > 0);
@@ -8975,6 +10859,7 @@ function exportDebtSummaryPDF() {
             return;
         }
         
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument();
         const reportTitle = 'Debt Summary Report';
         const margin = 15;
@@ -9057,7 +10942,7 @@ function exportDebtSummaryPDF() {
 }
 
 // Export detailed debt history for a single customer
-function exportCustomerDebtPDF(index) {
+async function exportCustomerDebtPDF(index) {
     try {
         if (!customers[index]) {
             alert('Customer not found');
@@ -9067,7 +10952,7 @@ function exportCustomerDebtPDF(index) {
         const customer = customers[index];
 
         // Gather credit sales tied to this customer
-        const salesRecords = sales.filter(s => s.type === 'credit' && (s.customerId === index || s.customerId === customer.id));
+        const salesRecords = sales.filter((sale) => sale.type === 'credit' && isSaleLinkedToCustomer(sale, customer, index));
 
         // Also include legacy "debts" entries
         const manualDebtEntries = (typeof debts !== 'undefined' ? debts.filter(d => d.customer && d.customer.toLowerCase() === customer.name.toLowerCase()) : []);
@@ -9124,6 +11009,7 @@ function exportCustomerDebtPDF(index) {
             return new Date(a.date) - new Date(b.date);
         });
 
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument({ orientation: "portrait", unit: "mm", format: "a4" });
         const reportTitle = 'Customer Debt Report';
         
@@ -9135,7 +11021,10 @@ function exportCustomerDebtPDF(index) {
 
         y = drawPdfTitleBlock(doc, y, margin, 'Customer Debt Report', [
             `Customer: ${customer.name || 'N/A'}`,
-            `Generated: ${new Date().toLocaleString()}`
+            `Generated: ${new Date().toLocaleString()}`,
+            getCustomerPromiseDate(customer)
+                ? `Promised payback: ${formatCustomerPromiseDate(getCustomerPromiseDate(customer))}${isCustomerDebtOverdue(customer) ? ' (OVERDUE)' : ''}`
+                : 'Promised payback: Not set'
         ]);
 
         function safe(value, max = 30) {
@@ -9163,7 +11052,16 @@ function exportCustomerDebtPDF(index) {
         doc.setTextColor(37, 117, 252);
         doc.text(formatPdfCurrency(customer.owing), margin + contentWidth - 10, y + 20, { align: "right" });
 
-        y += 35;
+        const promiseDate = getCustomerPromiseDate(customer);
+        const promiseStatus = promiseDate
+            ? `${formatCustomerPromiseDate(promiseDate)}${isCustomerDebtOverdue(customer) ? ' | OVERDUE' : ''}`
+            : 'Not set';
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(90, 90, 90);
+        doc.text(`Promised payback: ${promiseStatus}`, margin + 10, y + 28);
+
+        y += 40;
 
         // ================= TABLE HEADER =================
         function drawTableHeader() {
@@ -10212,7 +12110,7 @@ function getSalesHistoryFilteredSales() {
         }
 
         if (!searchTerm) return true;
-        const customerName = sale.customerId !== null && customers[sale.customerId] ? customers[sale.customerId].name : 'Guest';
+        const customerName = getCustomerNameByReference(sale.customerId, 'Guest');
         return (
             (sale.drinkName && sale.drinkName.toLowerCase().includes(searchTerm)) ||
             (customerName && customerName.toLowerCase().includes(searchTerm)) ||
@@ -10253,7 +12151,7 @@ function renderSalesHistoryRows(filteredSales) {
     Object.values(transactions).forEach((transaction) => {
         const saleDate = new Date(transaction.date);
         const dateStr = saleDate.toLocaleDateString() + ' ' + saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const customerName = transaction.customerId !== null && customers[transaction.customerId] ? customers[transaction.customerId].name : 'Guest';
+        const customerName = getCustomerNameByReference(transaction.customerId, 'Guest');
         const saleTypeDisplay = transaction.type === 'credit'
             ? '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>'
             : '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>';
@@ -10410,8 +12308,8 @@ async function deleteTransaction(ids) {
         const idx = sales.findIndex(s => s.id === id);
         if (idx !== -1) {
             const deletedSale = sales[idx];
-            if (deletedSale.type === 'credit' && deletedSale.customerId !== null && customers[deletedSale.customerId]) {
-                customers[deletedSale.customerId].owing = Math.max(0, (customers[deletedSale.customerId].owing || 0) - (deletedSale.total || 0));
+            if (deletedSale.type === 'credit' && deletedSale.customerId !== null) {
+                adjustCustomerDebtByReference(deletedSale.customerId, -(Number(deletedSale.total) || 0));
             }
             sales.splice(idx, 1);
         }
@@ -10687,8 +12585,8 @@ async function deleteSale(index) {
         const deletedSale = sales[index];
         
         // If it was a credit sale, reduce customer's debt
-        if (deletedSale.type === 'credit' && deletedSale.customerId !== null && customers[deletedSale.customerId]) {
-            customers[deletedSale.customerId].owing = Math.max(0, (customers[deletedSale.customerId].owing || 0) - (deletedSale.total || 0));
+        if (deletedSale.type === 'credit' && deletedSale.customerId !== null) {
+            adjustCustomerDebtByReference(deletedSale.customerId, -(Number(deletedSale.total) || 0));
         }
         
         sales.splice(index, 1);
@@ -10702,7 +12600,7 @@ async function deleteSale(index) {
 }
 
 // ================= SALES HISTORY PDF EXPORT - WITH SPECIAL CHARACTER FIX =================
-function exportSalesHistoryPDF() {
+async function exportSalesHistoryPDF() {
     try {
         const filteredSales = getSalesHistoryFilteredSales();
         if (!filteredSales || filteredSales.length === 0) {
@@ -10710,6 +12608,7 @@ function exportSalesHistoryPDF() {
             return;
         }
 
+        await ensurePDFLibrariesReady();
         const doc = createPDFDocument({ orientation: "portrait", unit: "mm", format: "a4" });
         const reportTitle = 'Sales History Report';
 
@@ -10820,7 +12719,7 @@ function exportSalesHistoryPDF() {
             
             // Get customer name safely
             let customerName = "Guest";
-            if (transaction.customerId && typeof getSafeCustomerName === "function") {
+            if (transaction.customerId !== null && transaction.customerId !== undefined && typeof getSafeCustomerName === "function") {
                 customerName = getSafeCustomerName(transaction.customerId) || "Guest";
             }
             customerName = safe(customerName, 20);
@@ -10916,9 +12815,7 @@ function safeText(text, maxLength = 30) {
  */
 function getSafeCustomerName(customerId) {
     if (customerId === null || customerId === undefined) return 'Guest';
-    if (!customers[customerId]) return 'Unknown';
-    
-    const name = customers[customerId].name;
+    const name = getCustomerNameByReference(customerId, 'Unknown');
     return safeText(name, 15);
 }
 
@@ -11208,7 +13105,7 @@ function renderDrinkProfitEditor() {
     const container = document.getElementById('drinkProfitList');
     if (!container) return;
     if (!canViewProfitData()) {
-        clearElement(container);
+        container.innerHTML = `<div class="drink-profit-empty">Admin session required to view and edit drink profit values.</div>`;
         return;
     }
 
@@ -11289,6 +13186,7 @@ function loadSettings() {
     
     // Load theme and language
     const currentTheme = settings.theme || 'light';
+    const themeInput = document.getElementById('themeMode');
     const language = settings.language || 'en';
     const langSelect = document.getElementById('language');
     if (langSelect) {
@@ -11301,6 +13199,12 @@ function loadSettings() {
     
     const currencySelect = document.getElementById('currency');
     if (currencySelect) currencySelect.value = settings.currency || 'RWF';
+    const maxDebtInput = document.getElementById('maxCustomerDebt');
+    if (maxDebtInput) {
+        const maxDebt = getCustomerDebtLimit();
+        maxDebtInput.value = maxDebt > 0 ? String(maxDebt) : '';
+    }
+    if (themeInput) themeInput.value = currentTheme;
     
     setAppLanguage(language);
     applyTheme(currentTheme);
@@ -11314,6 +13218,8 @@ function loadSettings() {
     initializeAdminAutoDailySalesPdfUi();
     refreshAutoDailySalesPdfControls();
     updateConnectivityUI();
+    refreshSettingsAccountSecurityUI();
+    renderSettingsAiAssistantSection();
 }
 
 function saveProfitPercentage() {
@@ -11342,10 +13248,39 @@ function saveProfitPercentage() {
     showSuccessToast(`${t('profitSaved')}: ${modeSummary}`);
 }
 
+async function saveCustomerDebtSettings() {
+    const input = document.getElementById('maxCustomerDebt');
+    const raw = String(input?.value || '').trim();
+    if (raw !== '' && (!Number.isFinite(Number(raw)) || Number(raw) < 0)) {
+        alert('Enter a valid debt limit. Use 0 or leave it empty for no limit.');
+        return;
+    }
+
+    const limit = raw === '' ? 0 : Number(raw);
+    settings.maxCustomerDebt = limit > 0 ? limit : 0;
+    await optimizedSaveData();
+
+    if (input) {
+        input.value = settings.maxCustomerDebt > 0 ? String(settings.maxCustomerDebt) : '';
+    }
+
+    const overLimitCount = settings.maxCustomerDebt > 0
+        ? customers.filter((customer) => Number(customer.owing || 0) > settings.maxCustomerDebt).length
+        : 0;
+    const summary = settings.maxCustomerDebt > 0
+        ? `Customer debt limit saved: RWF ${settings.maxCustomerDebt.toLocaleString()}`
+        : 'Customer debt limit cleared.';
+    const suffix = overLimitCount > 0
+        ? ` ${overLimitCount} customer(s) are already above the new limit.`
+        : '';
+    showSuccessToast(`${summary}${suffix}`);
+}
+
 function setTheme(theme) {
-    settings.theme = theme;
-    optimizedSaveData();
-    applyTheme(theme);
+    const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+    const themeInput = document.getElementById('themeMode');
+    if (themeInput) themeInput.value = normalizedTheme;
+    applyTheme(normalizedTheme);
 }
 
 function applyTheme(theme) {
@@ -11354,12 +13289,20 @@ function applyTheme(theme) {
     
     if (theme === 'dark') {
         document.body.classList.add('dark-mode');
-        if (darkBtn) darkBtn.style.borderColor = '#2575fc';
-        if (lightBtn) lightBtn.style.borderColor = '#333';
     } else {
         document.body.classList.remove('dark-mode');
-        if (lightBtn) lightBtn.style.borderColor = '#2575fc';
-        if (darkBtn) darkBtn.style.borderColor = '#333';
+    }
+
+    if (lightBtn) {
+        const isActive = theme !== 'dark';
+        lightBtn.classList.toggle('is-active', isActive);
+        lightBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+
+    if (darkBtn) {
+        const isActive = theme === 'dark';
+        darkBtn.classList.toggle('is-active', isActive);
+        darkBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     }
 }
 
@@ -11380,18 +13323,26 @@ function onLanguageChange(event) {
     optimizedSaveData();
 }
 
-function saveCurrencyAndLanguage() {
+function savePreferences() {
     const languageSelect = document.getElementById('language');
     const currencySelect = document.getElementById('currency');
+    const themeInput = document.getElementById('themeMode');
     
     const language = languageSelect ? languageSelect.value : 'en';
     const currency = currencySelect ? currencySelect.value : 'RWF';
+    const theme = themeInput ? themeInput.value : (settings.theme || 'light');
     
     settings.currency = currency;
+    settings.theme = theme === 'dark' ? 'dark' : 'light';
     setAppLanguage(language);
+    applyTheme(settings.theme);
     optimizedSaveData();
-    showSuccessToast('Settings saved. Language and currency updated.');
+    showSuccessToast('Preferences saved. Theme, language, and currency updated.');
     refreshAiAssistantInsights();
+}
+
+function saveCurrencyAndLanguage() {
+    return savePreferences();
 }
 
 // Translation helper function
@@ -11472,6 +13423,7 @@ function updateLanguageUI() {
     setText('#forgotPinTitle', t('resetPin'));
     setText('#forgotPinDescription', t('authResetDescription'));
     setText('#loginScreen label[for="resetPhone"]', t('phoneNumber'));
+    setText('#loginScreen label[for="resetVerificationCode"]', t('verificationCode'));
     setText('#loginScreen label[for="resetNewPin"]', t('resetNewPin'));
     setText('#loginScreen label[for="resetConfirmPin"]', t('resetConfirmPin'));
     setText('#resetPinBtn', t('resetPin'));
@@ -11483,6 +13435,7 @@ function updateLanguageUI() {
     setPlaceholder('#signupAdminPin', t('adminPinLabel'));
     setPlaceholder('#signupAdminPinConfirm', t('confirmAdminPin'));
     setPlaceholder('#resetPhone', t('phoneNumber'));
+    setPlaceholder('#resetVerificationCode', t('verificationCode'));
     setPlaceholder('#resetNewPin', t('resetNewPin'));
     setPlaceholder('#resetConfirmPin', t('resetConfirmPin'));
     const signupRoleStaffOption = document.querySelector('#signupRole option[value="staff"]');
@@ -11494,14 +13447,14 @@ function updateLanguageUI() {
     updateResetAccountPreview();
     setAuthHintText();
     updateActiveUserBadge();
+    syncSidebarLabels();
 
     // Home dashboard
-    setText('#home .dashboard-card h3', t('todaySales'));
-    setText('#home .dashboard-card p', t('dailyTotal'));
-    const homeStatLabels = document.querySelectorAll('#home .stat-card h4');
-    if (homeStatLabels[0]) homeStatLabels[0].textContent = t('todayProfit');
-    if (homeStatLabels[1]) homeStatLabels[1].textContent = t('customersOwing');
-    if (homeStatLabels[2]) homeStatLabels[2].textContent = t('pendingDeposits');
+    setText('#homeRevenueLabel', "Today's Revenue");
+    setText('#homeLowStockLabel', 'Low Stock Items');
+    setText('#homeCreditLabel', 'Outstanding Credit');
+    setText('#homeSalesOverviewTitle', 'Monthly Sales Overview');
+    setText('#homeLowStockPanelTitle', 'Low Stock Alert');
 
     // Add Sale page
     const saleLeftTitles = document.querySelectorAll('#addSale .sale-left h3');
@@ -11565,10 +13518,9 @@ function updateLanguageUI() {
     setText('#adminDataProtectionTitle', t('adminDataProtectionTitle'));
     setText('#adminDataProtectionDesc', t('adminDataProtectionDesc'));
     setText('#adminClearDataQuickBtn', t('adminClearCurrentUserData'));
-    setText('#adminAiTitle', t('adminAiTitle'));
-    setText('#adminAiDesc', t('adminAiDesc'));
-    setText('#adminRunAiBtn', t('adminAnalyzeBusiness'));
-    setText('#adminAiPlaceholder', t('adminAiPlaceholder'));
+    setText('#adminAiPanelTitle', t('adminAiTitle'));
+    setText('#adminAiPanelDesc', t('adminAiDesc'));
+    setText('#runBusinessAiAdvisorBtn', t('adminAnalyzeBusiness'));
     setText('#adminSummaryTotalLabel', t('adminSummaryTotalAccounts'));
     setText('#adminSummaryPrivilegedLabel', t('adminSummaryAdminOwner'));
     setText('#adminSummaryStaffLabel', t('adminSummaryStaff'));
@@ -11642,17 +13594,24 @@ function updateLanguageUI() {
     setText('#reports .range-note', t('rangeNote'));
 
     // Settings page
+    setText('#settingsAccountTitle', t('accountSecurity'));
     setText('#settingsBusinessTitle', t('businessSettings'));
-    setText('#settingsInterfaceTitle', t('interfaceSettings'));
+    setText('#settingsInterfaceTitle', t('appearancePreferences'));
     setText('#settingsDataTitle', t('dataManagement'));
-    setText('#settingsSystemTitle', t('appInformation'));
+    setText('#settingsSystemTitle', t('systemStatus'));
+    setText('#settingsAutomationTitle', t('automationsReports'));
+    setText('#settingsAiTitle', t('aiAssistantSettings'));
+    setText('#activeAccountLabel', t('activeAccountLabel'));
+    setText('#changePinBtn', t('changePin'));
+    setText('#generateResetCodeBtn', t('generateResetCode'));
+    setText('#settingsLogoutBtn', t('logoutLabel'));
     setText('#settings label[for="profitPercentage"]', t('profitPercentage'));
     setText('#settings label[for="profitMode"]', t('profitModeLabel'));
     const profitModePercentageOption = document.querySelector('#profitMode option[value="percentage"]');
     const profitModePerCaseOption = document.querySelector('#profitMode option[value="perCase"]');
     if (profitModePercentageOption) profitModePercentageOption.textContent = t('profitModePercentage');
     if (profitModePerCaseOption) profitModePerCaseOption.textContent = t('profitModePerCase');
-    setText('#settings button[onclick="saveProfitPercentage()"]', t('save'));
+    setText('#saveBusinessSettingsBtn', t('saveBusinessSettings'));
     setText('#profitInfoText', t('profitInfo'));
     setText('#drinkProfitManagerTitle', t('drinkProfitManagerTitle'));
     setText('#saveDrinkProfitBtn', t('saveDrinkProfits'));
@@ -11664,9 +13623,17 @@ function updateLanguageUI() {
     setText('#languageInfoText', t('languageInfo'));
     setText('#settings label[for="currency"]', t('currencySymbol'));
     setText('#currencyInfoText', t('currencyInfo'));
-    setText('#saveLanguageCurrencyBtn', t('saveLanguageCurrency'));
+    setText('#saveLanguageCurrencyBtn', t('savePreferences'));
+    setText('#connectionStatusLabel', t('connectionStatusLabel'));
+    setText('#lastSyncLabel', t('lastSyncLabel'));
     setText('#syncNowBtn', t('connectivitySyncNow'));
     setText('#connectivitySyncBtn', t('connectivitySyncNow'));
+    setText('#saveAdminAutoPdfBtn', t('saveAutomationSettings'));
+    setText('#downloadLastAutoPdfBtn', t('downloadLastAutoPdf'));
+    setText('#generateInsightsBtn', t('generateInsights'));
+    setText('#settingsAiAnalyzeBtn', t('quickAnalyze'));
+    setText('#settingsAiRestockBtn', t('quickRestock'));
+    setText('#settingsAiProfitBtn', t('quickProfitInsights'));
     setText('#settings button[onclick="clearAllData()"]', t('clearAllData'));
     setText('#clearUserDataBtn', t('clearAllData'));
     setText('#clearWarningText', t('warningClearData'));
@@ -11678,25 +13645,16 @@ function updateLanguageUI() {
     setPlaceholder('#clearDataConfirmInput', t('clearDataConfirmPlaceholder'));
     setText('#clearDataConfirmError', t('clearDataConfirmMismatch'));
 
-    // App info and footer
-    const appNameRow = document.getElementById('appNameRow');
-    if (appNameRow) appNameRow.innerHTML = `<strong>${t('appName')}</strong> Make A Way`;
-    const versionRow = document.getElementById('versionRow');
-    if (versionRow) versionRow.innerHTML = `<strong>${t('version')}</strong> 2.0`;
-    const purposeRow = document.getElementById('purposeRow');
-    if (purposeRow) purposeRow.innerHTML = `<strong>${t('purpose')}</strong> ${t('appPurposeValue')}`;
-    const storageRow = document.getElementById('storageRow');
-    if (storageRow) storageRow.innerHTML = `<strong>${t('storageLabel')}</strong> <span id="storageStatus">${document.getElementById('storageStatus')?.textContent || 'Checking...'}</span>`;
-    const accountRow = document.getElementById('accountRow');
-    if (accountRow) accountRow.innerHTML = `<strong>${t('activeAccountLabel')}</strong> <span id="activeAccountName">${activeUser ? (activeUser.name || activeUser.phone) : t('notLoggedIn')}</span>`;
     const footerText = document.querySelector('.footer p');
     if (footerText) footerText.textContent = `${t('footerText')} © 2026`;
 
     // Keep dynamic parts in sync
-    refreshStorageStatus();
     updateActiveUserBadge();
     refreshAdminAccessUI();
     refreshDataManagementAccessUI();
+    refreshSettingsAccountSecurityUI();
+    renderSettingsAiAssistantSection();
+    updateConnectivityUI();
     if (onboardingVisible) renderOnboardingStep();
     updateQuickDrinkSelect();
     updateCartDisplay();
@@ -11806,6 +13764,21 @@ async function confirmClearAllData(skipInputValidation = false) {
         return;
     }
 
+    await clearCurrentUserDataNow({ showHome: true });
+    closeClearDataConfirmForm();
+}
+
+function clearAllData() {
+    if (!isAdminSessionActive()) {
+        alert(t('clearDataRequiresAdminLogin'));
+        return;
+    }
+    openClearDataConfirmForm();
+}
+
+async function clearCurrentUserDataNow(options = {}) {
+    const { showHome = false } = options;
+
     sales = [];
     customers = [];
     clates = [];
@@ -11822,17 +13795,33 @@ async function confirmClearAllData(skipInputValidation = false) {
     updateCartDisplay();
     renderStockManagement();
     renderArchiveYearOptions();
-    showPage('home');
-    closeClearDataConfirmForm();
+    refreshAiAssistantInsights(true);
+    renderAdminPanel();
+    if (showHome) {
+        showPage('home');
+    }
     showSuccessToast(t('clearDataConfirmSuccess'));
 }
 
-function clearAllData() {
+async function adminClearCurrentUserData() {
+    if (!activeUser) {
+        alert('Please login first.');
+        return;
+    }
     if (!isAdminSessionActive()) {
         alert(t('clearDataRequiresAdminLogin'));
         return;
     }
-    openClearDataConfirmForm();
+    if (!handleAdminDangerDeleteInput()) {
+        alert('Type DELETE to confirm this action.');
+        return;
+    }
+
+    await clearCurrentUserDataNow({ showHome: false });
+
+    const input = document.getElementById('adminDangerDeleteInput');
+    if (input) input.value = '';
+    handleAdminDangerDeleteInput();
 }
 
 // Make functions available globally
@@ -11891,7 +13880,13 @@ window.loadSettings = loadSettings;
 window.saveProfitPercentage = saveProfitPercentage;
 window.saveDrinkProfitsFromSettings = saveDrinkProfitsFromSettings;
 window.setTheme = setTheme;
+window.savePreferences = savePreferences;
 window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
+window.changePinFromSettings = changePinFromSettings;
+window.generateResetCodeFromSettings = generateResetCodeFromSettings;
+window.logoutFromSettings = logoutFromSettings;
+window.generateSettingsAiInsights = generateSettingsAiInsights;
+window.runSettingsAiQuickAction = runSettingsAiQuickAction;
 window.clearAllData = clearAllData;
 window.clearEmployeeData = clearEmployeeData;
 window.archiveSelectedYear = archiveSelectedYear;
@@ -12380,6 +14375,50 @@ function refreshAiAssistantInsights(force = false) {
     if (aiAssistantState.isOpen) {
         renderAiAssistantDashboard(force);
     }
+    renderSettingsAiAssistantSection(force);
+    renderAdminAiPanel(force);
+}
+
+function renderSettingsAiAssistantSection(force = false) {
+    const card = document.getElementById('settingsAiCard');
+    if (!card) return;
+
+    const dateEl = document.getElementById('settingsAiDate');
+    const totalEl = document.getElementById('settingsAiTotal');
+    const bestEl = document.getElementById('settingsAiBest');
+    const slowEl = document.getElementById('settingsAiSlow');
+    const recommendationEl = document.getElementById('settingsAiRecommendation');
+
+    if (!activeUser) {
+        if (dateEl) dateEl.textContent = 'Today';
+        if (totalEl) totalEl.textContent = '--';
+        if (bestEl) bestEl.textContent = '--';
+        if (slowEl) slowEl.textContent = '--';
+        if (recommendationEl) recommendationEl.textContent = 'Sign in to generate insights for this account.';
+        return;
+    }
+
+    const analysis = getAiAssistantAnalysis(force);
+    if (dateEl) dateEl.textContent = analysis.dailySummary.dateLabel;
+    if (totalEl) totalEl.textContent = formatAiCurrency(analysis.dailySummary.totalSales);
+    if (bestEl) bestEl.textContent = analysis.dailySummary.bestProduct || '--';
+    if (slowEl) slowEl.textContent = analysis.dailySummary.slowProduct || '--';
+    if (recommendationEl) recommendationEl.textContent = analysis.dailySummary.recommendation || 'No recommendation available yet.';
+}
+
+function generateSettingsAiInsights() {
+    if (!activeUser) return;
+    renderSettingsAiAssistantSection(true);
+    if (aiAssistantState.isOpen) {
+        renderAiAssistantDashboard(true);
+    }
+    showSuccessToast('AI insights updated.');
+}
+
+function runSettingsAiQuickAction(prompt) {
+    if (!activeUser) return;
+    openAiAssistantPanel();
+    void handleAiAssistantPrompt(prompt);
 }
 
 function addAiAssistantMessage(role, html, isHtml = true) {
@@ -12949,13 +14988,18 @@ window.createUserFromAdminPanel = createUserFromAdminPanel;
 window.toggleUserRole = toggleUserRole;
 window.toggleUserActiveStatus = toggleUserActiveStatus;
 window.adminResetUserPin = adminResetUserPin;
+window.adminPromptResetUserPassword = adminPromptResetUserPassword;
 window.adminResetUserAdminPin = adminResetUserAdminPin;
+window.handleAdminDangerDeleteInput = handleAdminDangerDeleteInput;
+window.adminClearCurrentUserData = adminClearCurrentUserData;
 window.viewUserDataSnapshot = viewUserDataSnapshot;
 window.exportAdminUsersPDF = exportAdminUsersPDF;
 window.saveAdminStockValues = saveAdminStockValues;
 window.runAdminGrowthAnalysis = runAdminGrowthAnalysis;
 window.runBusinessAiAdvisor = runBusinessAiAdvisor;
+window.runAdminAiQuickCommand = runAdminAiQuickCommand;
 window.renderAdminBusinessAnalysisTab = renderAdminBusinessAnalysisTab;
+window.renderAdminAiPanel = renderAdminAiPanel;
 window.toggleAdminDrinksPieChart = toggleAdminDrinksPieChart;
 window.setAdminGrowthWindow = setAdminGrowthWindow;
 window.selectAdminGrowthPoint = selectAdminGrowthPoint;
