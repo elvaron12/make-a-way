@@ -5083,8 +5083,7 @@ async function generateResetCodeFromSettings() {
 }
 
 function logoutFromSettings() {
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.click();
+    void logoutCurrentUser();
 }
 
 function getAuthProviderLabel(user) {
@@ -13884,6 +13883,7 @@ window.savePreferences = savePreferences;
 window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
 window.changePinFromSettings = changePinFromSettings;
 window.generateResetCodeFromSettings = generateResetCodeFromSettings;
+window.logoutCurrentUser = logoutCurrentUser;
 window.logoutFromSettings = logoutFromSettings;
 window.generateSettingsAiInsights = generateSettingsAiInsights;
 window.runSettingsAiQuickAction = runSettingsAiQuickAction;
