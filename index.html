@@ -27,15 +27,19 @@
             background-color: rgba(0,0,0,0.5);
             backdrop-filter: blur(6px);
             -webkit-backdrop-filter: blur(6px);
+            overflow-y: auto;
+            padding: 12px;
         }
         
         .form-container {
             background-color: white;
-            margin: 10% auto;
+            margin: 24px auto;
             padding: 30px;
-            width: 400px;
+            width: min(420px, calc(100% - 16px));
             border-radius: 15px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
         }
         
         .form-title {
@@ -531,8 +535,10 @@
             }
             
             .form-container {
-                width: 90%;
-                margin: 5% auto;
+                width: min(92vw, 420px);
+                margin: 12px auto;
+                max-height: calc(100vh - 24px);
+                padding: 20px;
             }
         }
         
@@ -3299,7 +3305,7 @@
 
 <!-- Custom Forms (hidden initially) -->
 <div id="customerFormOverlay" class="form-overlay">
-    <div class="form-container" style="max-width: 450px; margin: 5% auto; padding: 25px;">
+    <div class="form-container" style="max-width: 430px; margin: 12px auto; padding: 20px; max-height: calc(100vh - 24px); overflow-y: auto;">
         <h3 class="form-title" style="font-size: 1.4rem; margin-bottom: 15px;">Add New Customer</h3>
         
         <div class="form-group" style="margin-bottom: 15px;">
@@ -3336,13 +3342,16 @@
         
         <div class="form-group" style="margin-bottom: 20px;">
             <label for="customerDebt" style="font-size: 0.9rem; margin-bottom: 5px;">Initial Debt (RWF)</label>
-            <input type="number" id="customerDebt" placeholder="Enter initial debt amount" value="0" style="padding: 10px; font-size: 14px;">
+            <input type="number" id="customerDebt" placeholder="Enter initial debt amount" value="0" style="padding: 10px; font-size: 14px;" oninput="syncCustomerPaybackDateVisibility()">
         </div>
 
         <div class="form-group" id="customerPaybackDateGroup" style="margin-bottom: 20px; display: none;">
-            <label for="customerPaybackDate" style="font-size: 0.9rem; margin-bottom: 5px;">Promised Payback Date</label>
-            <input type="date" id="customerPaybackDate" style="padding: 10px; font-size: 14px;" disabled>
-            <p style="margin-top: 8px; color: #64748b; font-size: 0.85rem;">Use this for loyal customers who promise to pay their debt on a specific date.</p>
+            <label for="customerPaybackDate" style="font-size: 0.9rem; margin-bottom: 5px;">Promised Payback Date & Time</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <input type="date" id="customerPaybackDate" style="padding: 10px; font-size: 14px; flex: 1 1 190px;" disabled>
+                <input type="time" id="customerPaybackTime" step="60" style="padding: 10px; font-size: 14px; flex: 1 1 140px;" disabled>
+            </div>
+            <p style="margin-top: 8px; color: #64748b; font-size: 0.85rem;">Set when a loyal customer promises to pay so overdue reminders can trigger on time.</p>
         </div>
         
         <div class="form-buttons" style="margin-top: 20px; gap: 10px;">
@@ -3382,8 +3391,11 @@
             <input type="number" id="debtAmount" placeholder="Enter amount (RWF)" required>
         </div>
         <div class="form-group" id="debtPromiseDateGroup" style="display: none;">
-            <label for="debtPromiseDate">Promised Payback Date</label>
-            <input type="date" id="debtPromiseDate" disabled>
+            <label for="debtPromiseDate">Promised Payback Date & Time</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <input type="date" id="debtPromiseDate" style="flex: 1 1 190px;" disabled>
+                <input type="time" id="debtPromiseTime" step="60" style="flex: 1 1 140px;" disabled>
+            </div>
         </div>
         <div class="form-buttons">
             <button onclick="closeDebtForm()" class="form-btn form-cancel">Cancel</button>
@@ -3790,8 +3802,11 @@
                     </div>
 
                     <div class="customer-select" id="creditPromiseDateContainer" style="display: none;">
-                        <label for="creditPromiseDate">Promised Payback Date:</label>
-                        <input type="date" id="creditPromiseDate" disabled>
+                        <label for="creditPromiseDate">Promised Payback Date & Time:</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <input type="date" id="creditPromiseDate" style="flex: 1 1 190px;" disabled>
+                            <input type="time" id="creditPromiseTime" step="60" style="flex: 1 1 140px;" disabled>
+                        </div>
                     </div>
                     
                     <div class="total-display" style="background: linear-gradient(135deg, #e7f6ff 0%, #d6f0ff 58%, #d7f6ef 100%); color: #124d74; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #b8dff1;">
@@ -3977,15 +3992,7 @@
                         <h3 id="adminAccountsExportTitle" class="settings-card-title" style="margin-bottom: 8px;">Account Exports</h3>
                         <p id="adminAccountsExportDesc" class="settings-help-text" style="margin-bottom: 12px;">Download employer/account data in PDF.</p>
                         <div class="settings-inline-row" style="flex-wrap: wrap;">
-                            <button id="adminExportUsersPdfBtn" onclick="exportAdminUsersPDF()" class="add-btn" style="background: #20a37c;">Export Accounts PDF</button>
-                        </div>
-                    </div>
-
-                    <div class="settings-card admin-tool-card">
-                        <h3 id="adminDataProtectionTitle" class="settings-card-title" style="margin-bottom: 8px;">Data Protection</h3>
-                        <p id="adminDataProtectionDesc" class="settings-help-text" style="margin-bottom: 12px;">Only admin login can clear current user data.</p>
-                        <div class="settings-inline-row" style="flex-wrap: wrap;">
-                            <button id="adminClearDataQuickBtn" onclick="clearAllData()" class="add-btn" style="background: #d93f3f;">Clear Current User Data</button>
+                            <button id="adminExportUsersPdfBtn" onclick="exportAdminUsersPDF()" class="add-btn" style="background: #20a37c; padding: 9px 13px; font-size: 0.84rem;">Export Accounts PDF</button>
                         </div>
                     </div>
 
@@ -4350,11 +4357,6 @@
                         </select>
                         <p id="languageInfoText" class="settings-help-text">Language preference for the app interface.</p>
                     </div>
-                    <div class="settings-group">
-                        <label for="currency">Currency</label>
-                        <input type="text" id="currency" placeholder="RWF" value="RWF" maxlength="5">
-                        <p id="currencyInfoText" class="settings-help-text">Default currency symbol (for example RWF, $, or EUR).</p>
-                    </div>
                     <button id="saveLanguageCurrencyBtn" onclick="savePreferences()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Save Preferences</button>
                 </div>
 
@@ -4399,42 +4401,6 @@
                         <button id="saveAdminAutoPdfBtn" onclick="saveAutoDailySalesPdfSettings()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Save Automation Settings</button>
                         <button id="downloadLastAutoPdfBtn" onclick="downloadLastAutoDailySalesPdf()" class="settings-btn settings-btn-secondary settings-full-btn" type="button">Download Last Auto PDF</button>
                         <p id="adminAutoPdfStatus" class="settings-help-text">Choose a close-of-business time, keep the app open, and allow automatic downloads in your browser.</p>
-                    </div>
-                </div>
-
-                <div class="settings-card settings-card-secondary" id="settingsAiCard">
-                    <div class="settings-card-head settings-card-head-action">
-                        <div>
-                            <h3 id="settingsAiTitle" class="settings-card-title">AI Assistant</h3>
-                            <p id="settingsAiDescription" class="settings-section-note">Generate a fresh snapshot first, then move from summary to guided quick actions.</p>
-                        </div>
-                        <button id="generateInsightsBtn" onclick="generateSettingsAiInsights()" class="settings-btn settings-btn-primary" type="button">Generate Insights</button>
-                    </div>
-                    <div class="settings-ai-summary">
-                        <div class="settings-ai-summary-head">
-                            <span class="settings-label-eyebrow">Today's Summary</span>
-                            <span id="settingsAiDate" class="settings-status-pill">Today</span>
-                        </div>
-                        <div class="settings-ai-metrics">
-                            <div class="settings-ai-metric">
-                                <span>Total Sales</span>
-                                <strong id="settingsAiTotal">--</strong>
-                            </div>
-                            <div class="settings-ai-metric">
-                                <span>Best Product</span>
-                                <strong id="settingsAiBest">--</strong>
-                            </div>
-                            <div class="settings-ai-metric">
-                                <span>Slow Product</span>
-                                <strong id="settingsAiSlow">--</strong>
-                            </div>
-                        </div>
-                        <p id="settingsAiRecommendation" class="settings-help-text">Generate insights to see today's AI recommendation.</p>
-                    </div>
-                    <div class="settings-quick-actions">
-                        <button id="settingsAiAnalyzeBtn" onclick="runSettingsAiQuickAction('Analyze my business')" class="settings-btn settings-btn-secondary" type="button">Analyze</button>
-                        <button id="settingsAiRestockBtn" onclick="runSettingsAiQuickAction('What should I restock?')" class="settings-btn settings-btn-secondary" type="button">Restock</button>
-                        <button id="settingsAiProfitBtn" onclick="runSettingsAiQuickAction('How can I increase profit?')" class="settings-btn settings-btn-secondary" type="button">Profit Insights</button>
                     </div>
                 </div>
 
