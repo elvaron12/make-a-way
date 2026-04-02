@@ -6,7 +6,7 @@
     <script src="libs/html2canvas.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#1565c0">
+    <meta name="theme-color" content="#0b1423">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Make A Way</title>
     <link rel="icon" href="logo.png" type="image/png">
@@ -1208,7 +1208,7 @@
             background: rgba(255, 255, 255, 0.72);
             color: #0f5b8f;
             font-weight: 700;
-            font-size: 0.82rem;
+            font-size: 0.82rem; 
             letter-spacing: 0.01em;
         }
 
@@ -2053,7 +2053,20 @@
             }
 
             #app .nav-group-meta {
+                display: grid;
+                grid-template-columns: 1fr;
+                align-items: stretch;
+                gap: 8px;
+                width: 100%;
+                padding-top: 8px;
+            }
+
+            #app .sidebar-account-card {
                 display: none;
+            }
+
+            #app .sidebar-footer-btn {
+                min-height: 44px;
             }
 
             #app .top-bar-logo {
@@ -2137,18 +2150,20 @@
         }
 
         #app {
+            --sidebar-width: 236px;
             display: grid;
-            grid-template-columns: 236px minmax(0, 1fr);
+            grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
             grid-template-rows: minmax(0, 1fr);
             height: 100vh;
             min-height: 100vh;
             gap: 0;
             padding: 0;
             overflow: hidden;
+            transition: grid-template-columns 0.38s ease-in-out;
         }
 
         #app.sidebar-collapsed {
-            grid-template-columns: 82px minmax(0, 1fr);
+            --sidebar-width: 82px;
         }
 
         #app > .top-bar,
@@ -2170,10 +2185,11 @@
             position: fixed;
             top: 16px;
             right: 18px;
-            left: calc(236px + 18px);
+            left: calc(var(--sidebar-width) + 18px);
             z-index: 32;
             margin: 0;
             border-radius: 20px;
+            transition: left 0.38s ease-in-out, opacity 0.24s ease, transform 0.24s ease;
         }
 
         #app.sidebar-collapsed > #connectivityBanner {
@@ -2185,11 +2201,12 @@
             grid-row: 1;
             display: flex;
             flex-direction: column;
+            align-items: stretch;
             gap: 14px;
-            width: 236px;
+            width: var(--sidebar-width);
             height: 100vh;
             min-height: 100vh;
-            padding: 18px 12px 16px;
+            padding: 18px 0 16px 0;
             border-radius: 0;
             position: relative;
             top: 0;
@@ -2199,39 +2216,95 @@
             box-shadow: none;
             overflow-x: hidden;
             overflow-y: auto;
+            transition: width 0.38s ease-in-out, padding 0.38s ease-in-out, background 0.28s ease;
         }
 
         #app.sidebar-collapsed > .nav-buttons {
             width: 82px;
-            padding-left: 10px;
-            padding-right: 10px;
+            align-items: center;
+            padding: 18px 0 16px 0;
         }
 
         #app .nav-group-main {
             display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            width: 100%;
             gap: 8px;
             min-height: 0;
+            padding-bottom: 0;
+            padding-left: 0;
+            margin-right: 0;
+            justify-items: stretch;
+            align-items: stretch;
         }
 
         #app .nav-group-meta {
+            position: static;
+            left: auto;
+            right: auto;
+            bottom: auto;
+            max-width: none;
+            overflow: visible;
             margin-top: auto;
             display: grid;
-            gap: 12px;
+            grid-template-columns: minmax(0, 1fr);
             width: 100%;
+            gap: 12px;
             padding-top: 12px;
             flex-shrink: 0;
+            margin-right: 0;
+            justify-items: stretch;
+            align-items: stretch;
+        }
+
+        #app .nav-label {
+            display: block;
+            flex: 1 1 auto;
+            min-width: 0;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            max-width: 160px;
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
+            transition: max-width 0.28s ease-in-out, opacity 0.18s ease-in-out, transform 0.24s ease-in-out, visibility 0s linear 0s;
+        }
+
+        #app:not(.sidebar-collapsed) .nav-btn .nav-label,
+        #app:not(.sidebar-collapsed) .sidebar-footer-btn .nav-label {
+            opacity: 1;
+            visibility: visible;
+            max-width: 160px;
+            transform: translateX(0);
+        }
+
+        #app:not(.sidebar-collapsed) .nav-btn,
+        #app:not(.sidebar-collapsed) .sidebar-footer-btn {
+            gap: 9px;
+            padding: 8px 7px 8px 4px;
+            border-radius: 0 4px 4px 0;
+            width: calc(100% - 22px) !important;
+            max-width: calc(100% - 22px);
+            margin: 0 auto 0 0 !important;
         }
 
         #app .nav-btn,
         #app .sidebar-footer-btn {
             width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
             justify-content: flex-start;
             padding: 12px 14px;
-            border-radius: 14px;
-            border: 1px solid rgba(132, 179, 224, 0.16);
+            border-radius: 4px;
+            border: 0.4px solid rgba(132, 179, 224, 0.08);
             background: rgba(255, 255, 255, 0.05);
             color: #e4efff;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            overflow: hidden;
+            transform: none;
+            transition: padding 0.38s ease-in-out, gap 0.38s ease-in-out, background 0.24s ease, border-color 0.24s ease, color 0.24s ease, box-shadow 0.24s ease;
         }
 
         #app .nav-btn:hover,
@@ -2239,17 +2312,32 @@
             background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
             border-color: rgba(148, 210, 255, 0.28);
+            transform: none !important;
         }
 
         #app .nav-btn.active {
             color: #101b2d;
             background: linear-gradient(90deg, #ff9f1a 0%, #ffb11d 100%);
             border-color: rgba(255, 185, 69, 0.18);
-            box-shadow: 0 14px 24px rgba(255, 159, 26, 0.28);
+            box-shadow: 0 10px 18px rgba(255, 159, 26, 0.24);
+            transform: none !important;
         }
 
-        #app #sidebarSwitchBtn,
-        #app #sidebarCollapseBtn {
+        #app .nav-btn:active,
+        #app .sidebar-footer-btn:active,
+        #app .nav-btn:focus,
+        #app .sidebar-footer-btn:focus,
+        #app .nav-btn:focus-visible,
+        #app .sidebar-footer-btn:focus-visible,
+        #app .sidebar-brand-toggle,
+        #app .sidebar-brand-toggle:hover,
+        #app .sidebar-brand-toggle:active,
+        #app .sidebar-brand-toggle:focus,
+        #app .sidebar-brand-toggle:focus-visible {
+            transform: none !important;
+        }
+
+        #app #sidebarSwitchBtn {
             min-height: 48px;
         }
 
@@ -2257,8 +2345,87 @@
             background: linear-gradient(180deg, rgba(13, 38, 65, 0.92), rgba(11, 31, 53, 0.88));
         }
 
-        #app #sidebarCollapseBtn {
-            background: linear-gradient(180deg, rgba(12, 33, 56, 0.86), rgba(9, 25, 44, 0.84));
+        #app .sidebar-brand {
+            padding-left: 10px;
+            padding-right: 10px;
+            transition: gap 0.38s ease-in-out, padding 0.38s ease-in-out;
+        }
+
+        #app .sidebar-brand-copy {
+            min-width: 0;
+            max-width: 140px;
+            overflow: hidden;
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
+            transition: max-width 0.28s ease-in-out, opacity 0.18s ease-in-out, transform 0.24s ease-in-out, visibility 0s linear 0s;
+        }
+
+        #app .sidebar-brand-toggle {
+            margin-left: auto;
+            width: auto;
+            min-width: 42px;
+            height: 42px;
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(132, 179, 224, 0.16);
+            background: linear-gradient(180deg, rgba(12, 33, 56, 0.9), rgba(9, 25, 44, 0.88));
+            color: #e4efff;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            flex-shrink: 0;
+            transition: width 0.38s ease-in-out, padding 0.38s ease-in-out, background 0.24s ease, border-color 0.24s ease;
+        }
+
+        #app .sidebar-brand-toggle:hover {
+            background: linear-gradient(180deg, rgba(18, 48, 79, 0.94), rgba(10, 29, 51, 0.9));
+            color: #ffffff;
+            border-color: rgba(148, 210, 255, 0.28);
+        }
+
+        #app .nav-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            flex: 0 0 20px;
+            line-height: 0;
+            transition: transform 0.38s ease-in-out;
+        }
+
+        #app .nav-icon svg {
+            width: 20px;
+            height: 20px;
+            display: block;
+        }
+
+        #app .sidebar-brand-toggle .nav-icon {
+            width: 18px;
+            height: 18px;
+            transition: transform 0.38s ease-in-out;
+        }
+
+        #app .sidebar-brand-toggle .nav-icon svg {
+            transition: transform 0.22s ease;
+        }
+
+        #app .sidebar-brand-toggle .nav-label {
+            flex: 0 0 auto;
+            min-width: 0;
+            overflow: hidden;
+            max-width: 90px;
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
+            white-space: nowrap;
+            font-size: 0.8rem;
+            font-weight: 700;
+            transition: max-width 0.28s ease-in-out, opacity 0.18s ease-in-out, transform 0.24s ease-in-out, visibility 0s linear 0s;
         }
 
         #app .rw-clock,
@@ -2271,6 +2438,15 @@
             box-sizing: border-box;
         }
 
+        #app .sidebar-account-card {
+            max-height: 92px;
+            overflow: hidden;
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            transition: max-height 0.3s ease-in-out, opacity 0.18s ease-in-out, transform 0.24s ease-in-out, padding 0.24s ease-in-out, border-color 0.24s ease, visibility 0s linear 0s;
+        }
+
         #app .nav-group-meta .rw-clock,
         #app .nav-group-meta .sidebar-account-card,
         #app .nav-group-meta .sidebar-footer-btn {
@@ -2278,20 +2454,17 @@
         }
 
         #app .page-utility-bar {
-            position: sticky;
-            top: 0;
-            z-index: 10;
+            position: static;
             display: flex;
             justify-content: flex-end;
-            padding-bottom: 14px;
-            margin-bottom: 8px;
-            pointer-events: none;
+            padding-bottom: 0;
+            margin-bottom: 18px;
+            pointer-events: auto;
         }
 
         #app .page-clock {
             width: min(100%, 196px);
             margin-left: auto;
-            pointer-events: auto;
             border-color: rgba(102, 193, 255, 0.24);
             background: linear-gradient(160deg, rgba(11, 27, 46, 0.94), rgba(7, 48, 81, 0.9));
             box-shadow: 0 16px 30px rgba(4, 13, 26, 0.28);
@@ -2324,24 +2497,399 @@
 
         #app.sidebar-collapsed .nav-group-main {
             padding-bottom: 0;
+            justify-items: center;
+            width: 100%;
+            margin-right: 0;
         }
 
         #app.sidebar-collapsed .nav-group-meta {
             width: 100%;
             padding-top: 10px;
+            justify-items: center;
+            margin-right: 0;
+        }
+
+        #app.sidebar-collapsed .sidebar-brand {
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        #app.sidebar-collapsed .sidebar-brand-copy {
+            display: flex;
+            max-width: 0;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(-8px);
+        }
+
+        #app.sidebar-collapsed .sidebar-brand-toggle {
+            margin-left: auto;
+            margin-right: auto;
+            width: 44px;
+            padding: 0;
+            border-radius: 8px;
+        }
+
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-label {
+            display: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn .nav-label,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-label {
+            display: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn,
+        #app.sidebar-collapsed .sidebar-footer-btn {
+            gap: 0;
+            width: 42px;
+            min-width: 42px;
+            min-height: 42px;
+            padding: 0;
+            justify-content: center;
+            border-radius: 8px;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            transform: none !important;
+            overflow: visible !important;
+            transition: background 0.24s ease, border-color 0.24s ease, color 0.24s ease, box-shadow 0.24s ease !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn .nav-icon,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-icon,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-icon {
+            display: inline-flex !important;
+            width: 20px;
+            height: 20px;
+            min-width: 20px !important;
+            min-height: 20px !important;
+            flex: 0 0 20px !important;
+            opacity: 1;
+            visibility: visible;
+            transform: none;
+            margin: 0 !important;
+            transition: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn .nav-icon svg,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-icon svg,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-icon svg {
+            display: block !important;
+            width: 20px !important;
+            height: 20px !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            transform: translateX(0) !important;
+            margin: 0 !important;
+            transition: none !important;
+            stroke: currentColor !important;
+            fill: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn .nav-icon *,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-icon *,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-icon * {
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
+        #app.sidebar-collapsed .nav-group-main .nav-btn:not([style*="display: none"]),
+        #app.sidebar-collapsed .nav-group-meta .nav-btn:not([style*="display: none"]),
+        #app.sidebar-collapsed .nav-group-meta .sidebar-footer-btn:not([style*="display: none"]) {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn[style*="display: none"],
+        #app.sidebar-collapsed .sidebar-footer-btn[style*="display: none"] {
+            display: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn .nav-icon,
+        #app.sidebar-collapsed .nav-btn .nav-icon svg,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-icon,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-icon svg,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-icon,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-icon svg {
+            pointer-events: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn:hover,
+        #app.sidebar-collapsed .sidebar-footer-btn:hover,
+        #app.sidebar-collapsed .nav-btn.active,
+        #app.sidebar-collapsed .sidebar-footer-btn.active,
+        #app.sidebar-collapsed .nav-btn:active,
+        #app.sidebar-collapsed .sidebar-footer-btn:active {
+            transform: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn,
+        #app.sidebar-collapsed .sidebar-footer-btn {
+            color: #e4efff !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn.active {
+            color: #101b2d !important;
+        }
+
+        #app.sidebar-collapsed .sidebar-account-card {
+            display: grid;
+            max-height: 0;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px);
+            padding-top: 0;
+            padding-bottom: 0;
+            border-width: 0;
         }
 
         #app.sidebar-collapsed .sidebar-footer-btn {
             min-height: 48px;
-            padding: 12px;
-            justify-content: center;
-            border-radius: 16px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.08);
             border-color: rgba(148, 210, 255, 0.24);
         }
 
         #app.sidebar-collapsed #sidebarCollapseBtn .nav-icon svg {
             transform: rotate(180deg);
+        }
+
+        #app #settings .settings-theme-switch-line {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 18px;
+            margin-bottom: 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(19, 70, 144, 0.12);
+            background: linear-gradient(145deg, rgba(249, 252, 255, 0.96), rgba(239, 247, 255, 0.88));
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        #app #settings .settings-switch-copy {
+            display: grid;
+            gap: 4px;
+        }
+
+        #app #settings .settings-switch-copy strong {
+            color: #112a46;
+            font-size: 1rem;
+            line-height: 1.2;
+        }
+
+        #app #settings .settings-switch-copy small {
+            color: #6c819a;
+            font-size: 0.9rem;
+        }
+
+        #app #settings .settings-theme-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        #app #settings .settings-theme-switch input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #app #settings .settings-theme-switch-track {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            width: 68px;
+            height: 36px;
+            padding: 0 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(31, 99, 216, 0.14);
+            background: linear-gradient(145deg, #f4f8ff, #e2ecfb);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+            transition: background 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+        }
+
+        #app #settings .settings-theme-switch-track::before {
+            content: 'LIGHT';
+            font-size: 0.58rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: #6a7f99;
+            margin-left: auto;
+            transition: color 0.24s ease;
+        }
+
+        #app #settings .settings-theme-switch-track::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: linear-gradient(145deg, #ffffff, #eef5ff);
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+            transition: transform 0.3s ease-in-out, background 0.24s ease;
+        }
+
+        #app #settings .settings-theme-switch input:checked + .settings-theme-switch-track {
+            border-color: rgba(80, 181, 255, 0.18);
+            background: linear-gradient(145deg, #0f2742, #183b63);
+        }
+
+        #app #settings .settings-theme-switch input:checked + .settings-theme-switch-track::before {
+            content: 'DARK';
+            margin-left: 0;
+            color: #d9ebff;
+        }
+
+        #app #settings .settings-theme-switch input:checked + .settings-theme-switch-track::after {
+            transform: translateX(32px);
+            background: linear-gradient(145deg, #fefefe, #dce8ff);
+        }
+
+        #app #settings .settings-theme-switch input:focus-visible + .settings-theme-switch-track {
+            box-shadow: 0 0 0 4px rgba(37, 117, 252, 0.18);
+        }
+
+        #app #settings .settings-theme-row {
+            padding: 6px;
+            border-radius: 18px;
+            border: 1px solid rgba(19, 70, 144, 0.12);
+            background: rgba(245, 249, 255, 0.9);
+        }
+
+        #app #settings .settings-theme-btn {
+            min-height: 68px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 12px 16px;
+            letter-spacing: 0.01em;
+        }
+
+        #app #settings .admin-auto-pdf-toggle {
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(19, 70, 144, 0.1);
+            background: rgba(246, 250, 255, 0.9);
+        }
+
+        #app #settings .admin-auto-pdf-toggle input {
+            -webkit-appearance: none;
+            appearance: none;
+            position: relative;
+            width: 58px;
+            height: 32px;
+            border-radius: 999px;
+            border: 1px solid rgba(31, 99, 216, 0.16);
+            background: linear-gradient(145deg, #f4f8ff, #e1ebf9);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+            transition: background 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+            flex-shrink: 0;
+        }
+
+        #app #settings .admin-auto-pdf-toggle input::before {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            background: linear-gradient(145deg, #ffffff, #edf4ff);
+            box-shadow: 0 5px 14px rgba(15, 23, 42, 0.16);
+            transition: transform 0.28s ease-in-out;
+        }
+
+        #app #settings .admin-auto-pdf-toggle input:checked {
+            border-color: rgba(80, 181, 255, 0.12);
+            background: linear-gradient(145deg, #1f76ff, #1aa7d9);
+        }
+
+        #app #settings .admin-auto-pdf-toggle input:checked::before {
+            transform: translateX(26px);
+        }
+
+        #app #settings .admin-auto-pdf-toggle input:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(37, 117, 252, 0.18);
+        }
+
+        body.dark-mode #app #settings .settings-theme-switch-line,
+        body.dark-mode #app #settings .admin-auto-pdf-toggle {
+            border-color: rgba(129, 196, 255, 0.14);
+            background: rgba(11, 25, 41, 0.9);
+        }
+
+        body.dark-mode #app #settings .settings-switch-copy strong {
+            color: #eef5ff;
+        }
+
+        body.dark-mode #app #settings .settings-switch-copy small {
+            color: #9bb0ca;
+        }
+
+        body.dark-mode #app #settings .settings-theme-switch-track,
+        body.dark-mode #app #settings .admin-auto-pdf-toggle input {
+            border-color: rgba(129, 196, 255, 0.18);
+            background: linear-gradient(145deg, #11243a, #18314e);
+        }
+
+        body.dark-mode #app #settings .settings-theme-switch input:checked + .settings-theme-switch-track,
+        body.dark-mode #app #settings .admin-auto-pdf-toggle input:checked {
+            background: linear-gradient(145deg, #1f76ff, #1aa7d9);
+        }
+
+        body.dark-mode #app #settings .settings-theme-row {
+            border-color: rgba(129, 196, 255, 0.14);
+            background: rgba(11, 25, 41, 0.76);
+        }
+
+        @media (max-width: 900px) {
+            #app #settings .settings-theme-switch-line {
+                align-items: flex-start;
+            }
+        }
+
+        @media (max-width: 680px) {
+            #app #settings .settings-theme-switch-line {
+                flex-direction: column;
+            }
+
+            #app #settings .settings-theme-switch {
+                align-self: flex-start;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #app,
+            #app > .nav-buttons,
+            #app > #connectivityBanner,
+            #app .nav-btn,
+            #app .sidebar-footer-btn,
+            #app .nav-label,
+            #app .sidebar-brand,
+            #app .sidebar-brand-copy,
+            #app .sidebar-brand-toggle,
+            #app .sidebar-brand-toggle .nav-icon,
+            #app .sidebar-brand-toggle .nav-label,
+            #app .sidebar-account-card,
+            #app #settings .settings-theme-switch-track,
+            #app #settings .settings-theme-switch-track::after,
+            #app #settings .admin-auto-pdf-toggle input,
+            #app #settings .admin-auto-pdf-toggle input::before {
+                transition: none !important;
+            }
         }
 
         #app > .page-container {
@@ -2635,7 +3183,7 @@
         }
     </style>
 </head>
-<body>
+<body class="dark-mode">
 
 <!-- MAW Loading Overlay -->
 <div id="welcomeOverlay" aria-hidden="true">
@@ -2920,6 +3468,14 @@
                 <strong>ShopFlow</strong>
                 <span>Business Manager</span>
             </div>
+            <button id="sidebarCollapseBtn" class="sidebar-brand-toggle" type="button" title="Collapse Sidebar" aria-label="Collapse Sidebar" aria-pressed="false" onclick="toggleSidebarCollapsed()">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m15 18-6-6 6-6"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Collapse</span>
+            </button>
         </div>
         <div class="nav-group nav-group-main">
             <button class="nav-btn active" data-page="home" onclick="showPage('home')">
@@ -3023,13 +3579,7 @@
                 </span>
                 <span class="nav-label">Settings</span>
             </button>
-        </div>
-        <div class="nav-group nav-group-meta">
-            <div class="sidebar-account-card">
-                <span id="sidebarAccountMode" class="sidebar-account-mode">User</span>
-                <strong id="sidebarAccountName">Not logged in</strong>
-            </div>
-            <button id="sidebarSwitchBtn" class="sidebar-footer-btn" type="button" title="Switch Account" aria-label="Switch Account" onclick="void logoutCurrentUser()">
+            <button id="sidebarSwitchBtn" class="nav-btn" type="button" title="Switch Account" aria-label="Switch Account" onclick="void logoutCurrentUser()">
                 <span class="nav-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 3h5v5"></path>
@@ -3040,14 +3590,12 @@
                 </span>
                 <span class="nav-label">Switch Account</span>
             </button>
-            <button id="sidebarCollapseBtn" class="sidebar-footer-btn" type="button" title="Collapse Sidebar" aria-label="Collapse Sidebar" aria-pressed="false" onclick="toggleSidebarCollapsed()">
-                <span class="nav-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m15 18-6-6 6-6"></path>
-                    </svg>
-                </span>
-                <span class="nav-label">Collapse</span>
-            </button>
+        </div>
+        <div class="nav-group nav-group-meta">
+            <div class="sidebar-account-card">
+                <span id="sidebarAccountMode" class="sidebar-account-mode">User</span>
+                <strong id="sidebarAccountName">Not logged in</strong>
+            </div>
         </div>
     </div>
 
@@ -3785,12 +4333,12 @@
                             <p id="settingsInterfaceDescription" class="settings-section-note">Adjust how the workspace looks and reads, then save your preferences in one clear step.</p>
                         </div>
                     </div>
-                    <input type="hidden" id="themeMode" value="light">
-                    <div class="settings-group">
-                        <label for="themeMode">Theme Toggle</label>
-                        <div class="settings-theme-row">
-                            <button onclick="setTheme('light')" id="lightThemeBtn" class="settings-btn settings-theme-btn" type="button">Light Mode</button>
-                            <button onclick="setTheme('dark')" id="darkThemeBtn" class="settings-btn settings-theme-btn dark" type="button">Dark Mode</button>
+                    <input type="hidden" id="themeMode" value="dark">
+                    <div class="settings-theme-switch-line">
+                        <div class="settings-switch-copy">
+                            <span class="settings-label-eyebrow">Appearance</span>
+                            <strong>Dark mode only</strong>
+                            <small id="settingsThemeSwitchState">Dark mode active</small>
                         </div>
                     </div>
                     <div class="settings-group">
