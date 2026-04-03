@@ -2295,6 +2295,26 @@
             margin: 0 auto 0 0 !important;
         }
 
+        /* Center sidebar buttons in expanded mode */
+        #app:not(.sidebar-collapsed) .nav-group-main,
+        #app:not(.sidebar-collapsed) .nav-group-meta {
+            justify-items: center !important;
+        }
+
+        #app:not(.sidebar-collapsed) .nav-btn,
+        #app:not(.sidebar-collapsed) .sidebar-footer-btn {
+            margin-left: auto !important;
+            margin-right: auto !important;
+            justify-content: center !important;
+            text-align: center !important;
+        }
+
+        #app:not(.sidebar-collapsed) .nav-label,
+        #app:not(.sidebar-collapsed) .sidebar-footer-btn .nav-label {
+            flex: 0 1 auto !important;
+            text-align: center !important;
+        }
+
         #app .nav-btn,
         #app .sidebar-footer-btn {
             width: 100%;
@@ -2661,6 +2681,70 @@
 
         #app.sidebar-collapsed #sidebarCollapseBtn .nav-icon svg {
             transform: rotate(180deg);
+        }
+
+        /* Hard-enforce icon-only sidebar in collapsed mode */
+        #app.sidebar-collapsed .sidebar-brand-copy,
+        #app.sidebar-collapsed .sidebar-account-card,
+        #app.sidebar-collapsed .nav-btn .nav-label,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-label,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-label {
+            display: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-group-main,
+        #app.sidebar-collapsed .nav-group-meta {
+            justify-items: center !important;
+            width: 100%;
+        }
+
+        #app.sidebar-collapsed .nav-btn:not([style*="display: none"]),
+        #app.sidebar-collapsed .sidebar-footer-btn:not([style*="display: none"]),
+        #app.sidebar-collapsed .sidebar-brand-toggle {
+            width: 44px !important;
+            min-width: 44px !important;
+            height: 44px !important;
+            min-height: 44px !important;
+            padding: 0 !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0 !important;
+            pointer-events: auto !important;
+            overflow: hidden !important;
+        }
+
+        #app.sidebar-collapsed .sidebar-account-card {
+            max-height: 0 !important;
+            padding: 0 !important;
+            border-width: 0 !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn .nav-icon,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-icon,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-icon {
+            display: inline-flex !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: none !important;
+            margin: 0 !important;
+        }
+
+        #app.sidebar-collapsed .nav-btn .nav-icon svg,
+        #app.sidebar-collapsed .sidebar-footer-btn .nav-icon svg,
+        #app.sidebar-collapsed .sidebar-brand-toggle .nav-icon svg {
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            width: 20px !important;
+            height: 20px !important;
+            transform: none !important;
+            pointer-events: none !important;
         }
 
         #app #settings .settings-theme-switch-line {
@@ -4123,50 +4207,61 @@
 
         <!-- ==================== SALES HISTORY PAGE - FIXED AND COMPLETE ==================== -->
         <div id="salesHistory" class="page" style="display: none;">
-            <div class="page-header">
-                <h2>Sales History</h2>
+            <div class="page-header activity-log-header">
+                <div>
+                    <h2>Activity Log</h2>
+                    <p id="salesHistoryCountLabel" class="activity-log-count">0 recorded activities</p>
+                </div>
                 <div style="display: flex; gap: 10px;">
                     <button onclick="exportSalesHistoryPDF()" class="add-btn" style="background: #ffa502;">Export PDF</button>
                 </div>
             </div>
             
-            <div class="customer-controls" style="margin-top: 20px;">
-                <input type="text" id="salesSearch" class="search-input" placeholder="Search sales by drink, customer, or date..." oninput="filterSalesHistory(this.value)">
-                <div style="display: flex; gap: 10px; align-items: center; margin: 10px 0 14px; flex-wrap: wrap;">
+            <div class="customer-controls activity-log-controls" style="margin-top: 20px;">
+                <div class="activity-log-filter-row">
+                    <input type="text" id="salesSearch" class="search-input" placeholder="Search activity..." oninput="filterSalesHistory(this.value)">
+                    <select id="salesActionFilter" class="activity-log-action-select" onchange="applySalesHistoryFilters()">
+                        <option value="all">All Actions</option>
+                        <option value="normal">Cash Sales</option>
+                        <option value="credit">Credit Sales</option>
+                        <option value="deposit">Deposits</option>
+                    </select>
+                </div>
+                <div class="activity-log-date-row">
                     <label for="salesHistoryDate" style="font-weight: 600; color: #555;">Date:</label>
                     <input type="date" id="salesHistoryDate" style="padding: 8px 10px; border: 1px solid #d8dee8; border-radius: 8px;" onchange="applySalesHistoryFilters()">
                     <button class="filter-btn" type="button" onclick="goToTodaySalesHistory()">Today</button>
                 </div>
-                
-                <div class="filter-buttons">
-                    <button class="filter-btn active" onclick="filterSalesByType('all', event)">All</button>
-                    <button class="filter-btn" onclick="filterSalesByType('normal', event)">Cash</button>
-                    <button class="filter-btn" onclick="filterSalesByType('credit', event)">Credit</button>
-                </div>
             </div>
-            
-            <div style="overflow-x: auto; margin-top: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-                <table id="salesHistoryTable">
-                    <thead>
-                        <tr>
-                            <th>Date & Time</th>
-                            <th>Item(s)</th>
-                            <th style="text-align: center;">Qty</th>
-                            <th style="text-align: right;">Unit Price</th>
-                            <th style="text-align: right;">Total</th>
-                            <th style="text-align: center;">Type</th>
-                            <th>Customer</th>
-                            <th style="text-align: center;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="salesHistoryBody">
-                        <tr>
-                            <td colspan="8" style="padding: 60px 20px; text-align: center; color: #999;">
-                                No sales recorded yet
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+
+            <div id="activityLogList" class="activity-log-list">
+                <div class="activity-log-empty">No sales recorded yet</div>
+            </div>
+
+            <div style="display: none;">
+                <div style="overflow-x: auto; margin-top: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                    <table id="salesHistoryTable">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Item(s)</th>
+                                <th style="text-align: center;">Qty</th>
+                                <th style="text-align: right;">Unit Price</th>
+                                <th style="text-align: right;">Total</th>
+                                <th style="text-align: center;">Type</th>
+                                <th>Customer</th>
+                                <th style="text-align: center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salesHistoryBody">
+                            <tr>
+                                <td colspan="8" style="padding: 60px 20px; text-align: center; color: #999;">
+                                    No sales recorded yet
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
         <!-- ==================== END OF SALES HISTORY PAGE ==================== -->
