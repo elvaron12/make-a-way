@@ -1,0 +1,16 @@
+{
+  "name": "Make A Way",
+  "short_name": "MakeAWay",
+  "description": "Make A Way web application",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2575fc",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
