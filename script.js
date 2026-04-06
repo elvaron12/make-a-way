@@ -407,6 +407,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ================= DATA MANAGEMENT =================
 let sales = [];
+let adminSales = [];
+let adminSalesCacheLoaded = false;
 let customers = [];
 let clates = [];
 let drinks = [];
@@ -600,6 +602,8 @@ const translations = {
         authAdminSetupRequiresUserPin: 'Admin password required to continue.',
         authAdminSetupPrompt: 'Set a new Admin Password',
         authAdminConfirmPrompt: 'Confirm Admin Password',
+        authSecretCodePrompt: 'Enter the admin reset secret code to continue.',
+        authSecretCodeInvalid: 'Secret code is incorrect. Password reset cancelled.',
         authAdminPinMustDiffer: 'Admin password must be different from your main password',
         authAdminSetupCancelled: 'Admin password setup cancelled.',
         authAdminSetupSuccess: 'Admin password created. You can now login as admin.',
@@ -854,6 +858,8 @@ const translations = {
         authAdminSetupRequiresUserPin: 'Ijambobanga rya admin rirakenewe kugira ngo ukomeze.',
         authAdminSetupPrompt: 'Shyiraho ijambobanga rishya rya admin',
         authAdminConfirmPrompt: 'Emeza ijambobanga rya admin',
+        authSecretCodePrompt: 'Shyiramo kode yihariye ya admin yo gukomeza.',
+        authSecretCodeInvalid: 'Kode yihariye si yo. Guhindura ijambobanga byahagaritswe.',
         authAdminPinMustDiffer: 'Ijambobanga rya admin rigomba kuba ritandukanye n\'iry\'ibanze',
         authAdminSetupCancelled: 'Gushyiraho ijambobanga rya admin byahagaritswe.',
         authAdminSetupSuccess: 'Ijambobanga rya admin ryashyizweho. Ubu ushobora kwinjira nka admin.',
@@ -1108,6 +1114,8 @@ authAdminAccessDenied: 'Ce compte n’a pas les droits administrateur',
 authAdminSetupRequiresUserPin: 'Mot de passe admin requis pour continuer.',
 authAdminSetupPrompt: 'Définissez un nouveau mot de passe admin',
 authAdminConfirmPrompt: 'Confirmez le mot de passe admin',
+authSecretCodePrompt: 'Entrez le code secret admin pour continuer.',
+authSecretCodeInvalid: 'Le code secret est incorrect. Réinitialisation annulée.',
 authAdminPinMustDiffer: 'Le mot de passe admin doit être différent du mot de passe principal',
 authAdminSetupCancelled: 'Configuration du mot de passe admin annulée.',
 authAdminSetupSuccess: 'Mot de passe admin configuré. Vous pouvez maintenant vous connecter en tant qu’admin.',
@@ -1675,6 +1683,8 @@ function bindAutoDailySalesPdfLifecycleEvents() {
 
 // ================= ELECTRON + WEB STORAGE =================
 const APP_META_STORAGE_KEY = 'app_meta';
+const GLOBAL_LOYAL_CUSTOMERS_KEY = 'global_loyal_customers';
+const GLOBAL_DRINKS_KEY = 'global_drinks';
 
 function getDefaultAppMeta() {
     return {
@@ -2442,6 +2452,36 @@ function userDataKey(base, user = activeUser) {
     return id ? `${base}__${id}` : '';
 }
 
+function getEffectiveSalesList() {
+    return isAdminSessionActive() ? (Array.isArray(adminSales) ? adminSales : []) : (Array.isArray(sales) ? sales : []);
+}
+
+async function refreshAdminSalesCache() {
+    if (!isAdminSessionActive()) {
+        adminSales = [];
+        adminSalesCacheLoaded = false;
+        return;
+    }
+
+    const users = Array.isArray(getAuthUsers()) ? getAuthUsers() : [];
+    const salesRequests = users
+        .map((user) => ({ name: userDataKey('sales', user), defaultValue: [] }))
+        .filter((item) => item.name);
+
+    if (salesRequests.length === 0) {
+        adminSales = [];
+        adminSalesCacheLoaded = true;
+        return;
+    }
+
+    const loaded = await loadManyNamedData(salesRequests);
+    adminSales = salesRequests.reduce((allSales, request) => {
+        const userSales = Array.isArray(loaded[request.name]) ? loaded[request.name] : [];
+        return allSales.concat(userSales);
+    }, []);
+    adminSalesCacheLoaded = true;
+}
+
 function localStorageKey(name) {
     return `makeaway_${name}`;
 }
@@ -2727,6 +2767,46 @@ async function loadActiveUserData(user = activeUser) {
     drinks = Array.isArray(loadedDrinks) ? loadedDrinks : [];
     settings = sanitizeUserSettings(loadedSettings);
     yearlyArchives = sanitizeYearArchives(loadedArchives);
+    
+    // Try to load customers from MongoDB
+    const mongoCustomersLoaded = await loadCustomersFromMongoDB(user?.phone || user);
+    
+    // Try to load drinks from MongoDB
+    const mongoDrinksLoaded = await loadDrinksFromMongoDB(user?.phone || user);
+    
+    // Merge global loyal customers
+    const globalLoyalCustomers = await loadNamedData(GLOBAL_LOYAL_CUSTOMERS_KEY, []);
+    if (Array.isArray(globalLoyalCustomers)) {
+        const loyalCustomers = globalLoyalCustomers.filter(c => c.type === 'loyal');
+        // Merge with user customers, avoiding duplicates by id
+        const mergedCustomers = [...customers];
+        for (const globalCust of loyalCustomers) {
+            const existingIndex = mergedCustomers.findIndex(c => c.id === globalCust.id);
+            if (existingIndex >= 0) {
+                mergedCustomers[existingIndex] = globalCust; // Update with global version
+            } else {
+                mergedCustomers.push(globalCust);
+            }
+        }
+        customers = mergedCustomers;
+    }
+    
+    // Merge global drinks
+    const globalDrinks = await loadNamedData(GLOBAL_DRINKS_KEY, []);
+    if (Array.isArray(globalDrinks)) {
+        // Merge with user drinks, avoiding duplicates by name
+        const mergedDrinks = [...drinks];
+        for (const globalDrink of globalDrinks) {
+            const existingIndex = mergedDrinks.findIndex(d => d.name.toLowerCase() === globalDrink.name.toLowerCase());
+            if (existingIndex >= 0) {
+                mergedDrinks[existingIndex] = globalDrink; // Update with global version
+            } else {
+                mergedDrinks.push(globalDrink);
+            }
+        }
+        drinks = mergedDrinks;
+    }
+    
     normalizeCustomersData();
     normalizeDrinksData();
 
@@ -2809,6 +2889,94 @@ async function saveData() {
     const payload = buildCurrentSavePayload(activeUser);
     const entries = Object.entries(payload).map(([name, value]) => ({ name, value }));
     await saveManyNamedData(entries);
+    
+    // Sync to MongoDB if user logged in
+    if (activeUser) {
+        await syncCustomersToMongoDB(activeUser);
+        await syncDrinksToMongoDB(activeUser);
+    }
+}
+
+// ============ MONGODB SYNC FUNCTIONS ============
+
+async function syncCustomersToMongoDB(userId) {
+    try {
+        if (!customers || customers.length === 0) return;
+        
+        const response = await fetch('/api/customers/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: userId,
+                customers: customers
+            })
+        });
+        
+        if (response.ok) {
+            console.log('✅ Customers synced to MongoDB');
+        } else {
+            console.warn('⚠️ Failed to sync customers:', response.statusText);
+        }
+    } catch (error) {
+        console.error('❌ MongoDB sync error (customers):', error);
+    }
+}
+
+async function syncDrinksToMongoDB(userId) {
+    try {
+        if (!drinks || drinks.length === 0) return;
+        
+        const response = await fetch('/api/drinks/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: userId,
+                drinks: drinks
+            })
+        });
+        
+        if (response.ok) {
+            console.log('✅ Drinks synced to MongoDB');
+        } else {
+            console.warn('⚠️ Failed to sync drinks:', response.statusText);
+        }
+    } catch (error) {
+        console.error('❌ MongoDB sync error (drinks):', error);
+    }
+}
+
+async function loadCustomersFromMongoDB(userId) {
+    try {
+        const response = await fetch(`/api/customers/load/${userId}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.customers && data.customers.length > 0) {
+                customers = data.customers;
+                console.log('✅ Customers loaded from MongoDB:', customers.length);
+                return true;
+            }
+        }
+    } catch (error) {
+        console.error('❌ MongoDB load error (customers):', error);
+    }
+    return false;
+}
+
+async function loadDrinksFromMongoDB(userId) {
+    try {
+        const response = await fetch(`/api/drinks/load/${userId}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.drinks && data.drinks.length > 0) {
+                drinks = data.drinks;
+                console.log('✅ Drinks loaded from MongoDB:', drinks.length);
+                return true;
+            }
+        }
+    } catch (error) {
+        console.error('❌ MongoDB load error (drinks):', error);
+    }
+    return false;
 }
 
 // ================= LOGIN / SIGNUP SYSTEM =================
@@ -2932,20 +3100,42 @@ async function verifyUserPassword(user, password) {
     }
 
     const legacyPin = String(user.pin || '').trim();
-    const legacyAdminPin = String(user.adminPin || '').trim();
-    const matchesLegacy = (legacyPin && normalized === legacyPin) || (legacyAdminPin && normalized === legacyAdminPin);
+    const matchesLegacy = legacyPin && normalized === legacyPin;
     if (!matchesLegacy) return false;
 
     try {
         user.passwordHash = await hashPassword(normalized);
         delete user.pin;
-        delete user.adminPin;
         user.authProvider = 'password';
         user.updatedAt = new Date().toISOString();
         appMeta.authUsers = getAuthUsers();
         await saveNamedData(APP_META_STORAGE_KEY, appMeta);
     } catch (error) {
         console.warn('Password migration failed:', error);
+    }
+    return true;
+}
+
+async function verifyUserAdminPassword(user, password) {
+    if (!user) return false;
+    const normalized = normalizePasswordInput(password);
+    if (!normalized) return false;
+
+    if (user.adminPasswordHash) {
+        return verifyPassword(normalized, user.adminPasswordHash);
+    }
+
+    const legacyAdminPin = String(user.adminPin || '').trim();
+    if (!legacyAdminPin) return false;
+    if (normalized !== legacyAdminPin) return false;
+
+    try {
+        user.adminPasswordHash = await hashPassword(normalized);
+        delete user.adminPin;
+        appMeta.authUsers = getAuthUsers();
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    } catch (error) {
+        console.warn('Admin password migration failed:', error);
     }
     return true;
 }
@@ -3043,7 +3233,7 @@ async function setupAdminPinForUser(user, currentUserPin) {
         return { success: false, cancelled: false, message: t('authPinMismatch') };
     }
 
-    user.passwordHash = await hashPassword(adminPin);
+    user.adminPasswordHash = await hashPassword(adminPin);
     delete user.pin;
     delete user.adminPin;
     user.authProvider = 'password';
@@ -3068,13 +3258,35 @@ async function handleAdminLogin(identifier, pin, users = getAuthUsers()) {
         setAuthFeedback(t('authAdminAccessDenied'), 'error');
         return;
     }
-    const passwordOk = await verifyUserPassword(user, pin);
+
+    // Check for admin password reset first
+    const adminResetData = appMeta.adminPasswordReset;
+    if (adminResetData && adminResetData.newAdminPassword) {
+        const resetPasswordHash = await hashPassword(adminResetData.newAdminPassword);
+        const passwordOk = await verifyPassword(pin, resetPasswordHash);
+        if (passwordOk) {
+            // Set the user's admin password to the reset password
+            user.adminPasswordHash = resetPasswordHash;
+            user.updatedAt = new Date().toISOString();
+            appMeta.authUsers = users;
+            // Clear the reset data
+            delete appMeta.adminPasswordReset;
+            localStorage.removeItem('adminPasswordReset');
+            await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+            await completeLoginForUser(user, { loginMode: 'admin' });
+            await refreshAdminSalesCache();
+            return;
+        }
+    }
+
+    const passwordOk = await verifyUserAdminPassword(user, pin);
     if (!passwordOk) {
         registerFailedLoginAttempt('authAdminInvalidCredentials');
         return;
     }
 
     await completeLoginForUser(user, { loginMode: 'admin' });
+    await refreshAdminSalesCache();
 }
 
 async function completeLoginForUser(user, options = {}) {
@@ -3124,15 +3336,12 @@ function normalizeAuthUsersData() {
 }
 
 function resetForgotPinFields() {
-    const resetPhoneInput = document.getElementById('resetPhone');
-    const resetVerificationCodeInput = document.getElementById('resetVerificationCode');
+    const resetSecretCodeInput = document.getElementById('resetSecretCode');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
-    if (resetPhoneInput) resetPhoneInput.value = '';
-    if (resetVerificationCodeInput) resetVerificationCodeInput.value = '';
+    if (resetSecretCodeInput) resetSecretCodeInput.value = '';
     if (resetNewPinInput) resetNewPinInput.value = '';
     if (resetConfirmPinInput) resetConfirmPinInput.value = '';
-    updateResetAccountPreview();
 }
 
 function getAuthUsers() {
@@ -3440,7 +3649,7 @@ function toggleForgotPinPanel(show) {
     if (panel) panel.style.display = forgotPinVisible ? 'block' : 'none';
     if (loginBtn) loginBtn.style.display = (!forgotPinVisible && authMode === 'login') ? 'block' : 'none';
     if (signupBtn) signupBtn.style.display = (!forgotPinVisible && authMode === 'signup') ? 'block' : 'none';
-    if (forgotPinBtn) forgotPinBtn.style.display = (!forgotPinVisible && authMode === 'login') ? 'inline-block' : 'none';
+    if (forgotPinBtn) forgotPinBtn.style.display = (!forgotPinVisible && authMode === 'admin') ? 'inline-block' : 'none';
     if (loginTab) loginTab.disabled = forgotPinVisible;
     if (adminTab) adminTab.disabled = forgotPinVisible;
     if (signupTab) signupTab.disabled = forgotPinVisible;
@@ -3491,7 +3700,7 @@ function switchAuthMode(mode) {
     if (confirmPinGroup) confirmPinGroup.style.display = isSignup ? 'block' : 'none';
     if (loginBtn) loginBtn.style.display = isSignup ? 'none' : 'block';
     if (signupBtn) signupBtn.style.display = isSignup ? 'block' : 'none';
-    if (forgotPinBtn) forgotPinBtn.style.display = (!isSignup && !isAdmin) ? 'inline-block' : 'none';
+    if (forgotPinBtn) forgotPinBtn.style.display = isAdmin ? 'inline-block' : 'none';
     if (loginTab) loginTab.classList.toggle('active', !isSignup && !isAdmin);
     if (adminTab) adminTab.classList.toggle('active', isAdmin);
     if (signupTab) signupTab.classList.toggle('active', isSignup);
@@ -3971,22 +4180,21 @@ function openForgotPinPanel() {
 }
 
 async function handleResetPin() {
-    const resetPhoneInput = document.getElementById('resetPhone');
-    const resetVerificationCodeInput = document.getElementById('resetVerificationCode');
+    const resetSecretCodeInput = document.getElementById('resetSecretCode');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
 
-    const phone = normalizePhone(resetPhoneInput ? resetPhoneInput.value : '');
-    const verificationCode = String(resetVerificationCodeInput ? resetVerificationCodeInput.value : '').replace(/\D/g, '');
+    const secretCode = (resetSecretCodeInput ? resetSecretCodeInput.value : '').trim();
     const newPin = (resetNewPinInput ? resetNewPinInput.value : '').trim();
     const confirmPin = (resetConfirmPinInput ? resetConfirmPinInput.value : '').trim();
     const users = getAuthUsers();
     setAuthFeedback('');
 
-    if (phone.length < 10) {
-        setAuthFeedback(t('authPhoneRequired'), 'error');
+    if (secretCode !== 'UMUGWANEZA') {
+        setAuthFeedback('Invalid secret code. Access denied.', 'error');
         return;
     }
+
     if (!isPasswordValid(newPin)) {
         setAuthFeedback(t('authPinRules'), 'error');
         return;
@@ -3996,49 +4204,29 @@ async function handleResetPin() {
         return;
     }
 
-    const user = users.find((u) => normalizePhone(u.phone) === phone);
-    if (!user) {
-        setAuthFeedback(t('authUserNotFound'), 'error');
-        return;
-    }
-
-    if (!verificationCode) {
-        setAuthFeedback(t('authVerificationCodeRequired'), 'error');
-        return;
-    }
-
-    const codeCheck = validatePasswordResetCode(phone, verificationCode);
-    if (!codeCheck.ok) {
-        const messageKey = codeCheck.reason === 'missing'
-            ? 'authVerificationSendFirst'
-            : 'authVerificationCodeInvalid';
-        setAuthFeedback(t(messageKey), 'error');
-        return;
-    }
-
     try {
-        user.passwordHash = await hashPassword(newPin);
-        delete user.pin;
-        delete user.adminPin;
-        user.authProvider = 'password';
-        user.updatedAt = new Date().toISOString();
-        consumePasswordResetCode(phone, verificationCode);
-        appMeta.authUsers = users;
-        appMeta.lastLoginPhone = phone;
+        // Reset admin password for all users (or create a global admin password)
+        // Since admin passwords are per-user, we'll need to reset for the current context
+        // For now, we'll store a global admin reset state
+        const adminResetData = {
+            newAdminPassword: newPin,
+            resetTimestamp: new Date().toISOString()
+        };
+        
+        // Store the reset data temporarily
+        localStorage.setItem('adminPasswordReset', JSON.stringify(adminResetData));
+        
+        appMeta.adminPasswordReset = adminResetData;
         await saveNamedData(APP_META_STORAGE_KEY, appMeta);
     } catch (error) {
-        setAuthFeedback(error.message || 'Unable to reset password.', 'error');
+        setAuthFeedback(error.message || 'Unable to reset admin password.', 'error');
         return;
     }
 
     toggleForgotPinPanel(false);
 
-    const phoneInput = document.getElementById('phone');
-    const pinInput = document.getElementById('pin');
-    if (phoneInput) phoneInput.value = phone;
-    if (pinInput) pinInput.value = '';
-    setAuthFeedback(t('authPinResetSuccess'), 'success');
-    showSuccessToast(t('authPinResetSuccess'));
+    setAuthFeedback('Admin password reset successful. Please login with the new password.', 'success');
+    showSuccessToast('Admin password reset successful');
 }
 
 function initializeAuthUI() {
@@ -4057,8 +4245,7 @@ function initializeAuthUI() {
     const forgotPinBtn = document.getElementById('forgotPinBtn');
     const resetPinBtn = document.getElementById('resetPinBtn');
     const cancelResetPinBtn = document.getElementById('cancelResetPinBtn');
-    const resetPhoneInput = document.getElementById('resetPhone');
-    const resetVerificationCodeInput = document.getElementById('resetVerificationCode');
+    const resetSecretCodeInput = document.getElementById('resetSecretCode');
     const resetNewPinInput = document.getElementById('resetNewPin');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
 
@@ -4121,14 +4308,13 @@ function initializeAuthUI() {
         });
         resetPhoneInput.dataset.boundInput = '1';
     }
-    if (resetVerificationCodeInput && !resetVerificationCodeInput.dataset.boundInput) {
-        resetVerificationCodeInput.addEventListener('input', () => {
-            resetVerificationCodeInput.value = String(resetVerificationCodeInput.value || '').replace(/\D/g, '').slice(0, PASSWORD_RESET_CODE_LENGTH);
+    if (resetSecretCodeInput && !resetSecretCodeInput.dataset.boundInput) {
+        resetSecretCodeInput.addEventListener('input', () => {
             if (document.getElementById('authFeedback')?.style.display === 'block') {
                 setAuthFeedback('');
             }
         });
-        resetVerificationCodeInput.dataset.boundInput = '1';
+        resetSecretCodeInput.dataset.boundInput = '1';
     }
     if (pinInput && !pinInput.dataset.boundEnter) {
         pinInput.addEventListener('keypress', (e) => {
@@ -5401,7 +5587,7 @@ function getSaleDateIso(sale) {
 function getDailySalesRowsOrdered() {
     const grouped = new Map();
 
-    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+    getEffectiveSalesList().forEach((sale) => {
         const dayIso = getSaleDateIso(sale);
         if (!dayIso) return;
 
@@ -5450,7 +5636,7 @@ function renderAdminDailySalesSummary() {
 
 function getSalesForSpecificDay(dayIso) {
     const { dayStart, dayEnd } = getDayRange(dayIso);
-    return (Array.isArray(sales) ? sales : [])
+    return getEffectiveSalesList()
         .filter((sale) => {
             const saleDate = getSaleDateTimeOrNull(sale);
             return saleDate && saleDate >= dayStart && saleDate < dayEnd;
@@ -5581,7 +5767,7 @@ function getAdminBusinessAnalysisData(days = 30) {
     let previousTransactions = 0;
     const productTotals = new Map();
     const latestCreditByCustomerIndex = new Map();
-    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+    getEffectiveSalesList().forEach((sale) => {
         const saleDate = getSaleDateTimeOrNull(sale);
         if (!saleDate) return;
 
@@ -6139,7 +6325,7 @@ function renderAdminBusinessAnalysisTab() {
 
 function getAdminDrinksPieData() {
     const byDrink = new Map();
-    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+    getEffectiveSalesList().forEach((sale) => {
         const name = String(sale.drinkName || 'Unknown').trim() || 'Unknown';
         const qty = Number(sale.quantity) || 0;
         if (qty <= 0) return;
@@ -6995,11 +7181,11 @@ function getAdminGrowthInsights() {
     prevStart.setDate(prevStart.getDate() - 30);
     const prevEnd = new Date(recentStart);
 
-    const recentSales = (Array.isArray(sales) ? sales : []).filter((sale) => {
+    const recentSales = getEffectiveSalesList().filter((sale) => {
         const dt = getSaleDateTimeOrNull(sale);
         return dt && dt >= recentStart && dt <= now;
     });
-    const previousSales = (Array.isArray(sales) ? sales : []).filter((sale) => {
+    const previousSales = getEffectiveSalesList().filter((sale) => {
         const dt = getSaleDateTimeOrNull(sale);
         return dt && dt >= prevStart && dt < prevEnd;
     });
@@ -7224,7 +7410,7 @@ async function exportAdminAllSalesPDF() {
         return;
     }
 
-    const allSales = (Array.isArray(sales) ? sales : [])
+    const allSales = getEffectiveSalesList()
         .filter((sale) => !!getSaleDateTimeOrNull(sale))
         .slice()
         .sort((a, b) => {
@@ -7335,6 +7521,11 @@ async function exportAdminStockAuditPDF() {
 }
 
 function renderAdminPanel() {
+    if (isAdminSessionActive() && !adminSalesCacheLoaded) {
+        refreshAdminSalesCache().then(() => renderAdminPanel());
+        return;
+    }
+
     const body = document.getElementById('adminUsersBody');
     const totalEl = document.getElementById('adminSummaryTotal');
     const privilegedEl = document.getElementById('adminSummaryPrivileged');
@@ -7610,11 +7801,27 @@ async function adminResetUserPin(index) {
         return;
     }
 
+    const codeRaw = window.prompt(t('authSecretCodePrompt'), '');
+    if (codeRaw === null) return;
+    const code = String(codeRaw || '').trim().toUpperCase();
+    if (code !== 'UMUGWANEZA') {
+        alert(t('authSecretCodeInvalid'));
+        return;
+    }
+
     const pinRaw = window.prompt(`Set a new password for ${target.name || 'this user'}:`, '');
     if (pinRaw === null) return;
     const nextPassword = String(pinRaw || '').trim();
     if (!isPasswordValid(nextPassword)) {
         alert(t('authPinRules'));
+        return;
+    }
+
+    const confirmRaw = window.prompt('Confirm the new password:', '');
+    if (confirmRaw === null) return;
+    const confirmPassword = String(confirmRaw || '').trim();
+    if (confirmPassword !== nextPassword) {
+        alert(t('authPinMismatch'));
         return;
     }
 
@@ -7705,8 +7912,41 @@ async function clearEmployeeData(index) {
 }
 
 async function adminResetUserAdminPin(index) {
-    void index;
-    alert('Admin accounts use the same password as normal login. Use Reset Password instead.');
+    if (!canAccessAdminPanel()) {
+        alert('You do not have admin access.');
+        return;
+    }
+    const users = getAuthUsers();
+    const target = users[index];
+    if (!target) return;
+    if (!canManageAdminAccounts() && isAdminRoleUser(target)) {
+        alert('Only the owner can reset admin/owner passwords.');
+        return;
+    }
+
+    const adminPinRaw = window.prompt(`Set a new admin password for ${target.name || 'this user'}:`, '');
+    if (adminPinRaw === null) return;
+    const adminPin = normalizePasswordInput(adminPinRaw);
+    if (!isPasswordValid(adminPin)) {
+        alert(t('authPinRules'));
+        return;
+    }
+
+    const sameAsUserPassword = await verifyUserPassword(target, adminPin);
+    if (sameAsUserPassword) {
+        alert(t('authAdminPinMustDiffer'));
+        return;
+    }
+
+    try {
+        target.adminPasswordHash = await hashPassword(adminPin);
+        delete target.adminPin;
+        target.updatedAt = new Date().toISOString();
+        appMeta.authUsers = users;
+        await saveAuthUsersWithFeedback(`Admin password reset for ${target.name || 'user'}.`);
+    } catch (error) {
+        alert(error.message || 'Unable to reset admin password.');
+    }
 }
 
 async function viewUserDataSnapshot(index) {
@@ -9099,7 +9339,7 @@ async function deleteDrink(index) {
     showSuccessToast(`Drink deleted: ${drink.name}`);
 }
 
-function saveNewDrink() {
+async function saveNewDrink() {
     const name = document.getElementById('newDrinkName').value.trim();
     const price = parseFloat(document.getElementById('newDrinkPrice').value);
     const canEditProfit = canViewProfitData();
@@ -9162,7 +9402,11 @@ function saveNewDrink() {
         });
     }
     
-    optimizedSaveData();
+    await optimizedSaveData();
+    
+    // Save drinks globally for all users so the menu is shared across accounts
+    await saveGlobalDrink(isNewDrink ? drinks[drinks.length - 1] : drinks[existingIndex]);
+    
     updateDrinkList();
     updateQuickDrinkSelect();
     renderStockManagement();
@@ -9467,11 +9711,39 @@ async function saveCustomer() {
     
     customers.push(customer);
     await optimizedSaveData();
+    
+    // Save loyal customers globally for all users so loyalty data is shared
+    if (type === 'loyal') {
+        await saveGlobalLoyalCustomer(customer);
+    }
+    
     displayCustomers();
     updateHome();
     closeCustomerForm();
     
     showSuccessToast(`Customer added: ${name}`);
+}
+
+async function saveGlobalLoyalCustomer(customer) {
+    const globalCustomers = await loadNamedData(GLOBAL_LOYAL_CUSTOMERS_KEY, []);
+    const existingIndex = globalCustomers.findIndex(c => c.id === customer.id);
+    if (existingIndex >= 0) {
+        globalCustomers[existingIndex] = customer;
+    } else {
+        globalCustomers.push(customer);
+    }
+    await saveNamedData(GLOBAL_LOYAL_CUSTOMERS_KEY, globalCustomers);
+}
+
+async function saveGlobalDrink(drink) {
+    const globalDrinks = await loadNamedData(GLOBAL_DRINKS_KEY, []);
+    const existingIndex = globalDrinks.findIndex(d => d.name.toLowerCase() === drink.name.toLowerCase());
+    if (existingIndex >= 0) {
+        globalDrinks[existingIndex] = drink;
+    } else {
+        globalDrinks.push(drink);
+    }
+    await saveNamedData(GLOBAL_DRINKS_KEY, globalDrinks);
 }
 
 async function saveDeposit() {
@@ -9922,7 +10194,7 @@ function getCurrentMonthChartSeries() {
     const profit = Array(daysInMonth).fill(0);
     const allowProfit = canViewProfitData();
 
-    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+    getEffectiveSalesList().forEach((sale) => {
         const dt = getSaleDateTimeOrNull(sale);
         if (!dt || dt.getFullYear() !== year || dt.getMonth() !== month) return;
         const index = dt.getDate() - 1;
@@ -9983,6 +10255,9 @@ function renderHomeSalesChart() {
     const maxTicks = 4;
     const hasActivity = revenue.some((value) => value > 0) || (allowProfit && profit.some((value) => value > 0));
 
+    // Store chart data for interactivity
+    canvas._chartData = { revenue, profit, daysInMonth, maxValue, allowProfit, top, right, bottom, left, plotWidth, plotHeight, width, height };
+
     ctx.strokeStyle = '#e5ebf4';
     ctx.fillStyle = '#7287a1';
     ctx.font = '12px "Space Grotesk", sans-serif';
@@ -10038,6 +10313,109 @@ function renderHomeSalesChart() {
             drawDashboardBars(ctx, revenueX, top + plotHeight - revenueHeight, singleBarWidth, revenueHeight, revenueColor);
         }
     }
+
+    // Add interactivity
+    canvas.style.transition = 'transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease';
+    canvas.onmousemove = handleHomeSalesChartMouseMove;
+    canvas.onmouseout = handleHomeSalesChartMouseOut;
+    canvas.onclick = handleHomeSalesChartClick;
+}
+
+function handleHomeSalesChartMouseMove(event) {
+    const canvas = event.target;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const data = canvas._chartData;
+    if (!data) return;
+
+    const { revenue, profit, daysInMonth, maxValue, allowProfit, top, right, bottom, left, plotWidth, plotHeight, width, height } = data;
+
+    // Check if mouse is in plot area
+    if (x < left || x > width - right || y < top || y > height - bottom) {
+        hideHomeSalesChartTooltip();
+        canvas.style.boxShadow = '';
+        return;
+    }
+
+    // Add glow effect and subtle upward movement
+    canvas.style.boxShadow = '0 0 15px rgba(255, 255, 255, 0.6)';
+    canvas.style.transform = 'translateY(-1px) scale(1.01)';
+
+    // Find which day
+    const barGroupWidth = plotWidth / daysInMonth;
+    const dayIndex = Math.floor((x - left) / barGroupWidth);
+    if (dayIndex < 0 || dayIndex >= daysInMonth) {
+        hideHomeSalesChartTooltip();
+        return;
+    }
+
+    const day = dayIndex + 1;
+    const rev = revenue[dayIndex] || 0;
+    const prof = allowProfit ? (profit[dayIndex] || 0) : 0;
+
+    let tooltipText = `Day ${day}: RWF ${rev.toLocaleString()}`;
+    if (allowProfit && prof > 0) {
+        tooltipText += ` | Profit: RWF ${prof.toLocaleString()}`;
+    }
+
+    showHomeSalesChartTooltip(tooltipText, event.clientX, event.clientY);
+}
+
+function handleHomeSalesChartMouseOut() {
+    hideHomeSalesChartTooltip();
+    const canvas = document.getElementById('homeSalesChart');
+    if (canvas) {
+        canvas.style.boxShadow = '';
+        canvas.style.transform = '';
+    }
+}
+
+function handleHomeSalesChartClick(event) {
+    const canvas = event.target;
+    canvas.style.transition = 'transform 0.1s ease, filter 0.1s ease';
+    canvas.style.transform = 'translateY(-2px) scale(1.02)';
+    canvas.style.filter = 'brightness(1.1)';
+    
+    setTimeout(() => {
+        canvas.style.transform = '';
+        canvas.style.filter = '';
+    }, 150);
+}
+
+function showHomeSalesChartTooltip(text, clientX, clientY) {
+    const tooltip = document.getElementById('homeSalesChartTooltip');
+    if (!tooltip) return;
+    tooltip.textContent = text;
+    tooltip.style.display = 'block';
+    tooltip.style.left = '0px';
+    tooltip.style.top = '0px';
+
+    const wrap = tooltip.parentElement;
+    if (!wrap) return;
+
+    const rect = wrap.getBoundingClientRect();
+    let left = clientX - rect.left;
+    let top = clientY - rect.top - 10;
+
+    // Adjust position to stay within bounds
+    const tooltipRect = tooltip.getBoundingClientRect();
+    if (left + tooltip.offsetWidth > wrap.clientWidth) {
+        left = wrap.clientWidth - tooltip.offsetWidth - 8;
+    }
+    if (left < 8) left = 8;
+    if (top < 8) top = clientY - rect.top + 10;
+    if (top + tooltip.offsetHeight > wrap.clientHeight) {
+        top = wrap.clientHeight - tooltip.offsetHeight - 8;
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+}
+
+function hideHomeSalesChartTooltip() {
+    const tooltip = document.getElementById('homeSalesChartTooltip');
+    if (tooltip) tooltip.style.display = 'none';
 }
 
 function renderDashboardLowStockList(lowStockItems = []) {
@@ -10139,7 +10517,7 @@ function updateHome() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todaySales = sales.filter((sale) => {
+    const todaySales = getEffectiveSalesList().filter((sale) => {
         const saleDate = new Date(sale.date);
         return saleDate >= today;
     });
@@ -10228,7 +10606,7 @@ function showDailyReport(dateValue = null) {
     if (dateInput) dateInput.value = selectedDate;
 
     const { dayStart, dayEnd } = getDayRange(selectedDate);
-    const dailySales = sales.filter((sale) => {
+    const dailySales = getEffectiveSalesList().filter((sale) => {
         const saleDate = new Date(sale.date);
         return saleDate >= dayStart && saleDate < dayEnd;
     });
@@ -10440,7 +10818,7 @@ function getValidatedRangeSelection(showErrors = true) {
 function getSalesForRange(startDate, endDate) {
     const endExclusive = new Date(endDate);
     endExclusive.setDate(endExclusive.getDate() + 1);
-    return sales.filter((sale) => {
+    return getEffectiveSalesList().filter((sale) => {
         const saleDate = new Date(sale.date);
         return saleDate >= startDate && saleDate < endExclusive;
     });
@@ -10672,7 +11050,7 @@ function showWeeklyReport() {
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
     
-    const weeklySales = sales.filter(sale => {
+    const weeklySales = getEffectiveSalesList().filter(sale => {
         const saleDate = new Date(sale.date);
         return saleDate >= weekAgo;
     });
@@ -10769,7 +11147,7 @@ function showMonthlyReport() {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    const monthlySales = sales.filter(sale => {
+    const monthlySales = getEffectiveSalesList().filter(sale => {
         const saleDate = new Date(sale.date);
         return saleDate >= firstDay;
     });
@@ -10867,7 +11245,7 @@ function showAnnualReport() {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), 0, 1);
     
-    const annualSales = sales.filter(sale => {
+    const annualSales = getEffectiveSalesList().filter(sale => {
         const saleDate = new Date(sale.date);
         return saleDate >= firstDay;
     });
@@ -10962,15 +11340,16 @@ function showAnnualReport() {
 
 function showFullReport() {
     const allowProfit = canViewProfitData();
-    const totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-    const totalProfit = allowProfit ? calculateProfitFromSales(sales) : 0;
+    const effectiveSales = getEffectiveSalesList();
+    const totalSales = effectiveSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const totalProfit = allowProfit ? calculateProfitFromSales(effectiveSales) : 0;
     const totalCustomers = customers.length;
     const totalDebt = customers.reduce((sum, customer) => sum + (customer.owing || 0), 0);
     const totalDeposits = clates.filter(c => !c.returned).reduce((sum, c) => sum + (c.amount || 0), 0);
     
     // Top drinks
     const drinkSales = {};
-    sales.forEach(sale => {
+    effectiveSales.forEach(sale => {
         drinkSales[sale.drinkName] = (drinkSales[sale.drinkName] || 0) + (sale.quantity || 0);
     });
     
@@ -11454,7 +11833,7 @@ function exportDailyPDF(doc, startY, margin) {
     const selectedDate = (document.getElementById('dailyReportDate')?.value) || getTodayISODate();
     const { dayStart: today, dayEnd } = getDayRange(selectedDate);
 
-    const dailySales = sales.filter(sale => {
+    const dailySales = getEffectiveSalesList().filter(sale => {
         const saleDate = new Date(sale.date);
         return saleDate >= today && saleDate < dayEnd;
     });
@@ -11637,7 +12016,7 @@ function exportWeeklyPDF(doc, startY, margin) {
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
     
-    const weeklySales = sales.filter(sale => {
+    const weeklySales = getEffectiveSalesList().filter(sale => {
         const saleDate = new Date(sale.date);
         return saleDate >= weekAgo;
     });
@@ -11786,7 +12165,7 @@ function exportMonthlyPDF(doc, startY, margin) {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    const monthlySales = sales.filter(sale => {
+    const monthlySales = getEffectiveSalesList().filter(sale => {
         const saleDate = new Date(sale.date);
         return saleDate >= firstDay;
     });
@@ -11868,6 +12247,59 @@ function exportMonthlyPDF(doc, startY, margin) {
         yPos += 5;
     }
     
+    // LOYAL CUSTOMERS
+    const loyalCustomers = customers.filter(c => isLoyalCustomer(c));
+    if (loyalCustomers.length > 0) {
+        if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = 20;
+        }
+        
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('LOYAL CUSTOMERS', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Customer Name', margin + 3, yPos);
+        doc.text('Purchases', margin + 100, yPos);
+        doc.text('Spent', margin + 140, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        
+        // Calculate for monthly
+        const loyalStats = loyalCustomers.map(customer => {
+            const customerSales = monthlySales.filter(s => s.customerId === customer.id);
+            const totalPurchases = customerSales.length;
+            const totalSpent = customerSales.reduce((sum, s) => sum + (s.total || 0), 0);
+            return { name: customer.name, purchases: totalPurchases, spent: totalSpent };
+        }).filter(stat => stat.purchases > 0).sort((a, b) => b.spent - a.spent).slice(0, 10);
+        
+        loyalStats.forEach((stat, idx) => {
+            if (yPos > pageHeight - 15) {
+                doc.addPage();
+                yPos = 20;
+            }
+            if (idx % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+            }
+            doc.text(stat.name, margin + 3, yPos);
+            doc.text(stat.purchases.toString(), margin + 100, yPos);
+            doc.text(`RWF ${stat.spent.toLocaleString()}`, margin + 140, yPos);
+            yPos += 7;
+        });
+        yPos += 5;
+    }
+    
     // CUSTOMERS IN DEBT
     const customersInDebt = customers.filter(c => c.owing > 0);
     if (customersInDebt.length > 0) {
@@ -11926,7 +12358,7 @@ function exportAnnualPDF(doc, startY, margin) {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), 0, 1);
     
-    const annualSales = sales.filter(sale => {
+    const annualSales = getEffectiveSalesList().filter(sale => {
         const saleDate = new Date(sale.date);
         return saleDate >= firstDay;
     });
@@ -12068,6 +12500,59 @@ function exportAnnualPDF(doc, startY, margin) {
     });
     yPos += 5;
     
+    // LOYAL CUSTOMERS
+    const loyalCustomers = customers.filter(c => isLoyalCustomer(c));
+    if (loyalCustomers.length > 0) {
+        if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = 20;
+        }
+        
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('LOYAL CUSTOMERS', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Customer Name', margin + 3, yPos);
+        doc.text('Purchases', margin + 100, yPos);
+        doc.text('Spent', margin + 140, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        
+        // Calculate for annual
+        const loyalStats = loyalCustomers.map(customer => {
+            const customerSales = annualSales.filter(s => s.customerId === customer.id);
+            const totalPurchases = customerSales.length;
+            const totalSpent = customerSales.reduce((sum, s) => sum + (s.total || 0), 0);
+            return { name: customer.name, purchases: totalPurchases, spent: totalSpent };
+        }).filter(stat => stat.purchases > 0).sort((a, b) => b.spent - a.spent).slice(0, 12);
+        
+        loyalStats.forEach((stat, idx) => {
+            if (yPos > pageHeight - 15) {
+                doc.addPage();
+                yPos = 20;
+            }
+            if (idx % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+            }
+            doc.text(stat.name, margin + 3, yPos);
+            doc.text(stat.purchases.toString(), margin + 100, yPos);
+            doc.text(`RWF ${stat.spent.toLocaleString()}`, margin + 140, yPos);
+            yPos += 7;
+        });
+        yPos += 5;
+    }
+    
     // CUSTOMERS IN DEBT
     const customersInDebt = customers.filter(c => c.owing > 0);
     if (customersInDebt.length > 0) {
@@ -12123,12 +12608,13 @@ function exportAnnualPDF(doc, startY, margin) {
 
 function exportFullPDF(doc, startY, margin) {
     const allowProfit = canViewProfitData();
-    const totalSales = sales.reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = allowProfit ? calculateProfitFromSales(sales) : 0;
+    const effectiveSales = getEffectiveSalesList();
+    const totalSales = effectiveSales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = allowProfit ? calculateProfitFromSales(effectiveSales) : 0;
     const totalCustomers = customers.length;
     const totalDebt = customers.reduce((sum, c) => sum + (c.owing || 0), 0);
-    const cashSales = sales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
-    const creditSales = sales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    const cashSales = effectiveSales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = effectiveSales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
     
     let yPos = startY;
     const pageHeight = doc.internal.pageSize.height;
@@ -12147,7 +12633,7 @@ function exportFullPDF(doc, startY, margin) {
     doc.setFontSize(11);
     doc.setFont(undefined, 'normal');
     doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
-    doc.text(`Records: ${sales.length} transactions`, pageWidth - margin - 70, yPos);
+    doc.text(`Records: ${effectiveSales.length} transactions`, pageWidth - margin - 70, yPos);
     yPos += 12;
     
     // Divider
@@ -12171,7 +12657,7 @@ function exportFullPDF(doc, startY, margin) {
     yPos += 25;
     
     // TOP GOODS (ALL TIME)
-    if (sales.length > 0) {
+    if (effectiveSales.length > 0) {
         doc.setFontSize(12);
         doc.setFont(undefined, 'bold');
         doc.text('TOP GOODS SOLD (ALL TIME)', margin, yPos);
@@ -12179,7 +12665,7 @@ function exportFullPDF(doc, startY, margin) {
         
         const drinkSales = {};
         const drinkValues = {};
-        sales.forEach(sale => {
+        effectiveSales.forEach(sale => {
             if (!drinkSales[sale.drinkName]) {
                 drinkSales[sale.drinkName] = 0;
                 drinkValues[sale.drinkName] = 0;
@@ -12237,6 +12723,59 @@ function exportFullPDF(doc, startY, margin) {
     doc.text(`Cash Sales: RWF ${cashSales.toLocaleString()} (${cashPercent}%)`, margin + 5, yPos + 2);
     doc.text(`Credit Sales: RWF ${creditSales.toLocaleString()} (${creditPercent}%)`, margin + 5, yPos + 8);
     yPos += 20;
+    
+    // LOYAL CUSTOMERS
+    const loyalCustomers = customers.filter(c => isLoyalCustomer(c));
+    if (loyalCustomers.length > 0) {
+        if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = 20;
+        }
+        
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('LOYAL CUSTOMERS', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Customer Name', margin + 3, yPos);
+        doc.text('Total Purchases', margin + 100, yPos);
+        doc.text('Total Spent', margin + 140, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        
+        // Calculate purchase counts and totals for loyal customers
+        const loyalStats = loyalCustomers.map(customer => {
+            const customerSales = effectiveSales.filter(s => s.customerId === customer.id);
+            const totalPurchases = customerSales.length;
+            const totalSpent = customerSales.reduce((sum, s) => sum + (s.total || 0), 0);
+            return { name: customer.name, purchases: totalPurchases, spent: totalSpent };
+        }).sort((a, b) => b.spent - a.spent).slice(0, 15);
+        
+        loyalStats.forEach((stat, idx) => {
+            if (yPos > pageHeight - 15) {
+                doc.addPage();
+                yPos = 20;
+            }
+            if (idx % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+            }
+            doc.text(stat.name, margin + 3, yPos);
+            doc.text(stat.purchases.toString(), margin + 100, yPos);
+            doc.text(`RWF ${stat.spent.toLocaleString()}`, margin + 140, yPos);
+            yPos += 7;
+        });
+        yPos += 5;
+    }
     
     // CUSTOMERS IN DEBT
     const customersInDebt = customers.filter(c => c.owing > 0);
@@ -12330,8 +12869,9 @@ function getSalesHistoryFilteredSales() {
     const searchTerm = (document.getElementById('salesSearch')?.value || '').trim().toLowerCase();
     const selectedDate = document.getElementById('salesHistoryDate')?.value || '';
     const selectedType = getSalesHistorySelectedType();
+    const salesList = getEffectiveSalesList();
 
-    return sales.filter((sale) => {
+    return salesList.filter((sale) => {
         if (selectedType !== 'all' && sale.type !== selectedType) return false;
 
         if (selectedDate) {
@@ -12718,7 +13258,8 @@ function displaySalesHistory() {
     
     clearElement(tbody);
     
-    if (!sales || sales.length === 0) {
+    const salesList = getEffectiveSalesList();
+    if (!salesList || salesList.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="padding: 40px; text-align: center; color: #999;">No sales recorded yet</td></tr>';
         return;
     }
@@ -14473,7 +15014,7 @@ function getAiAssistantDateRange(days, endDate = new Date()) {
 }
 
 function getSalesWithinRange(start, end) {
-    return (Array.isArray(sales) ? sales : []).filter((sale) => {
+    return getEffectiveSalesList().filter((sale) => {
         const dt = getSaleDateTimeOrNull(sale);
         return dt && dt >= start && dt <= end;
     });
@@ -15516,6 +16057,45 @@ function refreshAiAssistantAccessUI() {
         if (log) log.innerHTML = '';
         closeAiAssistantPanel();
     }
+}
+// When user submits a new product
+async function addProduct(productName, price, category, stock) {
+    const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: productName,
+            price: price,
+            category: category,
+            stock: stock
+        })
+    });
+    const result = await response.json();
+    console.log('Product added:', result);
+}
+
+// When user makes a sale
+async function recordSale(productName, quantity, totalPrice, paymentMethod) {
+    const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            product: productName,
+            quantity: quantity,
+            total_price: totalPrice,
+            payment_method: paymentMethod
+        })
+    });
+    const result = await response.json();
+    console.log('Sale recorded:', result);
+}
+
+// Display products on your website
+async function loadProducts() {
+    const response = await fetch('/api/products');
+    const products = await response.json();
+    // Display products in your HTML
+    console.log('Products:', products);
 }
 
 window.saveStockValues = saveStockValues;
