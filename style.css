@@ -9396,6 +9396,22 @@ h1, h2, h3, h4, .logo, .dashboard-greeting {
     height: 320px;
 }
 
+.dashboard-chart-tooltip {
+    position: absolute;
+    z-index: 10;
+    max-width: 200px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #204265;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(15, 42, 79, 0.15);
+    border: 1px solid rgba(16, 81, 156, 0.2);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
 .dashboard-alert-list {
     display: grid;
     border-radius: 18px;
@@ -9588,6 +9604,12 @@ body.dark-mode .metric-icon-box {
 body.dark-mode .dashboard-eyebrow {
     background: rgba(255, 159, 26, 0.16);
     color: #ffc875;
+}
+
+body.dark-mode .dashboard-chart-tooltip {
+    background: rgba(33, 37, 41, 0.95);
+    color: #e9ecef;
+    border-color: rgba(77, 81, 85, 0.3);
 }
 
 @keyframes dashboard-page-fade {
