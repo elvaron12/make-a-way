@@ -9,6 +9,7 @@
     <link rel="icon" href="logo.png" type="image/png">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="mobile-styles.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
@@ -750,7 +751,9 @@
             box-shadow: 0 26px 70px rgba(7, 63, 109, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(14px) saturate(130%);
             -webkit-backdrop-filter: blur(14px) saturate(130%);
-            overflow: hidden;
+            max-height: min(calc(100vh - 40px), 820px);
+            overflow-y: auto;
+            overflow-x: hidden;
             animation: mawCardRise 0.75s cubic-bezier(0.2, 0.9, 0.2, 1);
         }
 
@@ -3354,26 +3357,22 @@
             <button id="forgotPinBtn" class="auth-link-btn" type="button">Forgot Password?</button>
 
             <div id="forgotPinPanel" class="forgot-panel" style="display: none;">
-                <h3 id="forgotPinTitle">Reset Password</h3>
-                <p id="forgotPinDescription" class="auth-panel-note">Use the phone number registered on the account, then choose a new password.</p>
-                <p id="resetAccountPreview" class="auth-account-preview">We will match the phone number to an existing account.</p>
+                <h3 id="forgotPinTitle">Reset Admin Password</h3>
+                <p id="forgotPinDescription" class="auth-panel-note">Enter the secret code to reset the admin password.</p>
+                <p id="resetAccountPreview" class="auth-account-preview">Only administrators can reset passwords using this method.</p>
                 <div class="input-group">
-                    <label for="resetPhone">Phone Number</label>
-                    <input type="tel" id="resetPhone" placeholder="Enter your phone number" autocomplete="off">
+                    <label for="resetSecretCode">Secret Code</label>
+                    <input type="password" id="resetSecretCode" maxlength="20" placeholder="Enter secret code" autocomplete="off">
                 </div>
                 <div class="input-group">
-                    <label for="resetVerificationCode">Verification Code</label>
-                    <input type="text" id="resetVerificationCode" maxlength="6" inputmode="numeric" placeholder="Enter reset code" autocomplete="one-time-code">
+                    <label for="resetNewPin">New Admin Password</label>
+                    <input type="password" id="resetNewPin" maxlength="64" placeholder="Enter new admin password" autocomplete="new-password">
                 </div>
                 <div class="input-group">
-                    <label for="resetNewPin">New Password</label>
-                    <input type="password" id="resetNewPin" maxlength="64" placeholder="Enter new password" autocomplete="new-password">
+                    <label for="resetConfirmPin">Confirm New Admin Password</label>
+                    <input type="password" id="resetConfirmPin" maxlength="64" placeholder="Confirm new admin password" autocomplete="new-password">
                 </div>
-                <div class="input-group">
-                    <label for="resetConfirmPin">Confirm New Password</label>
-                    <input type="password" id="resetConfirmPin" maxlength="64" placeholder="Confirm new password" autocomplete="new-password">
-                </div>
-                <button id="resetPinBtn" class="login-button">RESET PASSWORD</button>
+                <button id="resetPinBtn" class="login-button">RESET ADMIN PASSWORD</button>
                 <button id="cancelResetPinBtn" class="auth-link-btn" type="button">Cancel</button>
             </div>
 
@@ -3799,6 +3798,7 @@
                         </div>
                         <div class="dashboard-chart-wrap">
                             <canvas id="homeSalesChart" width="960" height="340"></canvas>
+                            <div id="homeSalesChartTooltip" class="dashboard-chart-tooltip" style="display:none;"></div>
                         </div>
                     </div>
 
