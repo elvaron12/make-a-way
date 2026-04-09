@@ -423,6 +423,7 @@ let rwandaClockInterval = null;
 let rwandaClockSyncInterval = null;
 let rwandaClockBaseEpochMs = null;
 let rwandaClockBasePerfMs = null;
+let rwandaClockLifecycleBound = false;
 let autoBackupTimeout = null;
 let autoDailySalesPdfTimeout = null;
 let autoDailySalesPdfCheckInterval = null;
@@ -435,6 +436,7 @@ let homeDebtNotificationRenderToken = 0;
 
 const RWANDA_TIME_ZONE = 'Africa/Kigali';
 const RWANDA_TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const GLOBAL_DRINKS_KEY = 'global_drinks';
 const offlineSyncState = {
     supported: false,
     serviceWorkerRegistered: false,
@@ -672,6 +674,7 @@ const translations = {
         all: 'All',
         owing: 'Owing',
         cleared: 'Cleared',
+        overdue: 'Overdue',
         addCustomer: 'Add Customer',
         exportDebtSummary: 'Export Debt Summary',
         searchCustomers: 'Search customers by name, phone, or details...',
@@ -801,6 +804,52 @@ const translations = {
         version: 'Version:',
         purpose: 'Purpose:',
         appPurposeValue: 'Business Tracking & Sales Management System',
+        homeRevenueLabel: "Today's Revenue",
+        homeLowStockLabel: 'Low Stock Items',
+        homeCreditLabel: 'Outstanding Credit',
+        homeSalesOverviewTitle: 'Monthly Sales Overview',
+        homeLowStockPanelTitle: 'Low Stock Alert',
+        selectedDrinksTitle: 'Selected Drinks',
+        addSelectedToCart: 'Add Selected to Cart',
+        refreshLabel: 'Refresh',
+        allActions: 'All Actions',
+        depositsAction: 'Deposits',
+        darkModeActive: 'Dark mode active',
+        savePreferencesSuccess: 'Preferences saved. Dark mode and language updated.',
+        customerActionAddDebt: 'Add Debt',
+        customerActionReduceDebt: 'Reduce Debt',
+        customerActionClearDebt: 'Clear Debt',
+        customerActionExportPdf: 'Export PDF',
+        customerActionDelete: 'Delete Customer',
+        adminAiLabel: 'AI Advisor',
+        adminAiToneHealthy: 'Healthy',
+        adminAiToneWatch: 'Watch',
+        adminAiToneStable: 'Stable',
+        adminAiInsightLabel: 'Insight',
+        adminAiReasonLabel: 'Reason',
+        adminAiActionLabel: 'Action',
+        adminAiSignalsLabel: 'Signals',
+        adminAiUpdatedNow: 'Updated now',
+        adminAiUpdatedAt: 'Updated {time}',
+        adminAiRecommendationSingular: 'recommendation',
+        adminAiRecommendationPlural: 'recommendations',
+        adminAiDebtCustomerSingular: 'debt customer',
+        adminAiDebtCustomerPlural: 'debt customers',
+        adminAiOverdueLabel: 'overdue',
+        adminAiRealData: 'Real business data',
+        adminAiGrowthTipsTitle: 'Growth Tips',
+        adminAiActionPlanTitle: 'Action Plan',
+        adminAiDebtSectionTitle: 'Customers with Debt',
+        adminAiCashflowWatch: 'Cashflow Watch',
+        adminAiTotalOwing: 'Total Owing',
+        adminAiInDebt: 'In Debt',
+        adminAiNoDueDate: 'No due date',
+        adminAiNoDebtActive: 'No customer debts are active. Great collection discipline.',
+        adminAiNoDataTitle: 'No data yet',
+        adminAiInsightFallbackTitle: 'Insight',
+        confirmActionTitle: 'Confirm Action',
+        confirmActionMessage: 'Are you sure you want to continue?',
+        confirmActionButton: 'Confirm',
         rightsReserved: '2026 Make A Way. All rights reserved.',
         footerText: 'MAKE A WAY - Business Tracking System'
     },
@@ -928,6 +977,7 @@ const translations = {
         all: 'Byose',
         owing: 'Bafite umwenda',
         cleared: 'Bishyuwe',
+        overdue: 'Byakererewe',
         addCustomer: 'Kongeramo umukiriya',
         exportDebtSummary: "Ohereza raporo y'imyenda",
         searchCustomers: 'Shakisha umukiriya ukoresheje izina, telefone cyangwa ibisobanuro...',
@@ -1057,6 +1107,114 @@ const translations = {
         version: 'Verisiyo:',
         purpose: 'Intego:',
         appPurposeValue: "Gukurikirana ubucuruzi no gucunga ibyagurishijwe",
+        adminRefresh: 'Vugurura',
+        adminTabSales: 'Igurisha',
+        adminTabAccountManagement: 'Imicungire ya konti',
+        adminSubTabDailySales: 'Igurisha rya buri munsi',
+        adminSubTabStock: 'Sitoki',
+        adminExportAccountsPdf: 'Ohereza PDF ya konti',
+        adminSearchEmployersPlaceholder: 'Shakisha abakozi ukoresheje izina cyangwa telefoni',
+        adminFilterPrivileged: 'Admin/Nyiri porogaramu',
+        adminFilterStaff: 'Abakozi',
+        adminFilterInactive: 'Badakora',
+        adminDailyExportTitle: 'Kohereza igurisha rya buri munsi',
+        adminDailyExportDesc: 'Hitamo umunsi runaka wohereze igurisha ryose rikurikiranye.',
+        adminExportDayPdf: 'Ohereza PDF y umunsi',
+        adminExportAllSalesPdf: 'Ohereza PDF y igurisha ryose',
+        adminStockAuditPdf: 'PDF ya igenzura rya sitoki',
+        adminStockSectionTitle: 'Incamake ya sitoki',
+        adminStockSectionDesc: 'Kurikirana sitoki nk uko biri kuri page ya stock kandi wohereze raporo.',
+        adminStockSummaryTotalDrinks: 'Ibinyobwa byose',
+        adminStockSummaryLow: 'Sitoki iri hasi',
+        adminStockSummaryOut: 'Byashize',
+        adminStockFilterLow: 'Hasi',
+        adminStockFilterOut: 'Byashize',
+        adminClearCurrentUserData: 'Siba amakuru y uwinjiye ubu',
+        adminAccountsExportTitle: 'Kohereza na raporo',
+        adminAccountsExportDesc: 'Tandukanya kohereza amakuru n ibikorwa byo gucunga konti.',
+        adminDataProtectionTitle: 'Kurinda amakuru',
+        adminDataProtectionDesc: 'Andika DELETE mbere yo gusiba amakuru y uwinjiye ubu.',
+        adminAiTitle: 'Umujyanama wa AI',
+        adminAiDesc: 'Banza ukore insights nshya, ubone kureba health, summary, alerts, priorities na quick commands.',
+        adminAnalyzeBusiness: 'Kora Insights',
+        adminAiPlaceholder: 'Koresha AI ubone igisubizo gisobanutse, impamvu ngufi, n igikorwa gikurikiraho.',
+        adminSummaryTotalAccounts: 'Konti zose',
+        adminSummaryAdminOwner: 'Admin + Nyiri porogaramu',
+        adminSummaryStaff: 'Abakozi',
+        adminSummaryInactive: 'Badakora',
+        adminDailyHeadDate: 'Itariki',
+        adminDailyHeadTransactions: 'Ibyakozwe',
+        adminDailyHeadCases: 'Amakaso yagurishijwe',
+        adminDailyHeadTotal: 'Igiteranyo cy igurisha',
+        adminDailyHeadProfit: 'Inyungu',
+        adminDailyHeadPrint: 'Capisha',
+        adminEmployerAccountsTitle: 'Imicungire y abakoresha',
+        adminNoSalesDataYet: 'Nta makuru y igurisha arahari.',
+        adminNoStockMatch: 'Nta kinyobwa gihuye n iyi filter.',
+        adminNoEmployersMatch: 'Nta mukozi uhuye n iyi filter.',
+        adminAnalysisRequiresSession: 'Session ya admin irakenewe kugira ngo usesengure.',
+        adminExportDayNoSales: 'Nta gurisha ribonetse kuri uwo munsi.',
+        authSubtitle: 'Igurisha, sitoki, backup na raporo byose hamwe.',
+        authModeLoginTitle: 'Kwinjira k umukozi',
+        authModeLoginText: 'Koresha nimero ya telefone n ijambobanga ufungure workspace y uyu munsi.',
+        authModeAdminTitle: 'Session ya Admin',
+        authModeAdminText: 'Admin mode ifungura exports z igurisha, kugenzura konti n igenamiterere ririnzwe.',
+        authModeSignupTitle: 'Fungura konti ya nyiri porogaramu',
+        authModeSignupText: 'Fungura konti ya mbere ya nyiri porogaramu kugira ngo urinde porogaramu mbere y uko abakozi bayikoresha.',
+        authResetDescription: 'Koresha nimero ya telefone ya konti, andika kode yo gusubiramo ya admin, hanyuma ushyireho ijambobanga rishya.',
+        authResetPreviewEmpty: 'Turahuza nimero ya telefone na konti ibitswe.',
+        authResetPreviewFound: 'Konti yabonetse: {name} ({phone}). Shyiramo ijambobanga rishya hasi.',
+        authResetPreviewMissing: 'Nta konti ibitswe ihuye na {phone}. Reba neza nimero wongere ugerageze.',
+        adminAutoPdfToggle: 'Kuramo PDF y igurisha rya buri munsi buri munsi',
+        adminAutoPdfTimeLabel: 'Igihe cyo kohereza',
+        adminAutoPdfSave: 'Bika auto export',
+        connectivitySyncNow: 'Huza nonaha',
+        homeRevenueLabel: "Amafaranga yinjijwe uyu munsi",
+        homeLowStockLabel: 'Ibintu bya sitoki iri hasi',
+        homeCreditLabel: 'Umwenda usigaye',
+        homeSalesOverviewTitle: 'Incamake y igurisha rya buri kwezi',
+        homeLowStockPanelTitle: 'Iburira rya sitoki iri hasi',
+        selectedDrinksTitle: 'Ibinyobwa byatoranyijwe',
+        addSelectedToCart: 'Ongeramo byatoranyijwe muri cart',
+        refreshLabel: 'Vugurura',
+        allActions: 'Ibikorwa byose',
+        depositsAction: 'Ubwizigame',
+        darkModeActive: 'Dark mode iri gukora',
+        savePreferencesSuccess: 'Ibyo ukunda byabitswe. Dark mode n ururimi byavuguruwe.',
+        customerActionAddDebt: 'Ongeraho umwenda',
+        customerActionReduceDebt: 'Gabanya umwenda',
+        customerActionClearDebt: 'Kuraho umwenda',
+        customerActionExportPdf: 'Ohereza PDF',
+        customerActionDelete: 'Siba umukiriya',
+        adminAiLabel: 'Umujyanama wa AI',
+        adminAiToneHealthy: 'Bimeze neza',
+        adminAiToneWatch: 'Icyitonderwa',
+        adminAiToneStable: 'Bihagaze neza',
+        adminAiInsightLabel: 'Icyo wabonye',
+        adminAiReasonLabel: 'Impamvu',
+        adminAiActionLabel: 'Igikorwa',
+        adminAiSignalsLabel: 'Ibimenyetso',
+        adminAiUpdatedNow: 'Byavuguruwe nonaha',
+        adminAiUpdatedAt: 'Byavuguruwe saa {time}',
+        adminAiRecommendationSingular: 'inyunganizi',
+        adminAiRecommendationPlural: 'inyunganizi',
+        adminAiDebtCustomerSingular: 'umukiriya ufite umwenda',
+        adminAiDebtCustomerPlural: 'abakiriya bafite imyenda',
+        adminAiOverdueLabel: 'byakererewe',
+        adminAiRealData: 'Amakuru nyayo y ubucuruzi',
+        adminAiGrowthTipsTitle: 'Inama zo kuzamura ubucuruzi',
+        adminAiActionPlanTitle: 'Uko ukora',
+        adminAiDebtSectionTitle: 'Abakiriya bafite umwenda',
+        adminAiCashflowWatch: 'Igenzura ry amafaranga yinjira',
+        adminAiTotalOwing: 'Umwenda wose',
+        adminAiInDebt: 'Bafite umwenda',
+        adminAiNoDueDate: 'Nta tariki yo kwishyura',
+        adminAiNoDebtActive: 'Nta mukiriya ufite umwenda uriho. Mwakomeje neza.',
+        adminAiNoDataTitle: 'Nta makuru arahari',
+        adminAiInsightFallbackTitle: 'Icyo wabonye',
+        confirmActionTitle: 'Emeza igikorwa',
+        confirmActionMessage: 'Uzi neza ko ushaka gukomeza?',
+        confirmActionButton: 'Emeza',
         rightsReserved: '2026 Make A Way. Uburenganzira bwose bwihariwe.',
         footerText: 'MAKE A WAY - Sisitemu yo gukurikirana ubucuruzi'
     },
@@ -1184,6 +1342,7 @@ remove: 'Supprimer',
 all: 'Tous',
 owing: 'Débiteurs',
 cleared: 'Payés',
+overdue: 'En retard',
 addCustomer: 'Ajouter un client',
 exportDebtSummary: 'Exporter le rapport des dettes',
 searchCustomers: 'Rechercher un client par nom, téléphone ou description...',
@@ -1275,9 +1434,10 @@ function escapeHtml(s) {
 }
 
 function showSuccessToast(message) {
+    const localizedMessage = localizeLooseText(message);
     const toast = document.createElement('div');
     toast.className = 'maw-success-toast';
-    toast.innerHTML = `<span class="tick">&#10004;</span><span>${escapeHtml(message)}</span>`;
+    toast.innerHTML = `<span class="tick">&#10004;</span><span>${escapeHtml(localizedMessage)}</span>`;
     document.body.appendChild(toast);
 
     requestAnimationFrame(() => {
@@ -1322,10 +1482,10 @@ function ensureUiConfirmBindings() {
 
 function showUiConfirm(options = {}) {
     const {
-        title = 'Confirm Action',
-        message = 'Are you sure you want to continue?',
-        confirmText = 'Confirm',
-        cancelText = 'Cancel'
+        title = t('confirmActionTitle'),
+        message = t('confirmActionMessage'),
+        confirmText = t('confirmActionButton'),
+        cancelText = t('cancel')
     } = options;
 
     const overlay = document.getElementById('uiConfirmOverlay');
@@ -1338,10 +1498,10 @@ function showUiConfirm(options = {}) {
         return Promise.resolve(window.confirm(String(message)));
     }
 
-    titleEl.textContent = String(title);
-    messageEl.textContent = String(message);
-    cancelBtn.textContent = String(cancelText);
-    okBtn.textContent = String(confirmText);
+    titleEl.textContent = localizeLooseText(String(title));
+    messageEl.textContent = localizeLooseText(String(message));
+    cancelBtn.textContent = localizeLooseText(String(cancelText));
+    okBtn.textContent = localizeLooseText(String(confirmText));
 
     overlay.style.display = 'block';
     return new Promise((resolve) => {
@@ -1683,8 +1843,9 @@ function bindAutoDailySalesPdfLifecycleEvents() {
 
 // ================= ELECTRON + WEB STORAGE =================
 const APP_META_STORAGE_KEY = 'app_meta';
+const GLOBAL_CUSTOMERS_KEY = 'global_customers';
+const GLOBAL_CLATES_KEY = 'global_clates';
 const GLOBAL_LOYAL_CUSTOMERS_KEY = 'global_loyal_customers';
-const GLOBAL_DRINKS_KEY = 'global_drinks';
 
 function getDefaultAppMeta() {
     return {
@@ -1902,6 +2063,91 @@ function normalizeDrinksList(list) {
         .filter(Boolean);
 }
 
+function sanitizeClateEntry(raw, fallbackIndex = 0) {
+    if (!raw || typeof raw !== 'object') return null;
+    const customerName = String(raw.customerName ?? raw.name ?? '').trim();
+    const amountValue = Number(raw.amount ?? raw.value ?? 0);
+    const amount = Number.isFinite(amountValue) ? Math.max(0, amountValue) : 0;
+    if (!customerName || amount <= 0) return null;
+
+    const description = String(raw.description || 'Bottle deposit').trim() || 'Bottle deposit';
+    const dateRaw = raw.date ?? raw.createdAt ?? '';
+    const parsedDate = new Date(dateRaw || Date.now());
+    const date = Number.isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
+
+    const returned = Boolean(raw.returned);
+    const returnedDateRaw = raw.returnedDate ?? raw.returnDate ?? '';
+    const parsedReturnedDate = new Date(returnedDateRaw || Date.now());
+    const returnedDate = returned
+        ? (Number.isNaN(parsedReturnedDate.getTime()) ? new Date().toISOString() : parsedReturnedDate.toISOString())
+        : '';
+
+    const parsedId = Number(raw.id ?? raw.depositId ?? NaN);
+    const id = (Number.isFinite(parsedId) && parsedId > 0)
+        ? Math.floor(parsedId)
+        : (Date.now() + fallbackIndex);
+
+    return {
+        id,
+        customerName,
+        amount,
+        description,
+        date,
+        returned,
+        returnedDate
+    };
+}
+
+function normalizeClatesData() {
+    if (!Array.isArray(clates)) {
+        clates = [];
+        return;
+    }
+    clates = clates
+        .map((entry, index) => sanitizeClateEntry(entry, index))
+        .filter(Boolean);
+}
+
+function normalizeClatesList(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+        .map((entry, index) => sanitizeClateEntry(entry, index))
+        .filter(Boolean);
+}
+
+function getClateMergeKey(entry, fallbackIndex = 0) {
+    const id = Number(entry?.id);
+    if (Number.isFinite(id) && id > 0) return `id:${Math.floor(id)}`;
+
+    const customerName = String(entry?.customerName || '').trim().toLowerCase();
+    const amount = Number(entry?.amount) || 0;
+    const date = String(entry?.date || '').trim();
+    if (customerName && amount > 0 && date) {
+        return `sig:${customerName}|${amount}|${date}`;
+    }
+    return `idx:${fallbackIndex}`;
+}
+
+function mergeClateLists(...lists) {
+    const merged = [];
+    const keyToIndex = new Map();
+
+    lists.forEach((list) => {
+        const normalizedList = normalizeClatesList(list);
+        normalizedList.forEach((entry, index) => {
+            const mergeKey = getClateMergeKey(entry, index);
+            if (keyToIndex.has(mergeKey)) {
+                merged[keyToIndex.get(mergeKey)] = entry;
+                return;
+            }
+            keyToIndex.set(mergeKey, merged.length);
+            merged.push(entry);
+        });
+    });
+
+    return merged;
+}
+
 const CUSTOMER_TYPE_LABELS = {
     regular: 'Regular Customer',
     loyal: 'Loyal Customer',
@@ -2092,6 +2338,37 @@ function normalizeCustomersList(list) {
         .filter(Boolean);
 }
 
+function getCustomerMergeKey(customer, fallbackIndex = 0) {
+    const id = String(customer?.id ?? '').trim();
+    if (id) return `id:${id}`;
+
+    const phone = normalizePhone(customer?.phone || '');
+    const name = String(customer?.name || '').trim().toLowerCase();
+    if (phone && name) return `phone:${phone}|name:${name}`;
+    if (name) return `name:${name}|idx:${fallbackIndex}`;
+    return `idx:${fallbackIndex}`;
+}
+
+function mergeCustomerLists(...lists) {
+    const merged = [];
+    const keyToIndex = new Map();
+
+    lists.forEach((list) => {
+        const normalizedList = normalizeCustomersList(list);
+        normalizedList.forEach((customer, index) => {
+            const mergeKey = getCustomerMergeKey(customer, index);
+            if (keyToIndex.has(mergeKey)) {
+                merged[keyToIndex.get(mergeKey)] = customer;
+                return;
+            }
+            keyToIndex.set(mergeKey, merged.length);
+            merged.push(customer);
+        });
+    });
+
+    return merged;
+}
+
 function getCustomerDebtLimit() {
     const raw = Number(settings?.maxCustomerDebt);
     return Number.isFinite(raw) && raw > 0 ? raw : 0;
@@ -2249,65 +2526,37 @@ function buildCustomerItemMarkup(customer, index, options = {}) {
     const promiseLabel = formatCustomerPromiseDate(promiseDate);
     const overdue = isCustomerDebtOverdue(customer);
     const overdueLabel = formatOverdueDurationLabel(getCustomerDebtOverdueMs(customer));
-    const overdueLoyal = overdue && isLoyalCustomer(customer);
+    const customerIconMarkup = '<div class="customer-icon loyal-avatar" aria-hidden="true"></div>';
+
     return `
-        <div class="customer-info">
-            <div class="customer-title-row">
-                <strong>${escapeHtml(customer.name)}</strong>
-                ${overdueLoyal ? `<span class="customer-status-badge overdue">Payback Due</span>` : ''}
+        <div class="customer-square-card">
+            ${customerIconMarkup}
+            <div class="customer-info-section">
+                <div class="customer-name">${escapeHtml(customer.name)}</div>
+                <div class="customer-debt">${customer.owing > 0 ? `RWF ${customer.owing.toLocaleString()}` : 'Cleared'}</div>
+                ${overdue ? `<div class="customer-overdue-badge">!</div>` : ''}
             </div>
-            <div class="customer-details">
-                ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
-                ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
-                ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(formatCustomerTypeLabel(customer.type))}</div>` : ''}
-                ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
-                ${promiseDate ? `<div class="customer-detail-item ${overdue ? 'customer-detail-overdue' : ''}">&#128197; Promise Time: ${escapeHtml(promiseLabel)}${overdue ? ` (${overdueLabel})` : ''}</div>` : ''}
-            </div>
-            ${buildCustomerDebtSummaryHtml(customer)}
         </div>
-        <div class="customer-actions">
-            <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
-            <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
-            <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
-            <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
-            ${includeDelete ? `<button onclick="deleteCustomer(${index})" style="background: #ff4757;">Delete</button>` : ''}
+        <div class="customer-square-buttons">
+            <button onclick="openAddDebtForm(${index})" class="square-btn customer-action-btn action-add" title="${escapeHtml(t('customerActionAddDebt'))}"><span class="square-btn-label">+</span></button>
+            <button onclick="openReduceDebtForm(${index})" class="square-btn customer-action-btn action-reduce" title="${escapeHtml(t('customerActionReduceDebt'))}"><span class="square-btn-label">-</span></button>
+            <button onclick="openClearDebtForm(${index})" class="square-btn customer-action-btn action-clear" title="${escapeHtml(t('customerActionClearDebt'))}"><span class="square-btn-label">✓</span></button>
+            <button onclick="exportCustomerDebtPDF(${index})" class="square-btn customer-action-btn action-pdf" title="${escapeHtml(t('customerActionExportPdf'))}"><span class="square-btn-label square-btn-label-pdf">PDF</span></button>
+            ${includeDelete ? `<button onclick="deleteCustomer(${index})" class="square-btn customer-action-btn action-delete" title="${escapeHtml(t('customerActionDelete'))}"><span class="square-btn-label">×</span></button>` : ''}
         </div>
     `;
 }
 
 async function getAdminHomeDebtReminderEntries() {
-    const users = getAuthUsers();
-    const scopedUsers = [];
-    const requests = [];
+    const sharedCustomers = await loadNamedData(GLOBAL_CUSTOMERS_KEY, []);
+    let validCustomers = normalizeCustomersList(sharedCustomers);
+    if (!validCustomers.length) {
+        // Backward compatibility with older installs that stored only loyal customers globally.
+        const legacyLoyalCustomers = await loadNamedData(GLOBAL_LOYAL_CUSTOMERS_KEY, []);
+        validCustomers = normalizeCustomersList(legacyLoyalCustomers);
+    }
 
-    users.forEach((user) => {
-        const key = userDataKey('customers', user);
-        if (!key) return;
-        scopedUsers.push({ user, key });
-        requests.push({ name: key, defaultValue: [] });
-    });
-
-    const loaded = requests.length ? await loadManyNamedData(requests) : {};
-    const reminders = [];
-
-    scopedUsers.forEach(({ user, key }) => {
-        const accountLabelBase = String(user?.name || user?.phone || 'User').trim() || 'User';
-        const accountLabel = isUserAccountActive(user)
-            ? accountLabelBase
-            : `${accountLabelBase} (inactive)`;
-        reminders.push(
-            ...getCustomerDebtReminderEntries(loaded[key], { accountLabel })
-        );
-    });
-
-    reminders.sort((a, b) => {
-        if (a.promisedPaybackDate && b.promisedPaybackDate && a.promisedPaybackDate !== b.promisedPaybackDate) {
-            return a.promisedPaybackDate.localeCompare(b.promisedPaybackDate);
-        }
-        return (b.overdueMs || 0) - (a.overdueMs || 0);
-    });
-
-    return reminders;
+    return getCustomerDebtReminderEntries(validCustomers, { accountLabel: 'All Accounts' });
 }
 
 async function renderHomeDebtNotifications() {
@@ -2395,6 +2644,29 @@ async function maybeShowDebtReminderPopup() {
         alert(`Payment reminder\n\nThese customers passed their promised payback date and time:\n\n${preview}${moreCount}`);
     } catch (error) {
         console.warn('Unable to show debt reminder popup:', error);
+    }
+}
+
+async function renderLoginDebtNotifications() {
+    const banner = document.getElementById('loginDebtNotifications');
+    if (!banner) return;
+
+    try {
+        const reminders = getCustomerDebtReminderEntries(customers);
+        if (!Array.isArray(reminders) || reminders.length === 0) {
+            banner.style.display = 'none';
+            return;
+        }
+
+        const totalOwing = reminders.reduce((sum, entry) => sum + (Number(entry.owing) || 0), 0);
+        banner.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px;">💰 ${reminders.length} customer${reminders.length > 1 ? 's' : ''} with overdue payments</div>
+            <div style="font-size: 0.85rem; opacity: 0.9;">Total: RWF ${totalOwing.toLocaleString()} - Remember to collect payments.</div>
+        `;
+        banner.style.display = 'block';
+    } catch (error) {
+        console.warn('Unable to render login debt notifications:', error);
+        banner.style.display = 'none';
     }
 }
 
@@ -2669,7 +2941,7 @@ async function initializeUserStorage(user = activeUser) {
     const salesKey = userDataKey('sales', user);
     const customersKey = userDataKey('customers', user);
     const clatesKey = userDataKey('clates', user);
-    const drinksKey = userDataKey('drinks', user);
+    const drinksKey = GLOBAL_DRINKS_KEY;
     const settingsKey = userDataKey('settings', user);
     const archivesKey = userDataKey('archives', user);
     if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey || !archivesKey) return;
@@ -2731,8 +3003,10 @@ async function migrateLegacyDataIfNeeded() {
 async function loadActiveUserData(user = activeUser) {
     const salesKey = userDataKey('sales', user);
     const customersKey = userDataKey('customers', user);
+    const globalCustomersKey = GLOBAL_CUSTOMERS_KEY;
+    const globalClatesKey = GLOBAL_CLATES_KEY;
     const clatesKey = userDataKey('clates', user);
-    const drinksKey = userDataKey('drinks', user);
+    const drinksKey = GLOBAL_DRINKS_KEY;
     const settingsKey = userDataKey('settings', user);
     const archivesKey = userDataKey('archives', user);
 
@@ -2749,6 +3023,8 @@ async function loadActiveUserData(user = activeUser) {
     const loadedMap = await loadManyNamedData([
         { name: salesKey, defaultValue: [] },
         { name: customersKey, defaultValue: [] },
+        { name: globalCustomersKey, defaultValue: [] },
+        { name: globalClatesKey, defaultValue: [] },
         { name: clatesKey, defaultValue: [] },
         { name: drinksKey, defaultValue: [] },
         { name: settingsKey, defaultValue: {} },
@@ -2756,39 +3032,86 @@ async function loadActiveUserData(user = activeUser) {
     ]);
     const loadedSales = loadedMap[salesKey];
     const loadedCustomers = loadedMap[customersKey];
+    const loadedGlobalCustomers = loadedMap[globalCustomersKey];
+    const loadedGlobalClates = loadedMap[globalClatesKey];
     const loadedClates = loadedMap[clatesKey];
     const loadedDrinks = loadedMap[drinksKey];
     const loadedSettings = loadedMap[settingsKey];
     const loadedArchives = loadedMap[archivesKey];
 
     sales = Array.isArray(loadedSales) ? loadedSales : [];
-    customers = Array.isArray(loadedCustomers) ? loadedCustomers : [];
-    clates = Array.isArray(loadedClates) ? loadedClates : [];
+    customers = mergeCustomerLists(loadedGlobalCustomers, loadedCustomers);
+    clates = mergeClateLists(loadedGlobalClates, loadedClates);
     drinks = Array.isArray(loadedDrinks) ? loadedDrinks : [];
     settings = sanitizeUserSettings(loadedSettings);
     yearlyArchives = sanitizeYearArchives(loadedArchives);
     
     // Try to load customers from MongoDB
-    const mongoCustomersLoaded = await loadCustomersFromMongoDB(user?.phone || user);
+    await loadCustomersFromMongoDB(user?.phone || user);
     
     // Try to load drinks from MongoDB
-    const mongoDrinksLoaded = await loadDrinksFromMongoDB(user?.phone || user);
-    
-    // Merge global loyal customers
-    const globalLoyalCustomers = await loadNamedData(GLOBAL_LOYAL_CUSTOMERS_KEY, []);
-    if (Array.isArray(globalLoyalCustomers)) {
-        const loyalCustomers = globalLoyalCustomers.filter(c => c.type === 'loyal');
-        // Merge with user customers, avoiding duplicates by id
-        const mergedCustomers = [...customers];
-        for (const globalCust of loyalCustomers) {
-            const existingIndex = mergedCustomers.findIndex(c => c.id === globalCust.id);
-            if (existingIndex >= 0) {
-                mergedCustomers[existingIndex] = globalCust; // Update with global version
-            } else {
-                mergedCustomers.push(globalCust);
-            }
+    await loadDrinksFromMongoDB(user?.phone || user);
+
+    // Migrate legacy customer data if shared list is still empty.
+    if (customers.length === 0) {
+        const legacyCustomersKey = userDataKey('customers', user);
+        const legacyCustomers = await loadNamedData(legacyCustomersKey, []);
+        if (Array.isArray(legacyCustomers) && legacyCustomers.length > 0) {
+            customers = mergeCustomerLists(customers, legacyCustomers);
         }
-        customers = mergedCustomers;
+    }
+    if (clates.length === 0) {
+        const legacyClatesKey = userDataKey('clates', user);
+        const legacyClates = await loadNamedData(legacyClatesKey, []);
+        if (Array.isArray(legacyClates) && legacyClates.length > 0) {
+            clates = mergeClateLists(clates, legacyClates);
+        }
+    }
+
+    // Backfill shared customers from all account-scoped customer stores when needed.
+    const hasSharedCustomers = Array.isArray(loadedGlobalCustomers) && loadedGlobalCustomers.length > 0;
+    if (!hasSharedCustomers) {
+        const allAccounts = getAuthUsers();
+        const scopedCustomerRequests = (Array.isArray(allAccounts) ? allAccounts : [])
+            .map((account) => ({ name: userDataKey('customers', account), defaultValue: [] }))
+            .filter((item) => item.name);
+
+        if (scopedCustomerRequests.length > 0) {
+            const scopedMap = await loadManyNamedData(scopedCustomerRequests);
+            scopedCustomerRequests.forEach((request) => {
+                customers = mergeCustomerLists(customers, scopedMap[request.name]);
+            });
+        }
+    }
+    // Backfill shared deposits from all account-scoped deposit stores when needed.
+    const hasSharedClates = Array.isArray(loadedGlobalClates) && loadedGlobalClates.length > 0;
+    if (!hasSharedClates) {
+        const allAccounts = getAuthUsers();
+        const scopedClateRequests = (Array.isArray(allAccounts) ? allAccounts : [])
+            .map((account) => ({ name: userDataKey('clates', account), defaultValue: [] }))
+            .filter((item) => item.name);
+
+        if (scopedClateRequests.length > 0) {
+            const scopedMap = await loadManyNamedData(scopedClateRequests);
+            scopedClateRequests.forEach((request) => {
+                clates = mergeClateLists(clates, scopedMap[request.name]);
+            });
+        }
+    }
+
+    if (drinks.length === 0) {
+        const legacyDrinksKey = userDataKey('drinks', user);
+        const legacyDrinks = await loadNamedData(legacyDrinksKey, []);
+        if (Array.isArray(legacyDrinks) && legacyDrinks.length > 0) {
+            drinks = legacyDrinks;
+            await saveNamedData(GLOBAL_DRINKS_KEY, drinks);
+        }
+    }
+    
+    // Backward compatibility: merge the older loyal-only shared customer store.
+    const globalLoyalCustomers = await loadNamedData(GLOBAL_LOYAL_CUSTOMERS_KEY, []);
+    if (Array.isArray(globalLoyalCustomers) && globalLoyalCustomers.length > 0) {
+        customers = mergeCustomerLists(customers, globalLoyalCustomers);
     }
     
     // Merge global drinks
@@ -2808,7 +3131,10 @@ async function loadActiveUserData(user = activeUser) {
     }
     
     normalizeCustomersData();
+    normalizeClatesData();
     normalizeDrinksData();
+    await saveNamedData(GLOBAL_CUSTOMERS_KEY, customers);
+    await saveNamedData(GLOBAL_CLATES_KEY, clates);
 
     await migrateLegacyDataIfNeeded();
 }
@@ -2852,19 +3178,22 @@ function buildCurrentSavePayload(user = activeUser) {
 
     if (!user) return payload;
     normalizeCustomersData();
+    normalizeClatesData();
     normalizeDrinksData();
 
     const salesKey = userDataKey('sales', user);
     const customersKey = userDataKey('customers', user);
     const clatesKey = userDataKey('clates', user);
-    const drinksKey = userDataKey('drinks', user);
+    const drinksKey = GLOBAL_DRINKS_KEY;
     const settingsKey = userDataKey('settings', user);
     const archivesKey = userDataKey('archives', user);
     if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey || !archivesKey) return payload;
 
     payload[salesKey] = Array.isArray(sales) ? sales : [];
     payload[customersKey] = Array.isArray(customers) ? customers : [];
+    payload[GLOBAL_CUSTOMERS_KEY] = Array.isArray(customers) ? customers : [];
     payload[clatesKey] = Array.isArray(clates) ? clates : [];
+    payload[GLOBAL_CLATES_KEY] = Array.isArray(clates) ? clates : [];
     payload[drinksKey] = Array.isArray(drinks) ? drinks : [];
     payload[settingsKey] = sanitizeUserSettings(settings);
     payload[archivesKey] = sanitizeYearArchives(yearlyArchives);
@@ -2892,16 +3221,23 @@ async function saveData() {
     
     // Sync to MongoDB if user logged in
     if (activeUser) {
-        await syncCustomersToMongoDB(activeUser);
-        await syncDrinksToMongoDB(activeUser);
+        const syncUserId = activeUser?.phone || activeUser?.id || activeUser;
+        await syncCustomersToMongoDB(syncUserId);
+        await syncDrinksToMongoDB(syncUserId);
     }
 }
 
 // ============ MONGODB SYNC FUNCTIONS ============
 
 async function syncCustomersToMongoDB(userId) {
+    const isAdmin = isAdminSessionActive();
     try {
-        if (!customers || customers.length === 0) return;
+        if (!customers || customers.length === 0) {
+            console.log('⚠️ No customers to sync to MongoDB');
+            return;
+        }
+        
+        console.log(`🔄 Syncing ${customers.length} customers to MongoDB for user ${userId}${isAdmin ? ' (ADMIN)' : ''}`);
         
         const response = await fetch('/api/customers/save', {
             method: 'POST',
@@ -2913,12 +3249,12 @@ async function syncCustomersToMongoDB(userId) {
         });
         
         if (response.ok) {
-            console.log('✅ Customers synced to MongoDB');
+            console.log(`✅ Customers synced to MongoDB${isAdmin ? ' (ADMIN)' : ''}`);
         } else {
-            console.warn('⚠️ Failed to sync customers:', response.statusText);
+            console.warn(`❌ Failed to sync customers: ${response.statusText}${isAdmin ? ' (ADMIN)' : ''}`);
         }
     } catch (error) {
-        console.error('❌ MongoDB sync error (customers):', error);
+        console.error(`❌ MongoDB sync error (customers)${isAdmin ? ' (ADMIN)' : ''}:`, error);
     }
 }
 
@@ -2946,18 +3282,27 @@ async function syncDrinksToMongoDB(userId) {
 }
 
 async function loadCustomersFromMongoDB(userId) {
+    const isAdmin = isAdminSessionActive();
     try {
+        console.log(`🔄 Loading customers from MongoDB for user ${userId}${isAdmin ? ' (ADMIN)' : ''}`);
+        
         const response = await fetch(`/api/customers/load/${userId}`);
         if (response.ok) {
             const data = await response.json();
-            if (data.customers && data.customers.length > 0) {
-                customers = data.customers;
-                console.log('✅ Customers loaded from MongoDB:', customers.length);
-                return true;
+            const loadedCustomers = Array.isArray(data?.customers) ? normalizeCustomersList(data.customers) : [];
+            if (loadedCustomers.length > 0) {
+                customers = mergeCustomerLists(customers, loadedCustomers);
+                await saveNamedData(GLOBAL_CUSTOMERS_KEY, customers);
+                console.log(`✅ Customers loaded from MongoDB: ${customers.length} customers${isAdmin ? ' (ADMIN)' : ''}`);
+            } else {
+                console.log(`⚠️ No customers found in MongoDB${isAdmin ? ' (ADMIN)' : ''}`);
             }
+            return true;
+        } else {
+            console.warn(`❌ MongoDB load failed: ${response.statusText}${isAdmin ? ' (ADMIN)' : ''}`);
         }
     } catch (error) {
-        console.error('❌ MongoDB load error (customers):', error);
+        console.error(`❌ MongoDB load error (customers)${isAdmin ? ' (ADMIN)' : ''}:`, error);
     }
     return false;
 }
@@ -3126,18 +3471,36 @@ async function verifyUserAdminPassword(user, password) {
     }
 
     const legacyAdminPin = String(user.adminPin || '').trim();
-    if (!legacyAdminPin) return false;
-    if (normalized !== legacyAdminPin) return false;
-
-    try {
-        user.adminPasswordHash = await hashPassword(normalized);
-        delete user.adminPin;
-        appMeta.authUsers = getAuthUsers();
-        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
-    } catch (error) {
-        console.warn('Admin password migration failed:', error);
+    if (legacyAdminPin) {
+        if (normalized !== legacyAdminPin) return false;
+        try {
+            user.adminPasswordHash = await hashPassword(normalized);
+            delete user.adminPin;
+            appMeta.authUsers = getAuthUsers();
+            await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+        } catch (error) {
+            console.warn('Admin password migration failed:', error);
+        }
+        return true;
     }
-    return true;
+
+    // For owner accounts without admin password, allow login with regular password
+    if (isOwnerRoleUser(user) && user.passwordHash) {
+        const regularPasswordOk = await verifyPassword(normalized, user.passwordHash);
+        if (regularPasswordOk) {
+            // Set up admin password to match regular password initially
+            try {
+                user.adminPasswordHash = user.passwordHash;
+                appMeta.authUsers = getAuthUsers();
+                await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+            } catch (error) {
+                console.warn('Admin password setup failed:', error);
+            }
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function findUserByLoginIdentifier(identifierValue, users = getAuthUsers()) {
@@ -3531,7 +3894,7 @@ function setAuthHintText() {
 function setAuthFeedback(message = '', tone = 'info') {
     const feedback = document.getElementById('authFeedback');
     if (!feedback) return;
-    const text = String(message || '').trim();
+    const text = localizeLooseText(String(message || '').trim());
     if (!text) {
         feedback.style.display = 'none';
         feedback.textContent = '';
@@ -3730,20 +4093,20 @@ function updateActiveUserBadge() {
         }
         if (accountNameEl) accountNameEl.textContent = t('notLoggedIn');
         if (sidebarNameEl) sidebarNameEl.textContent = t('notLoggedIn');
-        if (sidebarModeEl) sidebarModeEl.textContent = 'Guest';
-        if (viewBadgeEl) viewBadgeEl.textContent = 'Normal Account';
+        if (sidebarModeEl) sidebarModeEl.textContent = localizeLooseText('Guest');
+        if (viewBadgeEl) viewBadgeEl.textContent = localizeLooseText('Normal Account');
         return;
     }
 
-    const userLabel = activeUser.name || activeUser.phone || 'User';
+    const userLabel = activeUser.name || activeUser.phone || localizeLooseText('User');
     if (badge) {
         badge.textContent = `${t('loggedInAs')}: ${userLabel}`;
         badge.style.display = 'inline-flex';
     }
     if (accountNameEl) accountNameEl.textContent = userLabel;
     if (sidebarNameEl) sidebarNameEl.textContent = userLabel;
-    if (sidebarModeEl) sidebarModeEl.textContent = adminSession ? 'Admin' : 'User';
-    if (viewBadgeEl) viewBadgeEl.textContent = adminSession ? 'Admin Session' : 'Normal Account';
+    if (sidebarModeEl) sidebarModeEl.textContent = adminSession ? localizeLooseText('Admin') : localizeLooseText('User');
+    if (viewBadgeEl) viewBadgeEl.textContent = adminSession ? localizeLooseText('Admin Session') : localizeLooseText('Normal Account');
 }
 
 function toggleSidebarCollapsed() {
@@ -3761,19 +4124,21 @@ function syncSidebarUtilityButtons() {
     const collapsed = Boolean(app && app.classList.contains('sidebar-collapsed'));
 
     if (switchBtn) {
-        switchBtn.title = 'Switch Account';
-        switchBtn.setAttribute('aria-label', 'Switch Account');
+        const switchLabel = localizeLooseText('Switch Account');
+        switchBtn.title = switchLabel;
+        switchBtn.setAttribute('aria-label', switchLabel);
         switchBtn.style.display = activeUser ? 'flex' : 'none';
     }
 
     if (collapseBtn) {
         const label = collapseBtn.querySelector('.nav-label');
-        const actionLabel = collapsed ? 'Expand' : 'Collapse';
+        const actionLabel = localizeLooseText(collapsed ? 'Expand' : 'Collapse');
+        const sidebarAction = localizeLooseText(collapsed ? 'Expand Sidebar' : 'Collapse Sidebar');
         if (label) {
             label.textContent = actionLabel;
         }
-        collapseBtn.title = `${actionLabel} Sidebar`;
-        collapseBtn.setAttribute('aria-label', `${actionLabel} Sidebar`);
+        collapseBtn.title = sidebarAction;
+        collapseBtn.setAttribute('aria-label', sidebarAction);
         collapseBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
     }
 }
@@ -3837,28 +4202,28 @@ function syncSidebarLabels() {
     const adminSession = isAdminSessionActive();
     const labels = adminSession
         ? {
-            home: 'Dashboard',
-            adminSales: 'Sales',
-            stockManagement: 'Inventory',
-            customers: 'Customers',
-            salesHistory: 'Activity Log',
-            reports: 'Reports',
-            adminAccounts: 'Admin',
-            addSale: 'Sales',
-            clate: 'Deposits',
-            settings: 'Settings'
+            home: localizeLooseText('Dashboard'),
+            adminSales: localizeLooseText('Sales'),
+            stockManagement: localizeLooseText('Inventory'),
+            customers: localizeLooseText('Customers'),
+            salesHistory: localizeLooseText('Activity Log'),
+            reports: localizeLooseText('Reports'),
+            adminAccounts: localizeLooseText('Admin'),
+            addSale: localizeLooseText('Sales'),
+            clate: localizeLooseText('Deposits'),
+            settings: localizeLooseText('Settings')
         }
         : {
-            home: 'Dashboard',
-            addSale: 'Sales',
-            stockManagement: 'Inventory',
-            customers: 'Customers',
-            salesHistory: 'Activity Log',
-            clate: 'Deposits',
-            reports: 'Reports',
-            adminSales: 'Sales',
-            adminAccounts: 'Admin',
-            settings: 'Settings'
+            home: localizeLooseText('Dashboard'),
+            addSale: localizeLooseText('Sales'),
+            stockManagement: localizeLooseText('Inventory'),
+            customers: localizeLooseText('Customers'),
+            salesHistory: localizeLooseText('Activity Log'),
+            clate: localizeLooseText('Deposits'),
+            reports: localizeLooseText('Reports'),
+            adminSales: localizeLooseText('Sales'),
+            adminAccounts: localizeLooseText('Admin'),
+            settings: localizeLooseText('Settings')
         };
 
     document.querySelectorAll('.nav-btn[data-page]').forEach((btn) => {
@@ -3919,6 +4284,9 @@ async function logoutCurrentUser() {
         loginScreen.style.visibility = 'visible';
         loginScreen.style.display = 'flex';
     }
+
+    // Show debt notifications on login screen
+    void renderLoginDebtNotifications();
 
     const phoneInput = document.getElementById('phone');
     const pinInput = document.getElementById('pin');
@@ -4091,6 +4459,15 @@ async function handleLogin() {
     }
 
     await completeLoginForUser(user, { loginMode: 'user' });
+}
+
+async function runLoginFlow() {
+    try {
+        await handleLogin();
+    } catch (error) {
+        console.error('Login failed unexpectedly:', error);
+        setAuthFeedback('Unable to login right now. Please try again.', 'error');
+    }
 }
 
 async function handleSignup() {
@@ -4267,7 +4644,10 @@ function initializeAuthUI() {
         signupTab.dataset.bound = '1';
     }
     if (loginBtn && !loginBtn.dataset.bound) {
-        loginBtn.addEventListener('click', handleLogin);
+        loginBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            void runLoginFlow();
+        });
         loginBtn.dataset.bound = '1';
     }
     if (signupBtn && !signupBtn.dataset.bound) {
@@ -4317,26 +4697,30 @@ function initializeAuthUI() {
         resetSecretCodeInput.dataset.boundInput = '1';
     }
     if (pinInput && !pinInput.dataset.boundEnter) {
-        pinInput.addEventListener('keypress', (e) => {
+        pinInput.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter') return;
+            if (e.repeat) return;
+            e.preventDefault();
             if (authMode === 'signup') {
                 const confirmEl = document.getElementById('confirmPin');
                 if (confirmEl) confirmEl.focus();
             } else {
-                handleLogin();
+                void runLoginFlow();
             }
         });
         pinInput.dataset.boundEnter = '1';
     }
     if (phoneInput && !phoneInput.dataset.boundEnter) {
-        phoneInput.addEventListener('keypress', (e) => {
+        phoneInput.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter') return;
+            if (e.repeat) return;
+            e.preventDefault();
             const passwordEl = document.getElementById('pin');
             if (passwordEl && !String(passwordEl.value || '').trim()) {
                 passwordEl.focus();
                 return;
             }
-            handleLogin();
+            void runLoginFlow();
         });
         phoneInput.dataset.boundEnter = '1';
     }
@@ -4449,6 +4833,7 @@ function initializeMobileChromeAutoHide() {
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
+    installLocalizedAlertBridge();
     console.log('Make A Way App Initializing...');
     const loginScreenEl = document.getElementById('loginScreen');
     if (loginScreenEl) {
@@ -4470,6 +4855,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (!didRestoreSession && loginScreenEl) {
             loginScreenEl.style.visibility = 'visible';
             loginScreenEl.style.display = 'flex';
+            // Show debt notifications on login screen
+            void renderLoginDebtNotifications();
         }
         startRwandaClock();
         bindOnboardingControls();
@@ -4487,6 +4874,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (loginScreenEl) {
             loginScreenEl.style.visibility = 'visible';
             loginScreenEl.style.display = 'flex';
+            // Show debt notifications on login screen
+            void renderLoginDebtNotifications();
         }
         setAuthFeedback('Startup took too long. Please refresh and try again.', 'error');
     }
@@ -4656,6 +5045,27 @@ function getClockLocale() {
     return localeMap[currentLanguage] || 'en-US';
 }
 
+function getPerfNow() {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+        return performance.now();
+    }
+    return Date.now();
+}
+
+function setRwandaClockBase(epochMs) {
+    if (!Number.isFinite(epochMs)) return false;
+    rwandaClockBaseEpochMs = Number(epochMs);
+    rwandaClockBasePerfMs = getPerfNow();
+    return true;
+}
+
+function ensureRwandaClockBaseline() {
+    if (Number.isFinite(rwandaClockBaseEpochMs) && Number.isFinite(rwandaClockBasePerfMs)) {
+        return;
+    }
+    setRwandaClockBase(Date.now());
+}
+
 async function fetchJsonWithTimeout(url, timeoutMs = 6000) {
     if (typeof fetch !== 'function') return null;
     const hasAbort = typeof AbortController !== 'undefined';
@@ -4738,20 +5148,23 @@ async function fetchRwandaEpochMs() {
 }
 
 function getSyncedRwandaDate() {
-    if (!Number.isFinite(rwandaClockBaseEpochMs) || !Number.isFinite(rwandaClockBasePerfMs)) {
-        return null;
-    }
-    const elapsedMs = performance.now() - rwandaClockBasePerfMs;
+    ensureRwandaClockBaseline();
+    if (!Number.isFinite(rwandaClockBaseEpochMs) || !Number.isFinite(rwandaClockBasePerfMs)) return null;
+    const elapsedMs = getPerfNow() - rwandaClockBasePerfMs;
     return new Date(rwandaClockBaseEpochMs + elapsedMs);
 }
 
 async function syncRwandaClockFromServer() {
     const epochMs = await fetchRwandaEpochMs();
     if (!Number.isFinite(epochMs)) return false;
+    return setRwandaClockBase(epochMs);
+}
 
-    rwandaClockBaseEpochMs = epochMs;
-    rwandaClockBasePerfMs = performance.now();
-    return true;
+async function syncAndRenderRwandaClock() {
+    ensureRwandaClockBaseline();
+    const synced = await syncRwandaClockFromServer();
+    updateRwandaClock();
+    return synced;
 }
 
 function updateRwandaClock() {
@@ -4760,14 +5173,7 @@ function updateRwandaClock() {
     const timeEl = document.getElementById('rwClockTime');
     if (!dayEl || !dateEl || !timeEl) return;
 
-    const now = getSyncedRwandaDate();
-    if (!now) {
-        dayEl.textContent = 'Syncing';
-        dateEl.textContent = 'Rwanda time';
-        timeEl.textContent = '--:--:--';
-        return;
-    }
-
+    const now = getSyncedRwandaDate() || new Date();
     const locale = getClockLocale();
 
     const dayText = new Intl.DateTimeFormat(locale, {
@@ -4805,24 +5211,30 @@ function startRwandaClock() {
         rwandaClockSyncInterval = null;
     }
 
+    ensureRwandaClockBaseline();
     updateRwandaClock();
 
-    const syncAndRender = async () => {
-        const synced = await syncRwandaClockFromServer();
-        if (!synced) return;
-        updateRwandaClock();
-    };
-
-    void syncAndRender();
+    void syncAndRenderRwandaClock();
     rwandaClockInterval = setInterval(updateRwandaClock, 1000);
     rwandaClockSyncInterval = setInterval(() => {
-        void syncAndRender();
+        void syncAndRenderRwandaClock();
     }, RWANDA_TIME_SYNC_INTERVAL_MS);
+
+    if (!rwandaClockLifecycleBound) {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'visible') return;
+            void syncAndRenderRwandaClock();
+        });
+        window.addEventListener('online', () => {
+            void syncAndRenderRwandaClock();
+        });
+        rwandaClockLifecycleBound = true;
+    }
 }
 
 function configureDatePickers() {
     const todayIso = getTodayISODate();
-    const pickerIds = ['salesHistoryDate', 'dailyReportDate', 'rangeStartDate', 'rangeEndDate', 'adminSalesExportDate'];
+    const pickerIds = ['salesHistoryDate', 'dailyReportDate', 'rangeStartDate', 'rangeEndDate', 'adminSalesExportDate', 'adminRangeStartDate', 'adminRangeEndDate'];
 
     pickerIds.forEach((id) => {
         const input = document.getElementById(id);
@@ -5002,7 +5414,7 @@ function refreshAdminAccessUI() {
 
     const reportsNavLabel = document.querySelector('.nav-btn[data-page="reports"] .nav-label');
     if (reportsNavLabel) {
-        reportsNavLabel.textContent = adminSession ? 'Reports' : t('reports');
+        reportsNavLabel.textContent = adminSession ? localizeLooseText('Reports') : t('reports');
     }
 
     syncSidebarLabels();
@@ -5023,7 +5435,7 @@ function setReportsPageModeForRole() {
     const reportOutput = document.getElementById('reportOutput');
 
     if (reportsHeader) {
-        reportsHeader.textContent = adminSession ? 'Business Analysis' : t('reports');
+        reportsHeader.textContent = adminSession ? localizeLooseText('Business Analysis') : t('reports');
     }
     if (adminBusinessAnalysis) {
         adminBusinessAnalysis.style.display = adminSession ? 'block' : 'none';
@@ -5158,9 +5570,9 @@ function refreshDataManagementAccessUI() {
             archiveYearInfo.textContent = t('clearDataRequiresAdminLogin');
         } else if (!hasAllowedArchive) {
             const nextYear = new Date().getFullYear() + 1;
-            archiveYearInfo.textContent = `Archive opens after Jan 1, ${nextYear}.`;
+            archiveYearInfo.textContent = localizeLooseText(`Archive opens after Jan 1, ${nextYear}.`);
         } else {
-            archiveYearInfo.textContent = 'Moves selected year sales and deposit records into archive and removes them from active workspace.';
+            archiveYearInfo.textContent = localizeLooseText('Moves selected year sales and deposit records into archive and removes them from active workspace.');
         }
     }
 
@@ -5183,7 +5595,7 @@ function refreshDataManagementAccessUI() {
     }
 
     if (autoPdfStatus && !allowed) {
-        autoPdfStatus.textContent = 'Admin login required to change automation schedules or download the last automatic PDF.';
+        autoPdfStatus.textContent = localizeLooseText('Admin login required to change automation schedules or download the last automatic PDF.');
     }
 
     refreshAutoDailySalesPdfControls();
@@ -5330,9 +5742,9 @@ async function archiveSelectedYear() {
 
 function normalizeUserRoleLabel(roleValue) {
     const role = normalizeAuthRole(roleValue, 'staff');
-    if (role === 'owner') return 'Owner';
-    if (role === 'admin') return 'Admin';
-    return 'Employee';
+    if (role === 'owner') return localizeLooseText('Owner');
+    if (role === 'admin') return localizeLooseText('Admin');
+    return localizeLooseText('Employee');
 }
 
 function refreshSettingsAccountSecurityUI() {
@@ -5349,15 +5761,15 @@ function refreshSettingsAccountSecurityUI() {
 
     if (metaEl) {
         if (!activeUser) {
-            metaEl.textContent = 'Phone login is required for every session.';
+            metaEl.textContent = localizeLooseText('Phone login is required for every session.');
         } else {
-            const phone = normalizePhone(activeUser.phone || '') || 'No phone saved';
-            metaEl.textContent = `${phone} | ${isAdminSessionActive() ? 'Admin session unlocked' : 'Standard account access'}`;
+            const phone = normalizePhone(activeUser.phone || '') || localizeLooseText('No phone saved');
+            metaEl.textContent = `${phone} | ${isAdminSessionActive() ? localizeLooseText('Admin session unlocked') : localizeLooseText('Standard account access')}`;
         }
     }
 
     if (roleEl) {
-        roleEl.textContent = activeUser ? normalizeUserRoleLabel(activeUser.role) : 'Guest';
+        roleEl.textContent = activeUser ? normalizeUserRoleLabel(activeUser.role) : localizeLooseText('Guest');
     }
 
     if (changeBtn) {
@@ -6686,13 +7098,31 @@ function getBusinessAiAdvisorSuggestions(analysis) {
     return suggestions.slice(0, 9);
 }
 
-function getAdminAiEmptyStateHtml(title = 'No data yet') {
+function getAdminAiEmptyStateHtml(title = '') {
+    const displayTitle = String(title || '').trim() || t('adminAiNoDataTitle');
     return `
         <div class="advisor-empty-state">
-            <strong>${escapeHtml(title)}</strong>
-            <p>${escapeHtml(ADMIN_AI_EMPTY_MESSAGE)}</p>
+            <strong>${escapeHtml(localizeLooseText(displayTitle))}</strong>
+            <p>${escapeHtml(localizeLooseText(ADMIN_AI_EMPTY_MESSAGE))}</p>
         </div>
     `;
+}
+
+function getAdminAiResponseTone(response) {
+    const text = [
+        response?.title,
+        response?.insight,
+        response?.reason,
+        response?.action
+    ].map((item) => String(item || '').toLowerCase()).join(' ');
+
+    if (/(risk|overdue|low stock|decline|down|warning|attention|leak|pressure|slow|no data|fallback)/.test(text)) {
+        return 'warning';
+    }
+    if (/(up|growth|healthy|strong|improv|best|momentum|safe|good)/.test(text)) {
+        return 'positive';
+    }
+    return 'neutral';
 }
 
 function getAdminAiSalesRecordCount(analysis) {
@@ -6723,41 +7153,186 @@ function formatAdminAiSentenceList(items, maxItems = 3) {
         .join(' ');
 }
 
+function buildAdminAiGrowthTips(analysis) {
+    if (!analysis) return ['Generate insights after recording sales to unlock tailored tips.'];
+
+    const growth = Number(analysis?.growthAnalysis?.growthPercent) || 0;
+    const bestProduct = analysis?.topProducts?.[0];
+    const slowProduct = analysis?.slowProducts?.[0];
+    const restockAlert = analysis?.restockAlerts?.[0];
+    const creditShare = Number(analysis?.growthAnalysis?.creditSharePercent) || 0;
+    const slowDay = analysis?.growthAnalysis?.slowestWeekday?.name || '';
+    const debtInsights = analysis?.debtInsights || {};
+    const topDebt = Array.isArray(debtInsights.topCustomers) ? debtInsights.topCustomers[0] : null;
+
+    const tips = [];
+    const addTip = (tip) => {
+        const normalized = String(tip || '').trim();
+        if (normalized) tips.push(normalized);
+    };
+
+    if (growth < -1 && bestProduct?.name) {
+        addTip(`Run a 3-day promo around ${bestProduct.name} to recover this week's sales dip.`);
+    } else if (bestProduct?.name) {
+        addTip(`Keep ${bestProduct.name} near checkout and bundle it to raise basket size.`);
+    }
+
+    if (slowProduct?.name) {
+        addTip(`Move ${slowProduct.name} with a combo or limited-time offer to clear slower stock.`);
+    }
+
+    if (restockAlert?.name) {
+        addTip(`Restock ${restockAlert.name} first so peak-day demand is not missed.`);
+    }
+
+    if ((debtInsights.overdueCount || 0) > 0) {
+        addTip(`Call overdue customers today. ${debtInsights.overdueCount} account(s) are already past promise date.`);
+    } else if ((debtInsights.customerCount || 0) > 0) {
+        addTip('Assign clear payback dates to every customer with debt to protect cash flow.');
+    }
+
+    if (topDebt?.name && Number(topDebt.owing) > 0) {
+        addTip(`Start follow-up with ${topDebt.name} for ${formatAiCurrency(topDebt.owing)} to recover cash faster.`);
+    }
+
+    if (creditShare > 35) {
+        addTip('Offer a same-day payment reward to reduce high credit exposure.');
+    }
+
+    if (slowDay) {
+        addTip(`Use ${slowDay} for loyalty offers, reminder calls, and customer comeback campaigns.`);
+    }
+
+    if (!tips.length) {
+        addTip('Keep recording daily sales so advisor recommendations stay sharp.');
+    }
+
+    return dedupeAdminAiText(tips, 5);
+}
+
+function buildAdminAiSpotlightHtml(analysis) {
+    if (!analysis) return '';
+
+    const growthTips = buildAdminAiGrowthTips(analysis);
+    const debtInsights = analysis.debtInsights || {
+        customerCount: 0,
+        overdueCount: 0,
+        dueCount: 0,
+        loyalCount: 0,
+        totalOwing: 0,
+        topCustomers: []
+    };
+    const debtCustomers = Array.isArray(debtInsights.topCustomers) ? debtInsights.topCustomers.slice(0, 4) : [];
+    const topDebt = debtCustomers[0];
+    const debtFollowUpLine = topDebt
+        ? `Highest follow-up: ${topDebt.name} (${formatAiCurrency(topDebt.owing)}).`
+        : 'No customer debts are pending right now.';
+
+    return `
+        <div class="admin-ai-strategy-grid">
+            <article class="admin-ai-strategy-card growth">
+                <div class="admin-ai-strategy-head">
+                    <h5>${escapeHtml(t('adminAiGrowthTipsTitle'))}</h5>
+                    <span class="admin-ai-strategy-pill">${escapeHtml(t('adminAiActionPlanTitle'))}</span>
+                </div>
+                <ul class="admin-ai-tip-list">
+                    ${growthTips.map((tip) => `<li>${escapeHtml(localizeLooseText(tip))}</li>`).join('')}
+                </ul>
+            </article>
+            <article class="admin-ai-strategy-card debt">
+                <div class="admin-ai-strategy-head">
+                    <h5>${escapeHtml(t('adminAiDebtSectionTitle'))}</h5>
+                    <span class="admin-ai-strategy-pill warning">${escapeHtml(t('adminAiCashflowWatch'))}</span>
+                </div>
+                <div class="admin-ai-debt-metrics">
+                    <article class="admin-ai-debt-metric">
+                        <span>${escapeHtml(t('adminAiTotalOwing'))}</span>
+                        <strong>${escapeHtml(formatAiCurrency(debtInsights.totalOwing || 0))}</strong>
+                    </article>
+                    <article class="admin-ai-debt-metric">
+                        <span>${escapeHtml(t('adminAiInDebt'))}</span>
+                        <strong>${Number(debtInsights.customerCount || 0).toLocaleString()}</strong>
+                    </article>
+                    <article class="admin-ai-debt-metric">
+                        <span>${escapeHtml(t('adminAiOverdueLabel'))}</span>
+                        <strong>${Number(debtInsights.overdueCount || 0).toLocaleString()}</strong>
+                    </article>
+                </div>
+                <p class="admin-ai-debt-summary-line">${escapeHtml(localizeLooseText(debtFollowUpLine))}</p>
+                ${debtCustomers.length ? `
+                    <div class="admin-ai-debt-list">
+                        ${debtCustomers.map((customer) => `
+                            <article class="admin-ai-debt-item status-${escapeHtml(customer.status || 'open')}">
+                                <div class="admin-ai-debt-main">
+                                    <strong>${escapeHtml(customer.name || 'Customer')}</strong>
+                                    <span>${escapeHtml(formatAiCurrency(customer.owing || 0))}</span>
+                                </div>
+                                <span class="admin-ai-debt-status ${escapeHtml(customer.status || 'open')}">${escapeHtml(localizeLooseText(customer.statusLabel || t('adminAiNoDueDate')))}</span>
+                            </article>
+                        `).join('')}
+                    </div>
+                ` : `<p class="admin-ai-debt-empty">${escapeHtml(t('adminAiNoDebtActive'))}</p>`}
+            </article>
+        </div>
+    `;
+}
+
 function buildAdminAiResponseCard(response) {
     const supporting = dedupeAdminAiText(response?.supporting || [], 4);
+    const tone = getAdminAiResponseTone(response);
+    const toneLabel = tone === 'positive' ? t('adminAiToneHealthy') : (tone === 'warning' ? t('adminAiToneWatch') : t('adminAiToneStable'));
+    const responseTitle = localizeLooseText(response?.title || t('adminAiInsightFallbackTitle'));
+    const responseInsight = localizeLooseText(response?.insight || ADMIN_AI_EMPTY_MESSAGE);
+    const responseReason = localizeLooseText(response?.reason || 'No explanation available yet.');
+    const responseAction = localizeLooseText(response?.action || 'Review your latest business data and try again.');
     return `
-        <article class="admin-ai-response-card">
-            <h4>${escapeHtml(response?.title || 'Insight')}</h4>
+        <article class="admin-ai-response-card tone-${tone}">
+            <div class="admin-ai-response-head">
+                <span class="admin-ai-response-eyebrow">${escapeHtml(t('adminAiLabel'))}</span>
+                <span class="admin-ai-response-tone ${tone}">${escapeHtml(toneLabel)}</span>
+            </div>
+            <h4>${escapeHtml(responseTitle)}</h4>
             <div class="admin-ai-response-row">
-                <span>Insight</span>
-                <strong>${escapeHtml(response?.insight || ADMIN_AI_EMPTY_MESSAGE)}</strong>
+                <span>${escapeHtml(t('adminAiInsightLabel'))}</span>
+                <strong>${escapeHtml(responseInsight)}</strong>
             </div>
             <div class="admin-ai-response-row">
-                <span>Reason</span>
-                <p>${escapeHtml(response?.reason || 'No explanation available yet.')}</p>
+                <span>${escapeHtml(t('adminAiReasonLabel'))}</span>
+                <p>${escapeHtml(responseReason)}</p>
             </div>
             <div class="admin-ai-response-row">
-                <span>Action</span>
-                <p>${escapeHtml(response?.action || 'Review your latest business data and try again.')}</p>
+                <span>${escapeHtml(t('adminAiActionLabel'))}</span>
+                <p>${escapeHtml(responseAction)}</p>
             </div>
             ${supporting.length ? `
+                <p class="admin-ai-response-support-title">${escapeHtml(t('adminAiSignalsLabel'))}</p>
                 <ul class="admin-ai-response-list">
-                    ${supporting.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+                    ${supporting.map((item) => `<li>${escapeHtml(localizeLooseText(item))}</li>`).join('')}
                 </ul>
             ` : ''}
         </article>
     `;
 }
 
-function buildAdminAiOutputHtml(responses, metaLabel = 'Updated now') {
+function buildAdminAiOutputHtml(responses, metaLabel = '', analysis = null) {
     const cards = Array.isArray(responses) ? responses : [];
+    const normalizedCards = cards.length ? cards : [getAdminAiFallbackResponse()];
+    const debtCount = Number(analysis?.debtInsights?.customerCount) || 0;
+    const overdueCount = Number(analysis?.debtInsights?.overdueCount) || 0;
+    const displayMeta = String(metaLabel || '').trim() || t('adminAiUpdatedNow');
+    const recommendationLabel = normalizedCards.length === 1 ? t('adminAiRecommendationSingular') : t('adminAiRecommendationPlural');
+    const debtLabel = debtCount === 1 ? t('adminAiDebtCustomerSingular') : t('adminAiDebtCustomerPlural');
     return `
         <div class="advisor-meta-row admin-ai-response-meta">
-            <span class="advisor-meta-pill">${escapeHtml(metaLabel)}</span>
-            <span class="advisor-meta-pill neutral">Real business data</span>
+            <span class="advisor-meta-pill">${escapeHtml(localizeLooseText(displayMeta))}</span>
+            <span class="advisor-meta-pill neutral">${normalizedCards.length} ${escapeHtml(recommendationLabel)}</span>
+            <span class="advisor-meta-pill neutral">${debtCount} ${escapeHtml(debtLabel)}</span>
+            ${overdueCount > 0 ? `<span class="advisor-meta-pill warning">${overdueCount} ${escapeHtml(t('adminAiOverdueLabel'))}</span>` : ''}
+            <span class="advisor-meta-pill neutral">${escapeHtml(t('adminAiRealData'))}</span>
         </div>
+        ${buildAdminAiSpotlightHtml(analysis)}
         <div class="admin-ai-response-grid">
-            ${cards.map((item) => buildAdminAiResponseCard(item)).join('')}
+            ${normalizedCards.map((item) => buildAdminAiResponseCard(item)).join('')}
         </div>
     `;
 }
@@ -6973,10 +7548,44 @@ function buildAdminAiRiskResponse(analysis) {
     };
 }
 
+function buildAdminAiDebtResponse(analysis) {
+    const debtInsights = analysis?.debtInsights || {
+        customerCount: 0,
+        overdueCount: 0,
+        dueCount: 0,
+        loyalCount: 0,
+        totalOwing: 0,
+        topCustomers: []
+    };
+    const topDebt = Array.isArray(debtInsights.topCustomers) ? debtInsights.topCustomers[0] : null;
+
+    if ((debtInsights.customerCount || 0) <= 0) {
+        return {
+            title: 'Debt Watchlist',
+            insight: 'No customer debt is active right now.',
+            reason: 'All recorded customer balances appear settled.',
+            action: 'Keep using clear payment terms to protect cash flow.'
+        };
+    }
+
+    return {
+        title: 'Debt Watchlist',
+        insight: `${debtInsights.customerCount} customer account(s) owe ${formatAiCurrency(debtInsights.totalOwing || 0)}.`,
+        reason: debtInsights.overdueCount > 0
+            ? `${debtInsights.overdueCount} account(s) are overdue and need immediate follow-up.`
+            : `${debtInsights.dueCount || 0} account(s) have promised dates tracked in the system.`,
+        action: topDebt?.name
+            ? `Start with ${topDebt.name} (${formatAiCurrency(topDebt.owing || 0)}) and log the next payment date.`
+            : 'Review debt accounts and schedule collection follow-ups.',
+        supporting: (debtInsights.topCustomers || []).slice(0, 3).map((item) => `${item.name}: ${formatAiCurrency(item.owing || 0)} (${item.statusLabel || 'No due date'})`)
+    };
+}
+
 function buildAdminAiOverviewResponses(analysis) {
     return [
         buildAdminAiHealthResponse(analysis),
         buildAdminAiSummaryResponse(analysis),
+        buildAdminAiDebtResponse(analysis),
         buildAdminAiRiskResponse(analysis)
     ];
 }
@@ -6997,6 +7606,9 @@ function getAdminAiStructuredResponse(prompt, analysis) {
     if (aiQueryHasAny(query, ['profit', 'margin', 'leak'])) {
         return buildAdminAiProfitResponse(analysis);
     }
+    if (aiQueryHasAny(query, ['debt', 'owing', 'overdue', 'credit'])) {
+        return buildAdminAiDebtResponse(analysis);
+    }
     if (aiQueryHasAny(query, ['sell the most', 'best seller', 'best-selling', 'top', 'most', 'popular'])) {
         return buildAdminAiTopProductsResponse(analysis);
     }
@@ -7007,10 +7619,10 @@ function getAdminAiStructuredResponse(prompt, analysis) {
 }
 
 function renderAdminAiPanel(force = false) {
-    const panel = document.querySelector('#adminPanel .admin-ai-panel');
-    if (!panel) return null;
-
+    const panel = document.querySelector('#reports #adminBusinessAnalysis .admin-ai-advisor-card')
+        || document.querySelector('#adminPanel .admin-ai-panel');
     const output = document.getElementById('businessAiAdvisorOutput');
+    if (!panel || !output) return null;
     const scoreValue = document.getElementById('adminAiHealthScoreValue');
     const explanation = document.getElementById('adminAiHealthExplanation');
     const totalEl = document.getElementById('adminAiTotalSales');
@@ -7023,16 +7635,16 @@ function renderAdminAiPanel(force = false) {
 
     if (!activeUser || !canAccessAdminPanel()) {
         if (scoreValue) scoreValue.textContent = '--';
-        if (explanation) explanation.textContent = 'Admin access is required to unlock AI insights.';
+        if (explanation) explanation.textContent = localizeLooseText('Admin access is required to unlock AI insights.');
         if (totalEl) totalEl.textContent = '--';
         if (bestEl) bestEl.textContent = '--';
         if (slowEl) slowEl.textContent = '--';
-        if (recommendationEl) recommendationEl.textContent = 'Sign in with admin access to unlock insights.';
-        if (restockList) restockList.innerHTML = `<li>${escapeHtml('Admin access is required to unlock AI insights.')}</li>`;
-        if (leakList) leakList.innerHTML = `<li>${escapeHtml('Admin access is required to unlock AI insights.')}</li>`;
-        if (prioritiesList) prioritiesList.innerHTML = `<li>${escapeHtml('Admin access is required to unlock AI insights.')}</li>`;
+        if (recommendationEl) recommendationEl.textContent = localizeLooseText('Sign in with admin access to unlock insights.');
+        if (restockList) restockList.innerHTML = `<li>${escapeHtml(localizeLooseText('Admin access is required to unlock AI insights.'))}</li>`;
+        if (leakList) leakList.innerHTML = `<li>${escapeHtml(localizeLooseText('Admin access is required to unlock AI insights.'))}</li>`;
+        if (prioritiesList) prioritiesList.innerHTML = `<li>${escapeHtml(localizeLooseText('Admin access is required to unlock AI insights.'))}</li>`;
         if (output && !output.classList.contains('is-generating')) {
-            output.innerHTML = getAdminAiEmptyStateHtml('Admin access required');
+            output.innerHTML = getAdminAiEmptyStateHtml(localizeLooseText('Admin access required'));
         }
         return null;
     }
@@ -7043,22 +7655,22 @@ function renderAdminAiPanel(force = false) {
     const summary = analysis.dailySummary || {};
 
     if (scoreValue) scoreValue.textContent = hasData ? `${analysis.healthScore.score}/100` : '--';
-    if (explanation) explanation.textContent = hasData ? formatAdminAiSentenceList([healthResponse.reason, healthResponse.action], 2) : ADMIN_AI_EMPTY_MESSAGE;
+    if (explanation) explanation.textContent = localizeLooseText(hasData ? formatAdminAiSentenceList([healthResponse.reason, healthResponse.action], 2) : ADMIN_AI_EMPTY_MESSAGE);
     if (totalEl) totalEl.textContent = hasData ? formatAiCurrency(summary.totalSales || 0) : '--';
     if (bestEl) bestEl.textContent = hasData ? (summary.bestProduct || '--') : '--';
     if (slowEl) slowEl.textContent = hasData ? (summary.slowProduct || '--') : '--';
-    if (recommendationEl) recommendationEl.textContent = hasData ? (summary.recommendation || 'No recommendation available yet.') : ADMIN_AI_EMPTY_MESSAGE;
+    if (recommendationEl) recommendationEl.textContent = localizeLooseText(hasData ? (summary.recommendation || 'No recommendation available yet.') : ADMIN_AI_EMPTY_MESSAGE);
 
     if (restockList) {
         const restockItems = hasData
-            ? analysis.restockAlerts.slice(0, 4).map((item) => `${item.name}: ${item.stockQty} case(s), ${formatDaysRemaining(item.daysRemaining)} left`)
+            ? analysis.restockAlerts.slice(0, 4).map((item) => localizeLooseText(`${item.name}: ${item.stockQty} case(s), ${formatDaysRemaining(item.daysRemaining)} left`))
             : [ADMIN_AI_EMPTY_MESSAGE];
         restockList.innerHTML = buildAiListItemsHtml(restockItems, ADMIN_AI_EMPTY_MESSAGE);
     }
 
     if (leakList) {
         const leakItems = hasData
-            ? (analysis.profitLeaks.length ? analysis.profitLeaks : ['No obvious profit leaks detected.'])
+            ? (analysis.profitLeaks.length ? analysis.profitLeaks : [localizeLooseText('No obvious profit leaks detected.')])
             : [ADMIN_AI_EMPTY_MESSAGE];
         leakList.innerHTML = buildAiListItemsHtml(leakItems, ADMIN_AI_EMPTY_MESSAGE);
     }
@@ -7073,7 +7685,7 @@ function renderAdminAiPanel(force = false) {
         prioritiesList.innerHTML = buildAiListItemsHtml(priorityItems, ADMIN_AI_EMPTY_MESSAGE);
     }
 
-    if (output && !hasData && !output.classList.contains('is-generating')) {
+    if (!hasData && !output.classList.contains('is-generating')) {
         output.innerHTML = getAdminAiEmptyStateHtml();
     }
 
@@ -7086,12 +7698,12 @@ async function runBusinessAiAdvisor(silent = false) {
 
     if (!canAccessAdminPanel()) {
         if (output) {
-            output.innerHTML = getAdminAiEmptyStateHtml('Permission denied');
+            output.innerHTML = getAdminAiEmptyStateHtml(localizeLooseText('Permission denied'));
         }
         if (!silent) {
-            alert('Permission Denied');
+            alert(localizeLooseText('Permission Denied'));
         }
-        return 'Permission Denied';
+        return localizeLooseText('Permission Denied');
     }
 
     if (output) {
@@ -7108,8 +7720,8 @@ async function runBusinessAiAdvisor(silent = false) {
     if (trigger) {
         trigger.disabled = true;
         trigger.classList.add('is-generating');
-        trigger.dataset.defaultLabel = trigger.dataset.defaultLabel || trigger.textContent || 'Generate Insights';
-        trigger.textContent = 'Generating...';
+        trigger.dataset.defaultLabel = trigger.dataset.defaultLabel || trigger.textContent || localizeLooseText('Generate Insights');
+        trigger.textContent = localizeLooseText('Generating...');
     }
 
     await new Promise((resolve) => setTimeout(resolve, 420));
@@ -7120,13 +7732,13 @@ async function runBusinessAiAdvisor(silent = false) {
         : [getAdminAiFallbackResponse()];
     if (output) {
         const updatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        output.innerHTML = buildAdminAiOutputHtml(responses, `Updated ${updatedAt}`);
+        output.innerHTML = localizeHtmlLooseText(buildAdminAiOutputHtml(responses, `Updated ${updatedAt}`, analysis));
         output.classList.remove('is-generating');
     }
     if (trigger) {
         trigger.disabled = false;
         trigger.classList.remove('is-generating');
-        trigger.textContent = trigger.dataset.defaultLabel || 'Generate Insights';
+        trigger.textContent = trigger.dataset.defaultLabel || localizeLooseText('Generate Insights');
     }
 
     if (!silent) {
@@ -7139,9 +7751,9 @@ async function runAdminAiQuickCommand(prompt) {
     const output = document.getElementById('businessAiAdvisorOutput');
     if (!canAccessAdminPanel()) {
         if (output) {
-            output.innerHTML = getAdminAiEmptyStateHtml('Permission denied');
+            output.innerHTML = getAdminAiEmptyStateHtml(localizeLooseText('Permission denied'));
         }
-        alert('Permission Denied');
+        alert(localizeLooseText('Permission Denied'));
         return getAdminAiFallbackResponse();
     }
 
@@ -7164,7 +7776,7 @@ async function runAdminAiQuickCommand(prompt) {
         : getAdminAiFallbackResponse();
 
     if (output) {
-        output.innerHTML = buildAdminAiOutputHtml([response], String(prompt || 'Quick command').trim() || 'Quick command');
+        output.innerHTML = localizeHtmlLooseText(buildAdminAiOutputHtml([response], String(prompt || localizeLooseText('Quick command')).trim() || localizeLooseText('Quick command'), analysis));
         output.classList.remove('is-generating');
     }
 
@@ -7264,7 +7876,7 @@ function runAdminGrowthAnalysis(silent = false) {
     const insights = getAdminGrowthInsights();
     output.innerHTML = `
         <ul>
-            ${insights.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+            ${insights.map((line) => `<li>${escapeHtml(localizeLooseText(line))}</li>`).join('')}
         </ul>
     `;
 
@@ -7509,6 +8121,130 @@ async function exportAdminAllSalesPDF() {
     } catch (error) {
         console.error('Admin all sales export failed:', error);
         alert(`Could not export all sales PDF: ${error.message}`);
+    }
+}
+
+async function exportAdminRangeSalesPDF() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can export sales.');
+        return;
+    }
+
+    const startInput = document.getElementById('adminRangeStartDate');
+    const endInput = document.getElementById('adminRangeEndDate');
+    const startDate = startInput?.value?.trim();
+    const endDate = endInput?.value?.trim();
+
+    if (!startDate || !endDate) {
+        alert('Please select both start and end dates for the range export.');
+        return;
+    }
+
+    if (startDate > endDate) {
+        alert('Start date cannot be after end date.');
+        return;
+    }
+
+    const allSales = getEffectiveSalesList()
+        .filter((sale) => {
+            const saleDate = getSaleDateIso(sale);
+            return saleDate && saleDate >= startDate && saleDate <= endDate;
+        })
+        .slice()
+        .sort((a, b) => {
+            const aDate = getSaleDateTimeOrNull(a);
+            const bDate = getSaleDateTimeOrNull(b);
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            return aDate - bDate;
+        });
+
+    if (!allSales.length) {
+        alert(`No sales data found between ${startDate} and ${endDate}.`);
+        return;
+    }
+
+    const totalSales = allSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const cashSales = allSales
+        .filter((sale) => sale.type === 'normal')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const creditSales = allSales
+        .filter((sale) => sale.type === 'credit')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const totalProfit = calculateProfitFromSales(allSales);
+
+    const rangeLabel = `${formatPdfDate(startDate)} - ${formatPdfDate(endDate)}`;
+
+    try {
+        await ensurePDFLibrariesReady();
+        const doc = createPDFDocument({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const reportTitle = 'Range Sales';
+        let y = applyPdfBrandHeaderFirstPageOnly(doc, reportTitle);
+        const margin = 14;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(12, 96, 156);
+        doc.text(`Range Sales Summary`, margin, y);
+        y += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Range: ${rangeLabel}`, margin, y);
+        y += 5;
+        doc.text(`Transactions: ${allSales.length}`, margin, y);
+        doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 54, y);
+        doc.text(`Profit: RWF ${totalProfit.toLocaleString()}`, margin + 124, y);
+        y += 5;
+        doc.text(`Cash: RWF ${cashSales.toLocaleString()}`, margin, y);
+        doc.text(`Credit: RWF ${creditSales.toLocaleString()}`, margin + 54, y);
+        y += 7;
+
+        const tableRows = allSales.map((sale) => {
+            const saleDate = getSaleDateTimeOrNull(sale);
+            const dayIso = saleDate ? saleDate.toISOString().slice(0, 10) : '';
+            const customerName = sale.type === 'credit'
+                ? (typeof getSafeCustomerName === 'function' ? getSafeCustomerName(sale.customerId) : 'Customer')
+                : 'Guest';
+            const unitPrice = Number(sale.unitPrice ?? sale.price) || 0;
+            return [
+                dayIso ? formatPdfDate(dayIso) : '-',
+                saleDate ? saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--',
+                String(sale.drinkName || 'Unknown'),
+                String(Number(sale.quantity) || 0),
+                `RWF ${unitPrice.toLocaleString()}`,
+                `RWF ${Number(sale.total || 0).toLocaleString()}`,
+                sale.type === 'credit' ? 'Credit' : 'Cash',
+                String(customerName || 'Guest')
+            ];
+        });
+
+        if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+                startY: y,
+                head: [['Date', 'Time', 'Drink', 'Qty', 'Unit Price', 'Total', 'Type', 'Customer']],
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 8.4, cellPadding: 2.2 },
+                headStyles: { fillColor: [13, 124, 227], textColor: 255 },
+                alternateRowStyles: { fillColor: [245, 250, 255] }
+            });
+        } else {
+            doc.setFontSize(8.5);
+            tableRows.slice(0, 26).forEach((row, idx) => {
+                const yy = y + (idx * 4.8);
+                doc.text(`${row[0]} ${row[1]} | ${row[2]} | ${row[3]} | ${row[5]} | ${row[6]}`, margin, yy);
+            });
+        }
+
+        applyPdfBrandFooter(doc, reportTitle);
+        const todayIso = new Date().toISOString().slice(0, 10);
+        doc.save(`admin-range-sales-${startDate}-to-${endDate}-${todayIso}.pdf`);
+        showSuccessToast(`Range sales PDF exported for ${rangeLabel}.`);
+    } catch (error) {
+        console.error('Admin range sales export failed:', error);
+        alert(`Could not export range sales PDF: ${error.message}`);
     }
 }
 
@@ -7961,7 +8697,7 @@ async function viewUserDataSnapshot(index) {
     const salesKey = userDataKey('sales', target);
     const customersKey = userDataKey('customers', target);
     const clatesKey = userDataKey('clates', target);
-    const drinksKey = userDataKey('drinks', target);
+    const drinksKey = GLOBAL_DRINKS_KEY;
     if (!salesKey || !customersKey || !clatesKey || !drinksKey) {
         alert('Could not resolve this user data scope.');
         return;
@@ -8274,7 +9010,7 @@ function addExportImportButtons() {
     // PDF Export button for current report
     const pdfBtn = document.createElement('button');
     pdfBtn.className = 'report-btn data-mgmt-btn';
-    pdfBtn.textContent = 'Export PDF';
+    pdfBtn.textContent = t('exportPdf');
     pdfBtn.onclick = function() {
         const reportType = getCurrentReportType();
         console.log('Exporting report type:', reportType);
@@ -8317,10 +9053,10 @@ function renderHomeStockWarning() {
     const remaining = lowStock.length > 3 ? ` +${lowStock.length - 3} more` : '';
 
     banner.innerHTML = `
-        <strong>Stock Warning:</strong>
-        ${outOfStockCount} out of stock, ${lowCount} low stock.
+        <strong>${escapeHtml(localizeLooseText('Stock Warning:'))}</strong>
+        ${escapeHtml(localizeLooseText(`${outOfStockCount} out of stock, ${lowCount} low stock.`))}
         <span>${preview}${remaining}</span>
-        <button class="stock-action-btn" style="margin-left: 8px;" onclick="showPage('stockManagement')">Open Stock Management</button>
+        <button class="stock-action-btn" style="margin-left: 8px;" onclick="showPage('stockManagement')">${escapeHtml(localizeLooseText('Open Stock Management'))}</button>
     `;
     banner.style.display = 'block';
 }
@@ -8655,13 +9391,29 @@ async function applyStockAdjustment(index, direction, qtyInputValue = null, note
 }
 
 async function getPersistedDrinksSnapshot() {
-    if (!activeUser) {
-        return normalizeDrinksList(drinks);
-    }
-    const drinksKey = userDataKey('drinks', activeUser);
-    if (!drinksKey) return normalizeDrinksList(drinks);
-    const stored = await loadNamedData(drinksKey, Array.isArray(drinks) ? drinks : []);
-    return normalizeDrinksList(stored);
+    const inMemory = normalizeDrinksList(drinks);
+    const globalStored = normalizeDrinksList(await loadNamedData(GLOBAL_DRINKS_KEY, inMemory));
+    const scopedKey = activeUser ? userDataKey('drinks', activeUser) : '';
+    const scopedStored = scopedKey ? normalizeDrinksList(await loadNamedData(scopedKey, [])) : [];
+
+    const merged = [];
+    const byName = new Map();
+    const mergeSources = [globalStored, scopedStored, inMemory];
+
+    mergeSources.forEach((sourceList) => {
+        sourceList.forEach((drink) => {
+            const nameKey = String(drink?.name || '').trim().toLowerCase();
+            if (!nameKey) return;
+            if (byName.has(nameKey)) {
+                merged[byName.get(nameKey)] = drink;
+                return;
+            }
+            byName.set(nameKey, merged.length);
+            merged.push(drink);
+        });
+    });
+
+    return merged;
 }
 
 function getLowStockDrinksFromList(drinksList) {
@@ -9005,7 +9757,7 @@ function updateQuickDrinkSelect() {
         nameEl.textContent = drink.name;
         const metaEl = document.createElement('span');
         metaEl.className = 'quick-drink-meta';
-        metaEl.textContent = `RWF ${Number(drink.price || 0).toLocaleString()} | Available now: ${availableQty} case(s)`;
+        metaEl.textContent = localizeLooseText(`RWF ${Number(drink.price || 0).toLocaleString()} | Available now: ${availableQty} case(s)`);
         info.appendChild(nameEl);
         info.appendChild(metaEl);
 
@@ -9022,7 +9774,7 @@ function updateQuickDrinkSelect() {
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'selected-drink-remove-btn';
-        removeBtn.textContent = 'Remove';
+        removeBtn.textContent = localizeLooseText('Remove');
         removeBtn.addEventListener('click', () => {
             toggleDrinkDraftSelection(drink.name, false);
         });
@@ -9587,8 +10339,8 @@ function openAddDebtForm(index) {
     const message = document.getElementById('debtMessage');
     const amountInput = document.getElementById('debtAmount');
     
-    if (title) title.textContent = 'Add Debt';
-    if (message) message.textContent = `Add debt amount for ${customers[index].name} (RWF):`;
+    if (title) title.textContent = localizeLooseText('Add Debt');
+    if (message) message.textContent = localizeLooseText(`Add debt amount for ${customers[index].name} (RWF):`);
     if (amountInput) {
         amountInput.value = '';
         amountInput.readOnly = false;
@@ -9606,8 +10358,8 @@ function openReduceDebtForm(index) {
     const message = document.getElementById('debtMessage');
     const amountInput = document.getElementById('debtAmount');
     
-    if (title) title.textContent = 'Reduce Debt';
-    if (message) message.textContent = `Reduce debt amount for ${customers[index].name} (RWF). Current: RWF ${customers[index].owing}`;
+    if (title) title.textContent = localizeLooseText('Reduce Debt');
+    if (message) message.textContent = localizeLooseText(`Reduce debt amount for ${customers[index].name} (RWF). Current: RWF ${customers[index].owing}`);
     if (amountInput) {
         amountInput.value = '';
         amountInput.readOnly = false;
@@ -9625,8 +10377,8 @@ function openClearDebtForm(index) {
     const message = document.getElementById('debtMessage');
     const amountInput = document.getElementById('debtAmount');
     
-    if (title) title.textContent = 'Clear Debt';
-    if (message) message.textContent = `Clear all debt for ${customers[index].name}? Current: RWF ${customers[index].owing}`;
+    if (title) title.textContent = localizeLooseText('Clear Debt');
+    if (message) message.textContent = localizeLooseText(`Clear all debt for ${customers[index].name}? Current: RWF ${customers[index].owing}`);
     if (amountInput) {
         amountInput.value = customers[index].owing;
         amountInput.readOnly = true;
@@ -9712,6 +10464,12 @@ async function saveCustomer() {
     customers.push(customer);
     await optimizedSaveData();
     
+    // Immediately sync to MongoDB so all users can see the new customer
+    if (activeUser) {
+        const syncUserId = activeUser?.phone || activeUser?.id || activeUser;
+        await syncCustomersToMongoDB(syncUserId);
+    }
+    
     // Save loyal customers globally for all users so loyalty data is shared
     if (type === 'loyal') {
         await saveGlobalLoyalCustomer(customer);
@@ -9733,6 +10491,10 @@ async function saveGlobalLoyalCustomer(customer) {
         globalCustomers.push(customer);
     }
     await saveNamedData(GLOBAL_LOYAL_CUSTOMERS_KEY, globalCustomers);
+
+    const sharedCustomers = await loadNamedData(GLOBAL_CUSTOMERS_KEY, []);
+    const mergedSharedCustomers = mergeCustomerLists(sharedCustomers, [customer]);
+    await saveNamedData(GLOBAL_CUSTOMERS_KEY, mergedSharedCustomers);
 }
 
 async function saveGlobalDrink(drink) {
@@ -9762,7 +10524,7 @@ async function saveDeposit() {
     }
     
     const clate = {
-        id: Date.now(),
+        id: Date.now() + Math.floor(Math.random() * 1000),
         customerName: name,
         amount,
         description: description || 'Bottle deposit',
@@ -9840,9 +10602,14 @@ async function confirmDebt() {
 }
 
 // ================= CUSTOMER FUNCTIONS =================
-function displayCustomers() {
+async function displayCustomers() {
     const list = document.getElementById('customerList');
     if (!list) return;
+    
+    // For admin users, ensure we have the latest data from MongoDB
+    if (isAdminSessionActive() && activeUser) {
+        await loadCustomersFromMongoDB(activeUser.phone || activeUser);
+    }
     
     clearElement(list);
     
@@ -9853,28 +10620,32 @@ function displayCustomers() {
     
     customers.forEach((customer, index) => {
         const item = document.createElement('div');
-        item.className = `customer-item${isCustomerDebtOverdue(customer) && isLoyalCustomer(customer) ? ' customer-item-overdue' : ''}`;
+        item.className = `customer-item${isCustomerDebtOverdue(customer) ? ' customer-item-overdue' : ''}`;
         item.innerHTML = buildCustomerItemMarkup(customer, index, { includeDelete: true });
         list.appendChild(item);
     });
 }
 
-async function deleteCustomer(index) {
-    if (!customers[index]) return;
-    
-    if (confirm(`Delete customer "${customers[index].name}"? This cannot be undone.`)) {
-        const removedName = customers[index].name;
-        customers.splice(index, 1);
-        await optimizedSaveData();
+async function refreshCustomers() {
+    if (activeUser) {
+        console.log('🔄 Manually refreshing customers from MongoDB...');
+        await loadCustomersFromMongoDB(activeUser.phone || activeUser);
         displayCustomers();
-        updateHome();
-        showSuccessToast(`Customer deleted: ${removedName}`);
+        showSuccessToast('Customers refreshed from database');
     }
 }
 
-function filterCustomers(type) {
+function filterCustomers(type, event) {
     const list = document.getElementById('customerList');
     if (!list) return;
+
+    const filterButtons = document.querySelectorAll('#customers .filter-buttons .filter-btn');
+    if (filterButtons) {
+        filterButtons.forEach((btn) => btn.classList.remove('active'));
+        if (event && event.target) {
+            event.target.classList.add('active');
+        }
+    }
     
     clearElement(list);
     
@@ -9889,6 +10660,9 @@ function filterCustomers(type) {
         case 'cleared':
             filtered = customers.filter(c => c.owing === 0);
             break;
+        case 'overdue':
+            filtered = customers.filter((customer) => Number(customer.owing || 0) > 0 && isCustomerDebtOverdue(customer));
+            break;
     }
     
     if (filtered.length === 0) {
@@ -9901,7 +10675,7 @@ function filterCustomers(type) {
         if (index === -1) return;
         
         const item = document.createElement('div');
-        item.className = `customer-item${isCustomerDebtOverdue(customer) && isLoyalCustomer(customer) ? ' customer-item-overdue' : ''}`;
+        item.className = `customer-item${isCustomerDebtOverdue(customer) ? ' customer-item-overdue' : ''}`;
         item.innerHTML = buildCustomerItemMarkup(customer, index, { includeDelete: false });
         list.appendChild(item);
     });
@@ -9933,7 +10707,7 @@ const debouncedFilterCustomers = debounce(function(value) {
         if (index === -1) return;
         
         const item = document.createElement('div');
-        item.className = `customer-item${isCustomerDebtOverdue(customer) && isLoyalCustomer(customer) ? ' customer-item-overdue' : ''}`;
+        item.className = `customer-item${isCustomerDebtOverdue(customer) ? ' customer-item-overdue' : ''}`;
         item.innerHTML = buildCustomerItemMarkup(customer, index, { includeDelete: false });
         list.appendChild(item);
     });
@@ -10153,9 +10927,9 @@ let dashboardChartResizeBound = false;
 
 function getDashboardGreeting(date = new Date()) {
     const hour = date.getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
+    if (hour < 12) return localizeLooseText('Good Morning');
+    if (hour < 18) return localizeLooseText('Good Afternoon');
+    return localizeLooseText('Good Evening');
 }
 
 function getDashboardDateLabel(date = new Date()) {
@@ -10224,7 +10998,7 @@ function drawDashboardBars(ctx, x, y, width, height, color) {
     ctx.fill();
 }
 
-function renderHomeSalesChart() {
+function renderHomeSalesChart(hoverDayIndex = -1) {
     const canvas = document.getElementById('homeSalesChart');
     if (!canvas) return;
     const wrap = canvas.parentElement;
@@ -10254,9 +11028,32 @@ function renderHomeSalesChart() {
     const plotHeight = Math.max(10, height - top - bottom);
     const maxTicks = 4;
     const hasActivity = revenue.some((value) => value > 0) || (allowProfit && profit.some((value) => value > 0));
+    const previousHoverIndex = Number(canvas._chartData?.hoverDayIndex);
+    const requestedHoverIndex = Number(hoverDayIndex);
+    const activeHoverDayIndex = Number.isInteger(requestedHoverIndex)
+        ? requestedHoverIndex
+        : (Number.isInteger(previousHoverIndex) ? previousHoverIndex : -1);
+    const normalizedHoverDayIndex = (activeHoverDayIndex >= 0 && activeHoverDayIndex < daysInMonth)
+        ? activeHoverDayIndex
+        : -1;
 
     // Store chart data for interactivity
-    canvas._chartData = { revenue, profit, daysInMonth, maxValue, allowProfit, top, right, bottom, left, plotWidth, plotHeight, width, height };
+    canvas._chartData = {
+        revenue,
+        profit,
+        daysInMonth,
+        maxValue,
+        allowProfit,
+        top,
+        right,
+        bottom,
+        left,
+        plotWidth,
+        plotHeight,
+        width,
+        height,
+        hoverDayIndex: normalizedHoverDayIndex
+    };
 
     ctx.strokeStyle = '#e5ebf4';
     ctx.fillStyle = '#7287a1';
@@ -10299,23 +11096,37 @@ function renderHomeSalesChart() {
     const revenueColor = '#132b4d';
     const profitColor = '#ff9f1a';
 
+    if (normalizedHoverDayIndex >= 0) {
+        const hoverX = left + normalizedHoverDayIndex * barGroupWidth;
+        ctx.fillStyle = 'rgba(19, 43, 77, 0.07)';
+        ctx.fillRect(hoverX + (barGroupWidth * 0.1), top, barGroupWidth * 0.8, plotHeight);
+    }
+
     for (let index = 0; index < daysInMonth; index += 1) {
         const groupX = left + index * barGroupWidth;
         const revenueHeight = (revenue[index] / maxValue) * plotHeight;
+        const isHovered = index === normalizedHoverDayIndex;
+        const revenueBarHeight = isHovered ? Math.min(plotHeight, revenueHeight + 3) : revenueHeight;
+        const revenueBarColor = isHovered ? '#1d4f86' : revenueColor;
         if (allowProfit) {
             const revenueX = groupX + (barGroupWidth * 0.5) - singleBarWidth - 1;
             const profitX = groupX + (barGroupWidth * 0.5) + 1;
-            drawDashboardBars(ctx, revenueX, top + plotHeight - revenueHeight, singleBarWidth, revenueHeight, revenueColor);
             const profitHeight = (profit[index] / maxValue) * plotHeight;
-            drawDashboardBars(ctx, profitX, top + plotHeight - profitHeight, singleBarWidth, profitHeight, profitColor);
+            const profitBarHeight = isHovered ? Math.min(plotHeight, profitHeight + 3) : profitHeight;
+            const profitBarColor = isHovered ? '#ffb545' : profitColor;
+            drawDashboardBars(ctx, revenueX, top + plotHeight - revenueBarHeight, singleBarWidth, revenueBarHeight, revenueBarColor);
+            drawDashboardBars(ctx, profitX, top + plotHeight - profitBarHeight, singleBarWidth, profitBarHeight, profitBarColor);
         } else {
             const revenueX = groupX + (barGroupWidth * 0.5) - (singleBarWidth / 2);
-            drawDashboardBars(ctx, revenueX, top + plotHeight - revenueHeight, singleBarWidth, revenueHeight, revenueColor);
+            drawDashboardBars(ctx, revenueX, top + plotHeight - revenueBarHeight, singleBarWidth, revenueBarHeight, revenueBarColor);
         }
     }
 
     // Add interactivity
-    canvas.style.transition = 'transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease';
+    canvas.style.transition = '';
+    canvas.style.boxShadow = '';
+    canvas.style.transform = '';
+    canvas.style.filter = '';
     canvas.onmousemove = handleHomeSalesChartMouseMove;
     canvas.onmouseout = handleHomeSalesChartMouseOut;
     canvas.onclick = handleHomeSalesChartClick;
@@ -10334,20 +11145,27 @@ function handleHomeSalesChartMouseMove(event) {
     // Check if mouse is in plot area
     if (x < left || x > width - right || y < top || y > height - bottom) {
         hideHomeSalesChartTooltip();
-        canvas.style.boxShadow = '';
+        canvas.style.cursor = 'default';
+        if (Number(data.hoverDayIndex) !== -1) {
+            renderHomeSalesChart(-1);
+        }
         return;
     }
-
-    // Add glow effect and subtle upward movement
-    canvas.style.boxShadow = '0 0 15px rgba(255, 255, 255, 0.6)';
-    canvas.style.transform = 'translateY(-1px) scale(1.01)';
 
     // Find which day
     const barGroupWidth = plotWidth / daysInMonth;
     const dayIndex = Math.floor((x - left) / barGroupWidth);
     if (dayIndex < 0 || dayIndex >= daysInMonth) {
         hideHomeSalesChartTooltip();
+        canvas.style.cursor = 'default';
+        if (Number(data.hoverDayIndex) !== -1) {
+            renderHomeSalesChart(-1);
+        }
         return;
+    }
+    canvas.style.cursor = 'pointer';
+    if (Number(data.hoverDayIndex) !== dayIndex) {
+        renderHomeSalesChart(dayIndex);
     }
 
     const day = dayIndex + 1;
@@ -10365,22 +11183,22 @@ function handleHomeSalesChartMouseMove(event) {
 function handleHomeSalesChartMouseOut() {
     hideHomeSalesChartTooltip();
     const canvas = document.getElementById('homeSalesChart');
-    if (canvas) {
-        canvas.style.boxShadow = '';
-        canvas.style.transform = '';
+    if (canvas && canvas._chartData) {
+        const activeHover = Number(canvas._chartData.hoverDayIndex);
+        if (activeHover >= 0) {
+            renderHomeSalesChart(-1);
+        }
+        canvas.style.cursor = 'default';
     }
 }
 
 function handleHomeSalesChartClick(event) {
     const canvas = event.target;
-    canvas.style.transition = 'transform 0.1s ease, filter 0.1s ease';
-    canvas.style.transform = 'translateY(-2px) scale(1.02)';
-    canvas.style.filter = 'brightness(1.1)';
-    
-    setTimeout(() => {
-        canvas.style.transform = '';
-        canvas.style.filter = '';
-    }, 150);
+    if (!canvas || !canvas._chartData) return;
+    const currentHover = Number(canvas._chartData.hoverDayIndex);
+    if (currentHover >= 0) {
+        renderHomeSalesChart(currentHover);
+    }
 }
 
 function showHomeSalesChartTooltip(text, clientX, clientY) {
@@ -10438,12 +11256,12 @@ function renderDashboardLowStockList(lowStockItems = []) {
         return `
             <div class="dashboard-alert-item">
                 <div class="dashboard-alert-copy">
-                    <strong>${escapeHtml(drink.name || 'Unnamed Drink')}</strong>
-                    <span>${status === 'out' ? 'Out of stock' : 'Low stock alert'}</span>
+                    <strong>${escapeHtml(drink.name || localizeLooseText('Unnamed Drink'))}</strong>
+                    <span>${status === 'out' ? localizeLooseText('Out of stock') : localizeLooseText('Low stock alert')}</span>
                 </div>
                 <div class="dashboard-alert-meta">
-                    <strong>${qty} case(s)</strong>
-                    <span>min: ${threshold}</span>
+                    <strong>${localizeLooseText(`${qty} case(s)`)}</strong>
+                    <span>${localizeLooseText(`min: ${threshold}`)}</span>
                 </div>
             </div>
         `;
@@ -10470,25 +11288,27 @@ function updateHomeDashboardChrome(todaySalesList = [], lowStockItems = [], cust
 
     if (greetingEl) greetingEl.textContent = getDashboardGreeting();
     if (dateEl) dateEl.textContent = getDashboardDateLabel();
-    if (eyebrowEl) eyebrowEl.textContent = adminSession ? 'Admin Dashboard' : 'Dashboard';
+    if (eyebrowEl) eyebrowEl.textContent = adminSession ? localizeLooseText('Admin Dashboard') : localizeLooseText('Dashboard');
     if (revenueMetaEl) {
         const label = todaySalesList.length === 1 ? 'sale' : 'sales';
-        revenueMetaEl.textContent = `${todaySalesList.length} ${label}`;
+        revenueMetaEl.textContent = localizeLooseText(`${todaySalesList.length} ${label}`);
     }
     if (lowStockCountEl) lowStockCountEl.textContent = String(lowStockItems.length);
     if (lowStockMetaEl) {
         const outCount = lowStockItems.filter((drink) => getDrinkStockStatus(drink) === 'out').length;
-        lowStockMetaEl.textContent = outCount > 0 ? `${outCount} out of stock` : 'Need restocking';
+        lowStockMetaEl.textContent = outCount > 0
+            ? localizeLooseText(`${outCount} out of stock`)
+            : localizeLooseText('Need restocking');
     }
     if (creditMetaEl) {
-        creditMetaEl.textContent = `${customerDebtCount} customer${customerDebtCount === 1 ? '' : 's'}`;
+        creditMetaEl.textContent = localizeLooseText(`${customerDebtCount} customer${customerDebtCount === 1 ? '' : 's'}`);
     }
 
     if (secondaryLabelEl) {
-        secondaryLabelEl.textContent = showProfit ? "Today's Profit" : "Today's Sales";
+        secondaryLabelEl.textContent = showProfit ? localizeLooseText("Today's Profit") : localizeLooseText("Today's Sales");
     }
     if (secondaryMetaEl) {
-        secondaryMetaEl.textContent = showProfit ? 'Net earnings' : 'Transactions';
+        secondaryMetaEl.textContent = showProfit ? localizeLooseText('Net earnings') : localizeLooseText('Transactions');
     }
     if (secondaryValueEl) {
         secondaryValueEl.textContent = String(todaySalesList.length);
@@ -13901,14 +14721,14 @@ async function refreshStorageStatus() {
         if (window.electronAPI && typeof window.electronAPI.invoke === 'function') {
             const result = await window.electronAPI.invoke('get-storage-status');
             if (result && result.success) {
-                statusEl.textContent = result.mode === 'sqlite' ? 'SQLite Database' : 'JSON Files';
+                statusEl.textContent = result.mode === 'sqlite' ? localizeLooseText('SQLite Database') : localizeLooseText('JSON Files');
                 return;
             }
         }
 
-        statusEl.textContent = window.indexedDB ? 'IndexedDB + localStorage' : 'localStorage';
+        statusEl.textContent = window.indexedDB ? localizeLooseText('IndexedDB + localStorage') : localizeLooseText('localStorage');
     } catch (error) {
-        statusEl.textContent = 'Unknown';
+        statusEl.textContent = localizeLooseText('Unknown');
     }
 }
 
@@ -13952,25 +14772,25 @@ function updateConnectivityUI(options = {}) {
 
     if (connectionEl) {
         connectionEl.textContent = offlineSyncState.syncInFlight
-            ? 'Online - syncing'
-            : (online ? 'Online' : 'Offline');
+            ? localizeLooseText('Online - syncing')
+            : (online ? localizeLooseText('Online') : localizeLooseText('Offline'));
     }
 
     if (syncEl) {
         if (!online) {
-            syncEl.textContent = 'Waiting for internet to sync online features.';
+            syncEl.textContent = localizeLooseText('Waiting for internet to sync online features.');
         } else if (offlineSyncState.syncInFlight) {
-            syncEl.textContent = 'Syncing now...';
+            syncEl.textContent = localizeLooseText('Syncing now...');
         } else if (offlineSyncState.lastError) {
-            syncEl.textContent = `Last sync needs attention: ${offlineSyncState.lastError}`;
+            syncEl.textContent = localizeLooseText(`Last sync needs attention: ${offlineSyncState.lastError}`);
         } else if (offlineSyncState.lastSyncAt) {
-            syncEl.textContent = `Last synced ${formatAutoDailySalesPdfLabel(offlineSyncState.lastSyncAt)}`;
+            syncEl.textContent = localizeLooseText(`Last synced ${formatAutoDailySalesPdfLabel(offlineSyncState.lastSyncAt)}`);
         } else if (supportsOfflineShellInstall()) {
-            syncEl.textContent = 'Ready. Local data already keeps working offline on this device.';
+            syncEl.textContent = localizeLooseText('Ready. Local data already keeps working offline on this device.');
         } else if (isElectron || (typeof window !== 'undefined' && String(window.location.protocol || '') === 'file:')) {
-            syncEl.textContent = 'Local storage works offline here. Installable offline caching needs http or https.';
+            syncEl.textContent = localizeLooseText('Local storage works offline here. Installable offline caching needs http or https.');
         } else {
-            syncEl.textContent = 'Online. Offline caching is limited on this setup.';
+            syncEl.textContent = localizeLooseText('Online. Offline caching is limited on this setup.');
         }
     }
 
@@ -13982,8 +14802,8 @@ function updateConnectivityUI(options = {}) {
         setConnectivityBannerState({
             visible: true,
             mode: '',
-            title: 'Offline mode active',
-            message: 'Sales still save on this device. When internet comes back, the app will refresh online features and update the offline cache.'
+            title: localizeLooseText('Offline mode active'),
+            message: localizeLooseText('Sales still save on this device. When internet comes back, the app will refresh online features and update the offline cache.')
         });
         return;
     }
@@ -13992,8 +14812,8 @@ function updateConnectivityUI(options = {}) {
         setConnectivityBannerState({
             visible: true,
             mode: 'syncing',
-            title: 'Syncing saved work',
-            message: 'Refreshing the Rwanda clock, AI web features, and offline cache.'
+            title: localizeLooseText('Syncing saved work'),
+            message: localizeLooseText('Refreshing the Rwanda clock, AI web features, and offline cache.')
         });
         return;
     }
@@ -14002,8 +14822,8 @@ function updateConnectivityUI(options = {}) {
         setConnectivityBannerState({
             visible: true,
             mode: 'online',
-            title: 'Back online',
-            message: 'The app is connected again. Local changes are saved and online features are refreshed.'
+            title: localizeLooseText('Back online'),
+            message: localizeLooseText('The app is connected again. Local changes are saved and online features are refreshed.')
         });
         connectivityBannerHideTimeout = setTimeout(() => {
             setConnectivityBannerState({ visible: false });
@@ -14041,10 +14861,7 @@ async function syncAppAfterReconnect(options = {}) {
             }
         }
 
-        const syncedClock = await syncRwandaClockFromServer().catch(() => false);
-        if (syncedClock) {
-            updateRwandaClock();
-        }
+        await syncAndRenderRwandaClock().catch(() => false);
 
         refreshAiAssistantInsights(true);
         scheduleAutoBackup();
@@ -14381,7 +15198,7 @@ function applyTheme(theme) {
     }
 
     if (themeSwitchState) {
-        themeSwitchState.textContent = 'Dark mode active';
+        themeSwitchState.textContent = t('darkModeActive');
     }
 }
 
@@ -14415,7 +15232,7 @@ function savePreferences() {
     setAppLanguage(language);
     applyTheme(theme);
     optimizedSaveData();
-    showSuccessToast('Preferences saved. Dark mode and language updated.');
+    showSuccessToast(t('savePreferencesSuccess'));
     refreshAiAssistantInsights();
 }
 
@@ -14429,6 +15246,420 @@ function t(key) {
         return translations[currentLanguage][key];
     }
     return translations['en'][key] || key;
+}
+
+function tp(key, values = {}) {
+    let template = String(t(key) || '');
+    Object.keys(values || {}).forEach((name) => {
+        const safeValue = String(values[name] ?? '');
+        template = template.split(`{${name}}`).join(safeValue);
+    });
+    return template;
+}
+
+const RW_LOOSE_TEXT_MAP = {
+    'Permission Denied': 'Uburenganzira bwanzwe.',
+    'Permission denied': 'Uburenganzira bwanzwe.',
+    'Dashboard': 'Incamake',
+    'Sales': 'Igurisha',
+    'Inventory': 'Sitoki',
+    'Customers': 'Abakiriya',
+    'Activity Log': 'Ibikorwa byabaye',
+    'Reports': 'Raporo',
+    'Admin': 'Admin',
+    'Deposits': 'Ubwizigame',
+    'Settings': 'Igenamiterere',
+    'Switch Account': 'Hindura konti',
+    'Expand': 'Fungura',
+    'Collapse': 'Funga',
+    'Expand Sidebar': 'Fungura urutonde rwo ku ruhande',
+    'Collapse Sidebar': 'Funga urutonde rwo ku ruhande',
+    'Guest': 'Umushyitsi',
+    'Customer': 'Umukiriya',
+    'None': 'Nta na kimwe',
+    'No sales yet': 'Nta gurisha rirabaho',
+    'User': 'Ukoresha',
+    'Normal Account': 'Konti isanzwe',
+    'Admin Session': 'Session ya Admin',
+    'Business Analysis': 'Isesengura ry ubucuruzi',
+    'Admin Dashboard': 'Dashboard ya Admin',
+    'Unnamed Drink': 'Ikinyobwa kitazwi',
+    'Out of stock': 'Byashize muri sitoki',
+    'Low stock alert': 'Iburira rya sitoki iri hasi',
+    'Need restocking': 'Bikeneye kongerwa muri sitoki',
+    'Stock Warning:': 'Iburira rya Sitoki:',
+    'Open Stock Management': 'Fungura Igenzura rya Sitoki',
+    'Good Morning': 'Mwaramutse neza',
+    'Good Afternoon': 'Mwiriwe neza',
+    'Good Evening': 'Mwiriwe',
+    'No data available yet. Add sales to unlock insights.': 'Nta makuru ahari ubu. Ongeramo igurisha kugira ngo ubone insights.',
+    'No explanation available yet.': 'Nta busobanuro burahari ubu.',
+    'Review your latest business data and try again.': 'Reba amakuru yawe aheruka y ubucuruzi wongere ugerageze.',
+    'No recommendation available yet.': 'Nta nyunganizi irahari ubu.',
+    'No data yet.': 'Nta makuru arahari.',
+    'No activity yet.': 'Nta gikorwa kiraba.',
+    'No recent sales': 'Nta gurisha rya vuba',
+    'Out now': 'Byashize ubu',
+    'Less than 1 day': 'Munsi y umunsi 1',
+    'All stock looks healthy.': 'Sitoki yose imeze neza.',
+    'Profit insights require an admin session.': 'Insights z inyungu zikeneye session ya admin.',
+    'No obvious profit leaks detected.': 'Nta hantu hasohokeramo inyungu hagaragaye.',
+    'No urgent tasks today.': 'Nta gikorwa cyihutirwa uyu munsi.',
+    'Today': 'Uyu munsi',
+    'Sign in to generate insights for this account.': 'Injira kugira ngo ukore insights z iyi konti.',
+    'Unable to generate a response.': 'Ntibyashobotse gutanga igisubizo.',
+    'Sorry, I could not generate a response right now.': 'Mbabarira, ntibyashobotse gutanga igisubizo ubu.',
+    'Ask me about stock, sales, or growth. I can summarize your business in seconds.': 'Umbaze kuri sitoki, igurisha cyangwa kuzamuka kw ubucuruzi. Nshobora kuguha incamake mu masegonda.',
+    "Today's Summary": 'Incamake y uyu munsi',
+    "Tap a command to get instant insights. No typing needed.": 'Kanda command ubone insights ako kanya. Nta kwandika bisabwa.',
+    'Open Business AI Assistant': 'Fungura Umujyanama wa AI w ubucuruzi',
+    'Business AI Assistant': 'Umufasha wa AI w ubucuruzi',
+    'Smart insights for your shop': 'Insights zifasha iduka ryawe',
+    'Refresh insights': 'Vugurura insights',
+    'Refresh': 'Vugurura',
+    'Close assistant': 'Funga umufasha',
+    'Close': 'Funga',
+    'Business Health Score': 'Amanota y ubuzima bw ubucuruzi',
+    'Total Sales': 'Igiteranyo cy igurisha',
+    'Best Product': 'Igicuruzwa gikunzwe',
+    'Slow Product': 'Igicuruzwa kigenda gake',
+    "Generate insights to see today's recommendation.": 'Kora insights kugira ngo ubone inama y uyu munsi.',
+    'Smart Restock Alerts': 'Amaburira meza yo kongera sitoki',
+    'Profit Leak Detector': 'Igaragaza aho inyungu zisohokera',
+    "Today's Priorities": 'Ibyihutirwa by uyu munsi',
+    'Top 5': 'Top 5',
+    'Quick Commands': 'Amabwiriza yihuse',
+    'Analyze my business': 'Sesengura ubucuruzi bwanjye',
+    'What should I restock?': 'Ni iki nkwiriye kongera muri sitoki?',
+    'Which products sell the most?': 'Ni ibihe bicuruzwa bigurishwa cyane?',
+    'How can I increase profit?': 'Nabasha nte kongera inyungu?',
+    "Show today's summary report": 'Erekana raporo y incamake y uyu munsi',
+    'Show profit leaks': 'Erekana aho inyungu zisohokera',
+    'Show business health score': 'Erekana amanota y ubuzima bw ubucuruzi',
+    "Show today's priorities": 'Erekana ibyihutirwa by uyu munsi',
+    'Business Growth Overview': 'Incamake y izamuka ry ubucuruzi',
+    'No trend yet': 'Nta trend iraboneka',
+    'Analyze growth from your recent daily sales.': 'Sesengura izamuka rishingiye ku igurisha ryawe rya vuba rya buri munsi.',
+    'Growth analysis period': 'Igihe cy isesengura ry izamuka',
+    '14 Days': 'Iminsi 14',
+    '30 Days': 'Iminsi 30',
+    '60 Days': 'Iminsi 60',
+    '90 Days': 'Iminsi 90',
+    'Drinks': 'Ibinyobwa',
+    'Drinks loved by customers (share of cases sold)': 'Ibinyobwa bikunzwe n abakiriya (igipimo cy amakaso yagurishijwe)',
+    'Click a bar to view day details.': 'Kanda ku murongo ubone ibisobanuro by uwo munsi.',
+    'AI Business Advisor': 'Umujyanama wa AI w ubucuruzi',
+    'Action-focused suggestions from your real sales data.': 'Inama zifatika zishingiye ku makuru nyayo y igurisha ryawe.',
+    'Generate Suggestions': 'Kora inama',
+    'Suggestions are ready': 'Inama ziteguye',
+    'Generate ideas to see growth, stock, and sales actions.': 'Kora ibitekerezo ubone ibikorwa by izamuka, sitoki n igurisha.',
+    'Generate Insights': 'Kora Insights',
+    'Generating...': 'Biri gukorwa...',
+    'Quick command': 'Command yihuse',
+    'Admin access required': 'Uburenganzira bwa admin burakenewe',
+    'Admin access is required to unlock AI insights.': 'Uburenganzira bwa admin burakenewe kugira ngo ufungure AI insights.',
+    'Sign in with admin access to unlock insights.': 'Injira ufite uburenganzira bwa admin kugira ngo ufungure insights.',
+    'Moves selected year sales and deposit records into archive and removes them from active workspace.': 'Yimurira igurisha n ubwizigame bw umwaka wahisemo mu bubiko kandi ikabikura muri workspace iri gukora.',
+    'Admin login required to change automation schedules or download the last automatic PDF.': 'Kwinjira nka admin birakenewe kugira ngo uhindure gahunda za automation cyangwa ukurure PDF ya nyuma yakozwe automatic.',
+    'Owner': 'Nyiri porogaramu',
+    'Employee': 'Umukozi',
+    'Phone login is required for every session.': 'Kwinjira ukoresheje telefone birakenewe kuri buri session.',
+    'No phone saved': 'Nta telefone yabitswe',
+    'Admin session unlocked': 'Session ya admin yafunguwe',
+    'Standard account access': 'Uburenganzira bwa konti isanzwe',
+    'SQLite Database': 'Ububiko bwa SQLite',
+    'JSON Files': 'Amadosiye ya JSON',
+    'IndexedDB + localStorage': 'IndexedDB + localStorage',
+    'localStorage': 'localStorage',
+    'Unknown': 'Ntabwo bizwi',
+    'Online - syncing': 'Online - biri guhuza',
+    'Online': 'Online',
+    'Offline': 'Offline',
+    'Waiting for internet to sync online features.': 'Hategerejwe internet kugira ngo bihuze ibiri online.',
+    'Syncing now...': 'Biri guhuza ubu...',
+    'Ready. Local data already keeps working offline on this device.': 'Byiteguye. Amakuru yo muri iyi device akomeza gukora no mu gihe nta internet.',
+    'Local storage works offline here. Installable offline caching needs http or https.': 'Ububiko bwo muri iyi app bukora offline hano. Offline caching ishobora gushyirwaho ikeneye http cyangwa https.',
+    'Online. Offline caching is limited on this setup.': 'Online. Offline caching ifite aho igarukira kuri iyi setup.',
+    'Offline mode active': 'Offline mode iri gukora',
+    'Sales still save on this device. When internet comes back, the app will refresh online features and update the offline cache.': 'Igurisha riracyabikwa kuri iyi device. Internet yagaruka, app izavugurura ibiri online n offline cache.',
+    'Syncing saved work': 'Biri guhuza ibyo wabitse',
+    'Refreshing the Rwanda clock, AI web features, and offline cache.': 'Biri kuvugurura isaha y u Rwanda, AI web features na offline cache.',
+    'Back online': 'Wongeye kuba online',
+    'The app is connected again. Local changes are saved and online features are refreshed.': 'App yongeye guhuza. Impinduka zo muri local zabitswe kandi online features zavuguruwe.',
+    'Voice input not supported': 'Kwinjiza ijwi ntibishyigikiwe',
+    'There are no saved sales records in this workspace yet.': 'Nta makuru y igurisha yabitswe muri iyi workspace ubu.',
+    'Add sales, then generate insights again.': 'Ongeramo igurisha, hanyuma wongere ukore insights.',
+    'Recent activity is being tracked across sales, stock, and profit signals.': 'Ibikorwa bya vuba biri gukurikiranwa mu igurisha, sitoki n ibimenyetso by inyungu.',
+    'Work through the top issue and refresh insights again.': 'Tangirira ku kibazo cya mbere, hanyuma wongere uvugurure insights.',
+    'Keep recording sales today for a stronger recommendation.': 'Komeza kwandika igurisha uyu munsi kugira ngo inama zirusheho gukomera.',
+    'Stock levels are healthy right now.': 'Urwego rwa sitoki rumeze neza ubu.',
+    'No product is currently flagged as low based on stock on hand and recent sales movement.': 'Nta gicuruzwa kiri kuri low stock hashingiwe ku sitoki ihari n igurisha rya vuba.',
+    'Top Products': 'Ibicuruzwa bya mbere',
+    'Sales need to be recorded before product rankings can be calculated.': 'Igurisha rigomba kubanza kwandikwa mbere y uko urutonde rw ibicuruzwa rubarwa.',
+    "Add today's sales and run this command again.": 'Andika igurisha ry uyu munsi wongere ukoreshe iyi command.',
+    'Profit Insights': 'Insights z inyungu',
+    'Profit values are not available for this view.': 'Imibare y inyungu ntiboneka kuri iyi view.',
+    'Profit visibility depends on admin-level access and saved profit settings.': 'Kureba inyungu bisaba uburenganzira bwa admin n igenamiterere ry inyungu ryabitswe.',
+    'Open the admin session and review your profit settings to unlock exact profit insights.': 'Fungura session ya admin urebe igenamiterere ry inyungu kugira ngo ubone insights nyazo z inyungu.',
+    'No strong high-margin sales are lifting profit right now.': 'Nta gurisha rikomeye rifite margin nini riri kuzamura inyungu ubu.',
+    'High-performing products are helping profit stay healthy.': 'Ibicuruzwa bikora neza biri gufasha inyungu kuguma imeze neza.',
+    'Fix the leak first, then promote your highest-margin drink to recover profit faster.': 'Banza ukosore aho inyungu isohokera, hanyuma uzamure ikinyobwa cyawe gifite margin nini kugira ngo inyungu igaruke vuba.',
+    'Promote your highest-margin drink this week and track whether profit improves after the campaign.': 'Zamura ikinyobwa cyawe gifite margin nini muri iki cyumweru kandi ukurikirane niba inyungu yiyongereye nyuma ya campaign.',
+    'No urgent priorities are showing right now.': 'Nta byihutirwa biragaragara ubu.',
+    'Current sales and stock data do not show a critical bottleneck.': 'Amakuru y igurisha na sitoki y ubu ntagaragaza ikibazo gikomeye.',
+    'Keep logging sales and refresh insights later today.': 'Komeza kwandika igurisha kandi uvugurure insights nyuma uyu munsi.',
+    'This recommendation is based on current sales movement, stock levels, and recent business trends.': 'Iyi nama ishingiye ku buryo igurisha rigenda, urwego rwa sitoki n uburyo ubucuruzi bumeze vuba aha.',
+    'Complete the top priority first, then refresh insights for the next action.': 'Banza urangize igikorwa cya mbere, hanyuma uvugurure insights ku gikorwa gikurikira.',
+    'Business Snapshot': 'Incamake y ubucuruzi',
+    'Sales are stable across the current period.': 'Igurisha rihagaze neza muri iki gihe.',
+    "Review today's sales and focus on the next bottleneck.": 'Reba igurisha ry uyu munsi wibande ku kibazo gikurikira.',
+    'Risk Watch': 'Igenzura ry ibyago',
+    'No major operational risk is showing right now.': 'Nta byago bikomeye by imikorere bigaragara ubu.',
+    'Stock, debt, and product movement look stable in the latest saved data.': 'Sitoki, imyenda n imigendekere y ibicuruzwa bimeze neza mu makuru aheruka kubikwa.',
+    'Keep monitoring sales and rerun insights after the next sync.': 'Komeza ukurikirane igurisha wongere ukore insights nyuma ya sync ikurikira.',
+    'Debt Watchlist': 'Urutonde rw imyenda ikurikiranwa',
+    'No customer debt is active right now.': 'Nta mwenda w abakiriya uriho ubu.',
+    'All recorded customer balances appear settled.': 'Imyenda yose y abakiriya yanditswe isa n iyaishyuwe.',
+    'Keep using clear payment terms to protect cash flow.': 'Komeza gukoresha amabwiriza asobanutse yo kwishyura kugira ngo urinde cash flow.',
+    'Review debt accounts and schedule collection follow-ups.': 'Reba konti z imyenda kandi utegure gukurikirana uko kwishyura.',
+    'Please type a question so I can help.': 'Andika ikibazo kugira ngo ngufashe.',
+    'Sales for today:': 'Igurisha ry uyu munsi:',
+    'Sales for last 7 days:': 'Igurisha ry iminsi 7 ishize:',
+    'Sales for last 30 days:': 'Igurisha ry iminsi 30 ishize:',
+    'Debt and credit snapshot:': 'Incamake y imyenda na credit:',
+    'Deposit status:': 'Uko ubwizigame buhagaze:',
+    'Top restock alerts:': 'Amaburira ya mbere yo kongera sitoki:',
+    'Best sellers:': 'Ibicuruzwa bigurishwa cyane:',
+    'Slow movers:': 'Ibicuruzwa bigenda gake:',
+    'General profit tips:': 'Inama rusange zo kongera inyungu:',
+    'Admin login unlocks profit numbers.': 'Kwinjira nka admin bifungura imibare y inyungu.',
+    'Recommended action plan:': 'Uko ukora dusaba:',
+    'Growth suggestions based on your data:': 'Inama zo kuzamura ubucuruzi zishingiye ku makuru yawe:',
+    'You are offline, so I used the on-device business analysis only.': 'Ubu uri offline, nakoresheje gusa isesengura riri muri app.',
+    'Here is the latest business snapshot:': 'Dore incamake ya vuba y ubucuruzi:',
+    'I can answer with live business data from this app. Try one of these:': 'Nshobora gusubiza nkoresheje amakuru nyayo y ubucuruzi ari muri iyi app. Gerageza kimwe muri ibi:',
+    "Show today's sales summary": 'Erekana incamake y igurisha ry uyu munsi',
+    'What should I restock this week?': 'Ni iki nkwiriye kongera muri sitoki iki cyumweru?',
+    'Who owes me money right now?': 'Ni nde umfitiye umwenda ubu?',
+    'How are deposits looking?': 'Ubwizigame buhagaze gute?',
+    'Give me a growth action plan': 'Mpa gahunda y ibikorwa byo kuzamura ubucuruzi',
+    'You are offline, so replies use on-device data only.': 'Uri offline, ibisubizo birakoresha gusa amakuru ari muri app.',
+    'Please login first.': 'Banza winjire.',
+    'Only an active admin session can run AI analysis.': 'Ni session ya admin iri gukora gusa ishobora gukora AI analysis.',
+    'Only an active admin session can export daily sales.': 'Ni session ya admin iri gukora gusa ishobora kohereza igurisha rya buri munsi.',
+    'Only an active admin session can export sales.': 'Ni session ya admin iri gukora gusa ishobora kohereza igurisha.',
+    'Only an active admin session can export stock audit PDF.': 'Ni session ya admin iri gukora gusa ishobora kohereza PDF ya stock audit.',
+    'Only an active admin session can export account data.': 'Ni session ya admin iri gukora gusa ishobora kohereza amakuru ya konti.',
+    'Only an active admin session can generate a reset code.': 'Ni session ya admin iri gukora gusa ishobora gukora reset code.',
+    'Only an active admin session can update automatic PDF exports.': 'Ni session ya admin iri gukora gusa ishobora guhindura automatic PDF exports.',
+    'Only an active admin session can clear employee data.': 'Ni session ya admin iri gukora gusa ishobora gusiba amakuru y umukozi.',
+    'Only an active admin session can create user accounts.': 'Ni session ya admin iri gukora gusa ishobora gukora konti z abakoresha.',
+    'Only admin/owner accounts can open Management.': 'Ni konti za admin/nyirayo gusa zifungura Management.',
+    'Only admin/owner accounts can open Admin Panel.': 'Ni konti za admin/nyirayo gusa zifungura Admin Panel.',
+    'You do not have admin access.': 'Nta burenganzira bwa admin ufite.',
+    'Please choose a valid year to archive.': 'Hitamo umwaka wemewe wo kubika.',
+    'Archive is only available after the year ends.': 'Kubika bikorwa gusa umwaka urangiye.',
+    'No active account is signed in.': 'Nta konti iri gukora yinjiye.',
+    'Current PIN is required.': 'PIN yawe y ubu irakenewe.',
+    'Current PIN is incorrect.': 'PIN yawe y ubu si yo.',
+    'Could not find the active account.': 'Ntibyashobotse kubona konti iri gukora.',
+    'Could not generate a reset code right now.': 'Ntibyashobotse gukora reset code ubu.',
+    'Only the owner can issue reset codes for admin or owner accounts.': 'Nyiri porogaramu ni we gusa ushobora gutanga reset code kuri admin cyangwa owner.',
+    'Only the owner can reset admin/owner passwords.': 'Nyiri porogaramu ni we gusa ushobora guhindura ijambobanga rya admin/owner.',
+    'Only the owner can change account roles.': 'Nyiri porogaramu ni we gusa ushobora guhindura inshingano za konti.',
+    'Only the owner can activate or deactivate accounts.': 'Nyiri porogaramu ni we gusa ushobora gukora cyangwa guhagarika konti.',
+    'At least one owner account must remain.': 'Nibura konti imwe ya nyiri porogaramu igomba kuguma ikora.',
+    'At least one active owner account is required.': 'Nibura konti imwe ya owner ikora irakenewe.',
+    'You cannot change your own role while logged in.': 'Ntushobora guhindura inshingano zawe uri kwinjiyemo.',
+    'You cannot deactivate your own account.': 'Ntushobora guhagarika konti yawe.',
+    'You cannot clear your own data.': 'Ntushobora gusiba amakuru yawe bwite.',
+    'Only employee accounts can be cleared.': 'Ni konti z abakozi gusa zishobora gusibwa.',
+    'Please select both start and end dates for the range export.': 'Hitamo itariki yo gutangira n iyo kurangiza mbere yo kohereza range.',
+    'Start date cannot be after end date.': 'Itariki yo gutangira ntishobora kurenza iyo kurangiza.',
+    'No stock data to export.': 'Nta makuru ya sitoki yo kohereza.',
+    'No account data to export.': 'Nta makuru ya konti yo kohereza.',
+    'No report available to print.': 'Nta raporo ihari yo gucapisha.',
+    'Could not open print window.': 'Ntibyashobotse gufungura idirishya ryo gucapisha.',
+    'No transaction selected': 'Nta transaction yatoranyijwe.',
+    'Error displaying transaction details': 'Habaye ikibazo mu kwerekana amakuru ya transaction.',
+    'No sales to export': 'Nta gurisha rihari ryo kohereza.',
+    'Choose a valid export time.': 'Hitamo igihe cyemewe cyo kohereza.',
+    'No saved automatic PDF backup is available yet.': 'Nta backup ya automatic PDF iraboneka ubu.',
+    'Please add items to cart first': 'Banza wongere ibintu muri cart.',
+    'Please select at least one drink': 'Banza uhitemo nibura ikinyobwa kimwe.',
+    'Please select a customer for credit sale': 'Hitamo umukiriya kuri credit sale.',
+    'Please enter valid drink name and price': 'Andika izina ry ikinyobwa n igiciro byemewe.',
+    'Please enter customer name': 'Andika izina ry umukiriya.',
+    'Please enter a valid amount': 'Andika umubare wemewe.',
+    'Please enter a valid deposit amount': 'Andika umubare w ubwizigame wemewe.',
+    'Customer not found': 'Umukiriya ntabashije kuboneka.',
+    'Deposit not found!': 'Ubwizigame ntibwabashije kuboneka!',
+    'Quantity must be at least 1': 'Umubare ugomba kuba nibura 1.',
+    'Enter a stock quantity greater than zero.': 'Andika umubare wa stock urenze zero.',
+    'Initial stock must be zero or greater.': 'Stock ya mbere igomba kuba zero cyangwa irenze.',
+    'Low stock alert level must be zero or greater.': 'Urwego rwa low stock alert rugomba kuba zero cyangwa irenze.',
+    'Initial debt cannot be negative.': 'Umwenda wa mbere ntushobora kuba munsi ya zero.',
+    'No customers with outstanding debt.': 'Nta bakiriya bafite umwenda usigaye.',
+    'Enter a valid debt limit. Use 0 or leave it empty for no limit.': 'Andika debt limit yemewe. Koresha 0 cyangwa usige ubusa niba nta limit.',
+    'Type DELETE to confirm this action.': 'Andika DELETE kugira ngo wemeze iki gikorwa.',
+    'Unable to login right now. Please try again.': 'Ntibyashobotse kwinjira ubu. Ongera ugerageze.',
+    'Startup took too long. Please refresh and try again.': 'Gutangiza porogaramu byafashe igihe kinini. Vugurura wongere ugerageze.',
+    'Invalid secret code. Access denied.': 'Secret code si yo. Uburenganzira bwanzwe.',
+    'Admin password reset successful. Please login with the new password.': 'Gusubiramo ijambobanga rya admin byakunze. Injira ukoresheje ijambobanga rishya.',
+    'AI insights updated.': 'AI insights zavuguruwe.',
+    'AI growth analysis updated.': 'AI growth analysis yavuguruwe.',
+    'Preferences saved. Dark mode and language updated.': 'Ibyo ukunda byabitswe. Dark mode n ururimi byavuguruwe.',
+    'PIN updated successfully.': 'PIN yahinduwe neza.',
+    'Reset code generated successfully.': 'Reset code yakozwe neza.',
+    'Customers refreshed from database': 'Abakiriya bavuguruwe bavuye muri database.',
+    'Sync completed. Offline cache and online services are refreshed.': 'Guhuza byarangiye. Offline cache na serivisi zo kuri internet byavuguruwe.'
+};
+
+const RW_LOOSE_TEXT_RULES = [
+    [/^Could not export day PDF:\s*(.+)$/i, 'Ntibyashobotse kohereza PDF y umunsi: $1'],
+    [/^Could not export all sales PDF:\s*(.+)$/i, 'Ntibyashobotse kohereza PDF y igurisha ryose: $1'],
+    [/^Could not export range sales PDF:\s*(.+)$/i, 'Ntibyashobotse kohereza PDF ya range y igurisha: $1'],
+    [/^Could not export PDF:\s*(.+)$/i, 'Ntibyashobotse kohereza PDF: $1'],
+    [/^Error exporting stock PDF:\s*(.+)$/i, 'Habaye ikibazo mu kohereza PDF ya stock: $1'],
+    [/^Error exporting range PDF:\s*(.+)$/i, 'Habaye ikibazo mu kohereza PDF ya range: $1'],
+    [/^Error exporting PDF:\s*(.+)$/i, 'Habaye ikibazo mu kohereza PDF: $1'],
+    [/^Error exporting customer debt PDF:\s*(.+)$/i, 'Habaye ikibazo mu kohereza PDF y umwenda w umukiriya: $1'],
+    [/^Could not finish sync:\s*(.+)$/i, 'Ntibyashobotse kurangiza sync: $1'],
+    [/^No transactions found for\s+(.+)\.$/i, 'Nta transactions zabonetse muri $1.'],
+    [/^No sales data found between\s+(.+)\s+and\s+(.+)\.$/i, 'Nta makuru y igurisha yabonetse hagati ya $1 na $2.'],
+    [/^Only\s+(\d+)\s+case\(s\)\s+available\s+for\s+(.+)\.$/i, '$2 ifite amakaso $1 gusa aboneka.'],
+    [/^Select the payback date and time\s+(.+)\s+promised to pay\.$/i, 'Hitamo itariki n igihe $1 yemeye kwishyura.'],
+    [/^(\d+)\s+customer account\(s\)\s+owe\s+(.+)\.$/i, 'Konti z abakiriya $1 zifitiye umwenda wa $2.'],
+    [/^(\d+)\s+account\(s\)\s+are overdue and need immediate follow-up\.$/i, 'Konti $1 zarakererewe kandi zikeneye gukurikiranwa ako kanya.'],
+    [/^(\d+)\s+account\(s\)\s+have promised dates tracked in the system\.$/i, 'Konti $1 zifite amatariki yo kwishyura yakurikiranywe muri sisitemu.'],
+    [/^Start with\s+(.+)\s+\((.+)\)\s+and log the next payment date\.$/i, 'Tangira na $1 ($2) kandi wandike itariki ikurikira yo kwishyura.'],
+    [/^Archive opens after Jan 1,\s*(\d+)\.$/i, 'Ububiko bufungurwa nyuma ya 1 Mutarama, $1.'],
+    [/^(\d+)\s+sale$/i, 'Igurisha $1'],
+    [/^(\d+)\s+sales$/i, 'Igurisha $1'],
+    [/^(\d+)\s+out of stock$/i, 'Byashize muri sitoki: $1'],
+    [/^(\d+)\s+customer$/i, 'Umukiriya $1'],
+    [/^(\d+)\s+customers$/i, 'Abakiriya $1'],
+    [/^(\d+)\s+case\(s\)$/i, 'Amakaso $1'],
+    [/^(\d+)\s+out of stock,\s*(\d+)\s+low stock\.$/i, '$1 byashize muri sitoki, $2 biri hasi'],
+    [/^RWF\s+([0-9,]+)\s+\|\s+Available now:\s+(\d+)\s+case\(s\)$/i, 'RWF $1 | Bihari ubu: amakaso $2'],
+    [/^min:\s*(\d+)$/i, 'Ntarengwa: $1'],
+    [/^Last sync needs attention:\s*(.+)$/i, 'Sync ya nyuma ikeneye kwitabwaho: $1'],
+    [/^Last synced\s+(.+)$/i, 'Sync ya nyuma: $1'],
+    [/^Add debt amount for\s+(.+)\s+\(RWF\):$/i, 'Ongeraho umubare w umwenda wa $1 (RWF):'],
+    [/^Reduce debt amount for\s+(.+)\s+\(RWF\)\.\s+Current:\s+RWF\s+(.+)$/i, 'Gabanya umwenda wa $1 (RWF). Ubu ni: RWF $2'],
+    [/^Clear all debt for\s+(.+)\?\s+Current:\s+RWF\s+(.+)$/i, 'Kuraho umwenda wose wa $1? Ubu ni: RWF $2'],
+    [/^Updated\s+(.+)$/i, 'Byavuguruwe saa $1'],
+    [/^(\d+)\s+days$/i, 'Iminsi $1'],
+    [/^(\d+)d overdue$/i, 'Byakererewe iminsi $1'],
+    [/^Due\s+(.+)$/i, 'Yishyurwa ku wa $1'],
+    [/^(\d+)\s+item\(s\)\s+low or out of stock$/i, 'Ibintu $1 biri hasi cyangwa byashize muri sitoki'],
+    [/^(.+)\s+-\s+No recent sales\s+\((\d+)\s+cases\)$/i, '$1 - Nta gurisha rya vuba (amakaso $2)'],
+    [/^(.+)\s+-\s+Out now\s+\((\d+)\s+cases\)$/i, '$1 - Byashize ubu (amakaso $2)'],
+    [/^(.+)\s+-\s+Less than 1 day\s+\((\d+)\s+cases\)$/i, '$1 - Munsi y umunsi 1 (amakaso $2)'],
+    [/^(.+)\s+-\s+(\d+)\s+days\s+\((\d+)\s+cases\)$/i, '$1 - Iminsi $2 (amakaso $3)'],
+    [/^Restock\s+(.+)$/i, 'Ongera sitoki ya $1'],
+    [/^Confirm supplier for\s+(.+)$/i, 'Emeza supplier wa $1'],
+    [/^Reduce or bundle\s+(.+)$/i, 'Gabanya cyangwa uhuze na bundle $1'],
+    [/^Follow up\s+(.+)\s+for\s+(.+)$/i, 'Kurikirana $1 ku mafaranga $2'],
+    [/^Plan a mid-week offer on\s+(.+)$/i, 'Tegura promo hagati mu cyumweru kuri $1'],
+    [/^Feature\s+(.+)\s+near checkout$/i, 'Shyira $1 ahagaragara hafi yo kwishyuriraho'],
+    [/^(\d+)\s+customer account\(s\)\s+are overdue by 7\+\s+days$/i, 'Konti z abakiriya $1 zakererewe hejuru y iminsi 7'],
+    [/^Top follow-up:\s+(.+)\s+owes\s+(.+)$/i, 'Ukwitabwaho mbere: $1 afitiye umwenda wa $2'],
+    [/^Pending deposits:\s+(\d+)$/i, 'Ubwizigame butarasubizwa: $1'],
+    [/^Pending deposit value:\s+(.+)$/i, 'Agaciro k ubwizigame butarasubizwa: $1'],
+    [/^Returned deposits:\s+(\d+)$/i, 'Ubwizigame bwagaruwe: $1'],
+    [/^Latest pending deposit:\s+(.+)$/i, 'Ubwizigame bwa vuba butarasubizwa: $1'],
+    [/^(.+)\s+-\s+(\d+)\s+case\(s\)\s+in\s+(\d+)\s+days$/i, '$1 - amakaso $2 mu minsi $3'],
+    [/^Profit is up\s+\+?([0-9.]+)%\s+vs last week\.$/i, 'Inyungu yazamutseho $1% ugereranyije n icyumweru gishize.'],
+    [/^Profit is down\s+\+?([0-9.]+)%\s+vs last week\.$/i, 'Inyungu yagabanutseho $1% ugereranyije n icyumweru gishize.'],
+    [/^Sales are up\s+([0-9.]+)%\s+vs the previous\s+(\d+)\s+days\.$/i, 'Igurisha ryazamutseho $1% ugereranyije n iminsi $2 ishize.'],
+    [/^Sales are down\s+([0-9.]+)%\s+vs the previous\s+(\d+)\s+days\.$/i, 'Igurisha ryagabanutseho $1% ugereranyije n iminsi $2 ishize.'],
+    [/^(.+)\s+\((\d+)\s+purchases\)$/i, '$1 (yaguze inshuro $2)'],
+    [/^(.+)\s+\((\d+)\s+cases\)$/i, '$1 (amakaso $2)'],
+    [/^Health score:\s+(\d+)\/100$/i, 'Amanota y ubuzima: $1/100'],
+    [/^Top restock alert:\s+(.+)$/i, 'Iburira rya mbere rya sitoki: $1'],
+    [/^Best seller:\s+(.+)$/i, 'Igicuruzwa cya mbere: $1'],
+    [/^Outstanding debt:\s+(.+)$/i, 'Umwenda usigaye: $1'],
+    [/^Total sales:\s+(.+)$/i, 'Igiteranyo cy igurisha: $1'],
+    [/^Transactions:\s+(\d+)$/i, 'Ibyakozwe: $1'],
+    [/^Cases sold:\s+(\d+)$/i, 'Amakaso yagurishijwe: $1'],
+    [/^Cash sales:\s+(.+)$/i, 'Igurisha ry amafaranga: $1'],
+    [/^Credit sales:\s+(.+)$/i, 'Igurisha ku mwenda: $1'],
+    [/^Credit share of sales:\s+([0-9.]+)%$/i, 'Igipimo cy igurisha ku mwenda: $1%'],
+    [/^Best product:\s+(.+)$/i, 'Igicuruzwa cya mbere: $1'],
+    [/^Slow product:\s+(.+)$/i, 'Igicuruzwa kigenda gake: $1'],
+    [/^Recommendation:\s+(.+)$/i, 'Inama: $1'],
+    [/^Weekly profit change:\s+(.+)$/i, 'Impinduka y inyungu y icyumweru: $1'],
+    [/^(.+):\s+(\d+)\s+case\(s\)\s+sold$/i, '$1: amakaso $2 yagurishijwe'],
+    [/^(.+):\s+(\d+)\s+case\(s\),\s+(.+)\s+left$/i, '$1: amakaso $2, hasigaye $3'],
+    [/^(.+):\s+(.+)\s+\((.+)\)$/i, '$1: $2 ($3)'],
+    [/^(.+)\s+is your best-selling product right now\.$/i, '$1 ni cyo gicuruzwa cyawe cya mbere ubu.'],
+    [/^No sales yet\. Record sales to see top products\.$/i, 'Nta gurisha rirabaho. Andika igurisha ubone ibicuruzwa bya mbere.'],
+    [/^No slow products detected in the last\s+(\d+)\s+days\.$/i, 'Nta bicuruzwa bigenda gake byagaragaye mu minsi $1 ishize.'],
+    [/^All stock levels look healthy right now\.$/i, 'Ubu sitoki yose imeze neza.'],
+    [/^No frequent buyers yet\. Add customer-linked sales to see loyalty insights\.$/i, 'Nta bakiriya bagura kenshi baragaragara. Ongeramo igurisha rifite umukiriya ubone loyalty insights.']
+];
+
+function localizeLooseText(message) {
+    const text = String(message ?? '');
+    if (!text || currentLanguage !== 'rw') return text;
+
+    const en = translations.en || {};
+    const rw = translations.rw || {};
+    const enKeys = Object.keys(en);
+    for (let i = 0; i < enKeys.length; i++) {
+        const key = enKeys[i];
+        if (en[key] === text && rw[key]) {
+            return rw[key];
+        }
+    }
+
+    if (RW_LOOSE_TEXT_MAP[text]) {
+        return RW_LOOSE_TEXT_MAP[text];
+    }
+
+    for (let i = 0; i < RW_LOOSE_TEXT_RULES.length; i++) {
+        const [pattern, replacement] = RW_LOOSE_TEXT_RULES[i];
+        if (pattern.test(text)) {
+            return text.replace(pattern, replacement);
+        }
+    }
+
+    return text;
+}
+
+function localizeHtmlLooseText(html) {
+    const source = String(html ?? '');
+    if (!source || currentLanguage !== 'rw') return source;
+    if (typeof document === 'undefined') return localizeLooseText(source);
+
+    const template = document.createElement('template');
+    template.innerHTML = source;
+    const showText = typeof NodeFilter !== 'undefined' ? NodeFilter.SHOW_TEXT : 4;
+    const walker = document.createTreeWalker(template.content, showText);
+    const textNodes = [];
+    while (walker.nextNode()) {
+        textNodes.push(walker.currentNode);
+    }
+    textNodes.forEach((node) => {
+        const raw = String(node.nodeValue || '');
+        const trimmed = raw.trim();
+        if (!trimmed) return;
+        const localized = localizeLooseText(trimmed);
+        if (localized === trimmed) return;
+        const leading = raw.match(/^\s*/)?.[0] || '';
+        const trailing = raw.match(/\s*$/)?.[0] || '';
+        node.nodeValue = `${leading}${localized}${trailing}`;
+    });
+    return template.innerHTML;
+}
+
+function installLocalizedAlertBridge() {
+    if (typeof window === 'undefined' || typeof window.alert !== 'function') return;
+    if (window.__mawLocalizedAlertBridge) return;
+    const nativeAlert = window.alert.bind(window);
+    window.alert = (message) => nativeAlert(localizeLooseText(String(message ?? '')));
+    window.__mawLocalizedAlertBridge = true;
 }
 
 // Update entire UI when language changes
@@ -14528,11 +15759,11 @@ function updateLanguageUI() {
     syncSidebarLabels();
 
     // Home dashboard
-    setText('#homeRevenueLabel', "Today's Revenue");
-    setText('#homeLowStockLabel', 'Low Stock Items');
-    setText('#homeCreditLabel', 'Outstanding Credit');
-    setText('#homeSalesOverviewTitle', 'Monthly Sales Overview');
-    setText('#homeLowStockPanelTitle', 'Low Stock Alert');
+    setText('#homeRevenueLabel', t('homeRevenueLabel'));
+    setText('#homeLowStockLabel', t('homeLowStockLabel'));
+    setText('#homeCreditLabel', t('homeCreditLabel'));
+    setText('#homeSalesOverviewTitle', t('homeSalesOverviewTitle'));
+    setText('#homeLowStockPanelTitle', t('homeLowStockPanelTitle'));
 
     // Add Sale page
     const saleLeftTitles = document.querySelectorAll('#addSale .sale-left h3');
@@ -14547,9 +15778,9 @@ function updateLanguageUI() {
     setText('#addSale button[onclick="saveNewDrink()"]', t('saveDrink'));
     setText('#addSale .sale-right > h3', t('currentSale'));
     setText('#addSale .sale-right > div:nth-of-type(1) h4', t('cartItems'));
-    setText('#selectedDrinksTitle', 'Selected Drinks');
+    setText('#selectedDrinksTitle', t('selectedDrinksTitle'));
     syncDrinkSelectionModeButton();
-    setText('#addSelectedToCartBtn', 'Add Selected to Cart');
+    setText('#addSelectedToCartBtn', t('addSelectedToCart'));
     setText('#addSale .sale-type label', `${t('saleType')}:`);
     setText('#addSale #customerSelectContainer label', `${t('selectCustomer')}:`);
     setText('#addSale .total-display p', t('totalAmount'));
@@ -14561,7 +15792,7 @@ function updateLanguageUI() {
     if (saleTypeCredit) saleTypeCredit.textContent = t('creditSale');
 
     // Stock management page
-    setText('#stockManagement button[onclick="renderStockManagement()"]', 'Refresh');
+    setText('#stockManagement button[onclick="renderStockManagement()"]', t('refreshLabel'));
     setText('#stockManagement button[onclick="exportStockManagementPDF()"]', t('exportPdf'));
     setPlaceholder('#stockSearch', t('searchDrinks'));
 
@@ -14624,6 +15855,7 @@ function updateLanguageUI() {
     if (customerFilterBtns[0]) customerFilterBtns[0].textContent = t('all');
     if (customerFilterBtns[1]) customerFilterBtns[1].textContent = t('owing');
     if (customerFilterBtns[2]) customerFilterBtns[2].textContent = t('cleared');
+    if (customerFilterBtns[3]) customerFilterBtns[3].textContent = t('overdue');
 
     // Clate/Deposit page
     setText('#clate button[onclick="openDepositForm()"]', `+ ${t('addDeposit')}`);
@@ -14639,10 +15871,10 @@ function updateLanguageUI() {
     setPlaceholder('#salesSearch', t('searchSales'));
     const salesActionFilter = document.getElementById('salesActionFilter');
     if (salesActionFilter) {
-        if (salesActionFilter.options[0]) salesActionFilter.options[0].textContent = 'All Actions';
+        if (salesActionFilter.options[0]) salesActionFilter.options[0].textContent = t('allActions');
         if (salesActionFilter.options[1]) salesActionFilter.options[1].textContent = t('cash');
         if (salesActionFilter.options[2]) salesActionFilter.options[2].textContent = t('creditSale');
-        if (salesActionFilter.options[3]) salesActionFilter.options[3].textContent = 'Deposits';
+        if (salesActionFilter.options[3]) salesActionFilter.options[3].textContent = t('depositsAction');
     }
     const saleTypeFilterBtns = document.querySelectorAll('#salesHistory .filter-buttons .filter-btn');
     if (saleTypeFilterBtns[0]) saleTypeFilterBtns[0].textContent = t('all');
@@ -14677,6 +15909,63 @@ function updateLanguageUI() {
     setText('#reports button[onclick="showCustomRangeReport()"]', t('loadRangeReport'));
     setText('#reports button[onclick="exportCustomRangePDF()"]', t('exportRangePdf'));
     setText('#reports .range-note', t('rangeNote'));
+    setText('#reports #adminBusinessAnalysis .admin-growth-header h3', localizeLooseText('Business Growth Overview'));
+    setText('#adminGrowthTrendBadge', localizeLooseText('No trend yet'));
+    setText('#adminGrowthSummary', localizeLooseText('Analyze growth from your recent daily sales.'));
+    const growthToolbar = document.querySelector('#reports #adminBusinessAnalysis .admin-growth-toolbar');
+    if (growthToolbar) growthToolbar.setAttribute('aria-label', localizeLooseText('Growth analysis period'));
+    setText('#growthWindow14Btn', localizeLooseText('14 Days'));
+    setText('#growthWindow30Btn', localizeLooseText('30 Days'));
+    setText('#growthWindow60Btn', localizeLooseText('60 Days'));
+    setText('#growthWindow90Btn', localizeLooseText('90 Days'));
+    setText('#adminDrinksPieBtn', localizeLooseText('Drinks'));
+    setText('#adminDrinksPieContainer .admin-drinks-pie-title', localizeLooseText('Drinks loved by customers (share of cases sold)'));
+    setText('#adminGrowthPointDetails .admin-growth-point-empty', localizeLooseText('Click a bar to view day details.'));
+    setText('#reports #adminBusinessAnalysis .admin-ai-advisor-title h4', localizeLooseText('AI Business Advisor'));
+    setText('#reports #adminBusinessAnalysis .admin-ai-advisor-title p', localizeLooseText('Action-focused suggestions from your real sales data.'));
+    setText('#runBusinessAiAdvisorBtn', localizeLooseText('Generate Suggestions'));
+    setText('#businessAiAdvisorOutput .advisor-empty-state strong', localizeLooseText('Suggestions are ready'));
+    setText('#businessAiAdvisorOutput .advisor-empty-state p', localizeLooseText('Generate ideas to see growth, stock, and sales actions.'));
+
+    // Floating AI assistant
+    const aiToggle = document.getElementById('aiAssistantToggle');
+    if (aiToggle) aiToggle.setAttribute('aria-label', localizeLooseText('Open Business AI Assistant'));
+    setText('#aiAssistantPanel .ai-assistant-header h3', localizeLooseText('Business AI Assistant'));
+    setText('#aiAssistantPanel .ai-assistant-header p', localizeLooseText('Smart insights for your shop'));
+    setText('#aiAssistantRefresh', localizeLooseText('Refresh'));
+    setText('#aiAssistantClose', localizeLooseText('Close'));
+    const aiRefreshBtn = document.getElementById('aiAssistantRefresh');
+    if (aiRefreshBtn) aiRefreshBtn.setAttribute('title', localizeLooseText('Refresh insights'));
+    const aiCloseBtn = document.getElementById('aiAssistantClose');
+    if (aiCloseBtn) aiCloseBtn.setAttribute('title', localizeLooseText('Close assistant'));
+    setText('#aiAssistantPanel .ai-health-card .ai-card-header span:first-child', localizeLooseText('Business Health Score'));
+    setText('#aiAssistantPanel .ai-daily-card .ai-card-header span:first-child', localizeLooseText("Today's Summary"));
+    setText('#aiDailyDate', localizeLooseText('Today'));
+    setText('#aiAssistantPanel .ai-daily-card .ai-daily-metrics div:nth-of-type(1) small', localizeLooseText('Total Sales'));
+    setText('#aiAssistantPanel .ai-daily-card .ai-daily-metrics div:nth-of-type(2) small', localizeLooseText('Best Product'));
+    setText('#aiAssistantPanel .ai-daily-card .ai-daily-metrics div:nth-of-type(3) small', localizeLooseText('Slow Product'));
+    setText('#aiDailyRecommendation', localizeLooseText("Generate insights to see today's recommendation."));
+    setText('#aiAssistantPanel .ai-restock-card .ai-card-header span:first-child', localizeLooseText('Smart Restock Alerts'));
+    setText('#aiAssistantPanel .ai-leak-card .ai-card-header span:first-child', localizeLooseText('Profit Leak Detector'));
+    setText('#aiAssistantPanel .ai-priority-card .ai-card-header span:first-child', localizeLooseText("Today's Priorities"));
+    setText('#aiAssistantPanel .ai-priority-card .ai-card-chip', localizeLooseText('Top 5'));
+    setText('#aiAssistantPanel .ai-command-title', localizeLooseText('Quick Commands'));
+    const aiCommandButtons = document.querySelectorAll('#aiAssistantPanel .ai-command-btn');
+    const aiCommandLabels = [
+        'Analyze my business',
+        'What should I restock?',
+        'Which products sell the most?',
+        'How can I increase profit?',
+        "Show today's summary report",
+        'Show profit leaks',
+        'Show business health score',
+        "Show today's priorities"
+    ];
+    aiCommandButtons.forEach((btn, index) => {
+        if (!aiCommandLabels[index]) return;
+        btn.textContent = localizeLooseText(aiCommandLabels[index]);
+    });
+    setText('#aiAssistantHint', localizeLooseText('Tap a command to get instant insights. No typing needed.'));
 
     // Settings page
     setText('#settingsAccountTitle', t('accountSecurity'));
@@ -15129,10 +16418,10 @@ function buildRestockForecast(stats30, stats7, growthAnalysis) {
 }
 
 function formatDaysRemaining(days) {
-    if (!Number.isFinite(days)) return 'No recent sales';
-    if (days <= 0) return 'Out now';
-    if (days < 1) return 'Less than 1 day';
-    return `${Math.ceil(days)} days`;
+    if (!Number.isFinite(days)) return localizeLooseText('No recent sales');
+    if (days <= 0) return localizeLooseText('Out now');
+    if (days < 1) return localizeLooseText('Less than 1 day');
+    return localizeLooseText(`${Math.ceil(days)} days`);
 }
 
 function getProfitTrendStats(days = 7) {
@@ -15178,6 +16467,60 @@ function getCustomerInsights(salesList, limit = 3) {
         }));
 
     return { topCustomers };
+}
+
+function getDebtCollectionInsights(limit = 5) {
+    const now = new Date();
+    const debtCustomers = normalizeCustomersList(customers)
+        .map((customer, index) => {
+            const owing = Math.max(0, Number(customer?.owing) || 0);
+            if (owing <= 0) return null;
+
+            const promiseDateValue = getCustomerPromiseDate(customer);
+            const promiseDate = parseCustomerPromiseDate(promiseDateValue);
+            const isOverdue = isCustomerDebtOverdue(customer, now);
+            const overdueDaysRaw = isOverdue ? getCustomerDebtOverdueDays(customer, now) : 0;
+            const overdueDays = isOverdue ? Math.max(1, Number(overdueDaysRaw) || 1) : 0;
+            const dueLabel = promiseDate
+                ? promiseDate.toLocaleDateString([], { month: 'short', day: 'numeric' })
+                : '';
+            const status = isOverdue ? 'overdue' : (promiseDate ? 'due' : 'open');
+            const statusLabel = isOverdue
+                ? `${overdueDays}d overdue`
+                : (dueLabel ? `Due ${dueLabel}` : 'No due date');
+
+            return {
+                id: String(customer?.id || `debt-${index}`),
+                name: String(customer?.name || `Customer ${index + 1}`),
+                owing,
+                status,
+                statusLabel,
+                overdueDays,
+                isLoyal: isLoyalCustomer(customer)
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+            const rank = (entry) => (entry.status === 'overdue' ? 3 : (entry.status === 'due' ? 2 : 1));
+            const rankDiff = rank(b) - rank(a);
+            if (rankDiff !== 0) return rankDiff;
+            if (b.overdueDays !== a.overdueDays) return b.overdueDays - a.overdueDays;
+            return b.owing - a.owing;
+        });
+
+    const totalOwing = debtCustomers.reduce((sum, item) => sum + (Number(item.owing) || 0), 0);
+    const overdueCount = debtCustomers.filter((item) => item.status === 'overdue').length;
+    const dueCount = debtCustomers.filter((item) => item.status === 'due').length;
+    const loyalCount = debtCustomers.filter((item) => item.isLoyal).length;
+
+    return {
+        customerCount: debtCustomers.length,
+        overdueCount,
+        dueCount,
+        loyalCount,
+        totalOwing,
+        topCustomers: debtCustomers.slice(0, Math.max(1, Number(limit) || 5))
+    };
 }
 
 function buildBusinessHealthScore(context) {
@@ -15339,6 +16682,7 @@ function buildAiAssistantAnalysis() {
     const restock = buildRestockForecast(stats30, stats7, growthAnalysis);
     const profitTrend = getProfitTrendStats(7);
     const customerInsights = getCustomerInsights(stats30.list, 3);
+    const debtInsights = getDebtCollectionInsights(6);
     const productsSoldCount = stats30.productStats.size;
     const healthScore = buildBusinessHealthScore({
         growthAnalysis,
@@ -15367,6 +16711,7 @@ function buildAiAssistantAnalysis() {
         restockAll: restock.restockAll,
         profitTrend,
         customerInsights,
+        debtInsights,
         healthScore,
         dailySummary,
         profitLeaks,
@@ -15391,9 +16736,9 @@ function invalidateAiAssistantCache() {
 
 function buildAiListItemsHtml(items, emptyText = 'No data yet.') {
     if (!Array.isArray(items) || items.length === 0) {
-        return `<li>${escapeHtml(emptyText)}</li>`;
+        return `<li>${escapeHtml(localizeLooseText(emptyText))}</li>`;
     }
-    return items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    return items.map((item) => `<li>${escapeHtml(localizeLooseText(item))}</li>`).join('');
 }
 
 function renderAiAssistantDashboard(force = false) {
@@ -15408,7 +16753,7 @@ function renderAiAssistantDashboard(force = false) {
     if (scoreValue) scoreValue.textContent = String(analysis.healthScore.score);
     if (scoreLabel) scoreLabel.textContent = `${analysis.healthScore.score}/100`;
     if (scoreNotes) {
-        scoreNotes.innerHTML = buildAiListItemsHtml(analysis.healthScore.notes, 'No activity yet.');
+        scoreNotes.innerHTML = buildAiListItemsHtml(analysis.healthScore.notes, localizeLooseText('No activity yet.'));
     }
     if (scoreWrap) {
         scoreWrap.classList.remove('good', 'warn', 'bad');
@@ -15434,9 +16779,9 @@ function renderAiAssistantDashboard(force = false) {
     if (restockCount) restockCount.textContent = String(analysis.restockAlerts.length);
     if (restockList) {
         const alerts = analysis.restockAlerts.slice(0, 5).map((item) => {
-            return `${item.name} - ${formatDaysRemaining(item.daysRemaining)} (${item.stockQty} cases)`;
+            return localizeLooseText(`${item.name} - ${formatDaysRemaining(item.daysRemaining)} (${item.stockQty} cases)`);
         });
-        restockList.innerHTML = buildAiListItemsHtml(alerts, 'All stock looks healthy.');
+        restockList.innerHTML = buildAiListItemsHtml(alerts, localizeLooseText('All stock looks healthy.'));
     }
 
     const leakCount = document.getElementById('aiLeakCount');
@@ -15444,16 +16789,16 @@ function renderAiAssistantDashboard(force = false) {
     if (leakCount) leakCount.textContent = String(canViewProfitData() ? analysis.profitLeaks.length : 0);
     if (leakList) {
         if (!canViewProfitData()) {
-            leakList.innerHTML = `<li>${escapeHtml('Profit insights require an admin session.')}</li>`;
+            leakList.innerHTML = `<li>${escapeHtml(localizeLooseText('Profit insights require an admin session.'))}</li>`;
         } else {
-            leakList.innerHTML = buildAiListItemsHtml(analysis.profitLeaks, 'No obvious profit leaks detected.');
+            leakList.innerHTML = buildAiListItemsHtml(analysis.profitLeaks, localizeLooseText('No obvious profit leaks detected.'));
         }
     }
 
     const prioritiesList = document.getElementById('aiPrioritiesList');
     if (prioritiesList) {
         const items = analysis.priorities.slice(0, AI_ASSISTANT_MAX_PRIORITIES);
-        prioritiesList.innerHTML = buildAiListItemsHtml(items, 'No urgent tasks today.');
+        prioritiesList.innerHTML = buildAiListItemsHtml(items, localizeLooseText('No urgent tasks today.'));
     }
 }
 
@@ -15477,11 +16822,11 @@ function renderSettingsAiAssistantSection(force = false) {
     const recommendationEl = document.getElementById('settingsAiRecommendation');
 
     if (!activeUser) {
-        if (dateEl) dateEl.textContent = 'Today';
+        if (dateEl) dateEl.textContent = localizeLooseText('Today');
         if (totalEl) totalEl.textContent = '--';
         if (bestEl) bestEl.textContent = '--';
         if (slowEl) slowEl.textContent = '--';
-        if (recommendationEl) recommendationEl.textContent = 'Sign in to generate insights for this account.';
+        if (recommendationEl) recommendationEl.textContent = localizeLooseText('Sign in to generate insights for this account.');
         return;
     }
 
@@ -15490,7 +16835,7 @@ function renderSettingsAiAssistantSection(force = false) {
     if (totalEl) totalEl.textContent = formatAiCurrency(analysis.dailySummary.totalSales);
     if (bestEl) bestEl.textContent = analysis.dailySummary.bestProduct || '--';
     if (slowEl) slowEl.textContent = analysis.dailySummary.slowProduct || '--';
-    if (recommendationEl) recommendationEl.textContent = analysis.dailySummary.recommendation || 'No recommendation available yet.';
+    if (recommendationEl) recommendationEl.textContent = localizeLooseText(analysis.dailySummary.recommendation || 'No recommendation available yet.');
 }
 
 function generateSettingsAiInsights() {
@@ -15513,7 +16858,8 @@ function addAiAssistantMessage(role, html, isHtml = true) {
     if (!log) return;
     const wrapper = document.createElement('div');
     wrapper.className = `ai-message ${role === 'user' ? 'user' : 'ai'}`;
-    wrapper.innerHTML = isHtml ? html : escapeHtml(html);
+    const content = isHtml ? localizeHtmlLooseText(html) : localizeLooseText(html);
+    wrapper.innerHTML = isHtml ? content : escapeHtml(content);
     log.appendChild(wrapper);
     log.scrollTop = log.scrollHeight;
 }
@@ -15534,8 +16880,8 @@ function addAiAssistantTyping() {
 }
 
 function buildAiBulletList(items) {
-    if (!Array.isArray(items) || items.length === 0) return '<p>No data yet.</p>';
-    return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+    if (!Array.isArray(items) || items.length === 0) return `<p>${escapeHtml(localizeLooseText('No data yet.'))}</p>`;
+    return `<ul>${items.map((item) => `<li>${escapeHtml(localizeLooseText(item))}</li>`).join('')}</ul>`;
 }
 
 function shouldUseExternalAdvice(query) {
@@ -15957,7 +17303,7 @@ function initializeAiAssistantVoice() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         voiceBtn.disabled = true;
-        voiceBtn.title = 'Voice input not supported';
+        voiceBtn.title = localizeLooseText('Voice input not supported');
         return;
     }
 
@@ -16131,6 +17477,7 @@ window.setAdminGrowthWindow = setAdminGrowthWindow;
 window.selectAdminGrowthPoint = selectAdminGrowthPoint;
 window.exportAdminDailySalesPDF = exportAdminDailySalesPDF;
 window.exportAdminAllSalesPDF = exportAdminAllSalesPDF;
+window.exportAdminRangeSalesPDF = exportAdminRangeSalesPDF;
 window.exportAdminStockAuditPDF = exportAdminStockAuditPDF;
 window.saveAutoDailySalesPdfSettings = saveAutoDailySalesPdfSettings;
 window.downloadLastAutoDailySalesPdf = downloadLastAutoDailySalesPdf;
