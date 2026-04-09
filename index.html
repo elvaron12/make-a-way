@@ -34,63 +34,104 @@
             margin: 24px auto;
             padding: 30px;
             width: min(420px, calc(100% - 16px));
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border-radius: 20px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.15), 0 5px 15px rgba(0,0,0,0.1);
             max-height: calc(100vh - 48px);
             overflow-y: auto;
+            border: 1px solid rgba(0,0,0,0.05);
         }
         
         .form-title {
-            color: #2575fc;
+            color: #1f2937;
             margin-top: 0;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: center;
+            background: linear-gradient(135deg, #2575fc 0%, #6a11cb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+            border: 1px solid rgba(0,0,0,0.06);
+            transition: all 0.2s ease;
+        }
+        
+        .form-group:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12), 0 3px 6px rgba(0,0,0,0.08);
+            transform: translateY(-1px);
         }
         
         .form-group label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
-            color: #555;
+            color: #374151;
+            font-size: 0.9rem;
         }
         
         .form-group input, .form-group textarea, .form-group select {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e1e5e9;
-            border-radius: 8px;
-            font-size: 16px;
+            padding: 12px 16px;
+            border: 2px solid rgba(0,0,0,0.1);
+            border-radius: 12px;
+            font-size: 15px;
+            background: white;
+            transition: all 0.2s ease;
         }
         
         .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
             border-color: #2575fc;
+            box-shadow: 0 0 0 3px rgba(37, 117, 252, 0.1);
+            outline: none;
             outline: none;
         }
         
         .form-buttons {
             text-align: right;
-            margin-top: 30px;
+            margin-top: 24px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
         }
         
         .form-btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
             border: none;
-            border-radius: 8px;
+            border-radius: 25px;
             font-weight: 600;
             cursor: pointer;
-            margin-left: 10px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .form-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
         .form-cancel {
             background: #f8f9fa;
+            color: #6b7280;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .form-cancel:hover {
+            background: #e5e7eb;
         }
         
         .form-submit {
-            background: #2575fc;
+            background: linear-gradient(135deg, #2575fc 0%, #6a11cb 100%);
             color: white;
+            border: 1px solid rgba(37, 117, 252, 0.2);
         }
         
         /* Modal styles for transaction details */
@@ -962,6 +1003,17 @@
             color: #477196;
             font-size: 0.86rem;
             line-height: 1.5;
+        }
+
+        #loginScreen .debt-notification-banner {
+            margin: 15px 0;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(255, 87, 34, 0.1));
+            border: 1px solid rgba(255, 152, 0, 0.3);
+            font-size: 0.9rem;
+            color: #e65100;
+            text-align: center;
         }
 
         @keyframes mawLoginDrift {
@@ -3313,6 +3365,8 @@
             </div>
             <div id="authFeedback" class="auth-status" role="status" aria-live="polite" style="display: none;"></div>
 
+            <div id="loginDebtNotifications" class="debt-notification-banner" style="display: none;"></div>
+
             <div class="input-group" id="signupNameGroup" style="display: none;">
                 <label for="signupName">Full Name</label>
                 <input type="text" id="signupName" placeholder="Enter your full name" autocomplete="off">
@@ -3385,27 +3439,27 @@
 
 <!-- Custom Forms (hidden initially) -->
 <div id="customerFormOverlay" class="form-overlay">
-    <div class="form-container" style="max-width: 430px; margin: 12px auto; padding: 20px; max-height: calc(100vh - 24px); overflow-y: auto;">
-        <h3 class="form-title" style="font-size: 1.4rem; margin-bottom: 15px;">Add New Customer</h3>
+    <div class="form-container">
+        <h3 class="form-title">Add New Customer</h3>
         
-        <div class="form-group" style="margin-bottom: 15px;">
-            <label for="customerName" style="font-size: 0.9rem; margin-bottom: 5px;">Customer Name *</label>
-            <input type="text" id="customerName" placeholder="Enter customer name" required style="padding: 10px; font-size: 14px;">
+        <div class="form-group">
+            <label for="customerName">Customer Name *</label>
+            <input type="text" id="customerName" placeholder="Enter customer name" required>
         </div>
         
-        <div class="form-group" style="margin-bottom: 15px;">
-            <label for="customerPhone" style="font-size: 0.9rem; margin-bottom: 5px;">Phone Number</label>
-            <input type="tel" id="customerPhone" placeholder="Enter phone number" style="padding: 10px; font-size: 14px;">
+        <div class="form-group">
+            <label for="customerPhone">Phone Number</label>
+            <input type="tel" id="customerPhone" placeholder="Enter phone number">
         </div>
         
-        <div class="form-group" style="margin-bottom: 15px;">
-            <label for="customerLocation" style="font-size: 0.9rem; margin-bottom: 5px;">Location/Address</label>
-            <input type="text" id="customerLocation" placeholder="Enter location or address" style="padding: 10px; font-size: 14px;">
+        <div class="form-group">
+            <label for="customerLocation">Location/Address</label>
+            <input type="text" id="customerLocation" placeholder="Enter location or address">
         </div>
         
-        <div class="form-group" style="margin-bottom: 15px;">
-            <label for="customerType" style="font-size: 0.9rem; margin-bottom: 5px;">Customer Type</label>
-            <select id="customerType" style="padding: 10px; font-size: 14px;" onchange="syncCustomerPaybackDateVisibility()">
+        <div class="form-group">
+            <label for="customerType">Customer Type</label>
+            <select id="customerType" onchange="syncCustomerPaybackDateVisibility()">
                 <option value="regular">Regular Customer</option>
                 <option value="loyal">Loyal Customer</option>
                 <option value="wholesale">Wholesale</option>
@@ -3415,28 +3469,28 @@
             </select>
         </div>
         
-        <div class="form-group" style="margin-bottom: 15px;">
-            <label for="customerNotes" style="font-size: 0.9rem; margin-bottom: 5px;">Additional Notes</label>
-            <textarea id="customerNotes" rows="2" placeholder="Any special notes, preferences, or identification details" style="padding: 10px; font-size: 14px; min-height: 60px;"></textarea>
+        <div class="form-group">
+            <label for="customerNotes">Additional Notes</label>
+            <textarea id="customerNotes" rows="2" placeholder="Any special notes, preferences, or identification details"></textarea>
         </div>
         
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="customerDebt" style="font-size: 0.9rem; margin-bottom: 5px;">Initial Debt (RWF)</label>
-            <input type="number" id="customerDebt" placeholder="Enter initial debt amount" value="0" style="padding: 10px; font-size: 14px;" oninput="syncCustomerPaybackDateVisibility()">
+        <div class="form-group">
+            <label for="customerDebt">Initial Debt (RWF)</label>
+            <input type="number" id="customerDebt" placeholder="Enter initial debt amount" value="0" oninput="syncCustomerPaybackDateVisibility()">
         </div>
 
-        <div class="form-group" id="customerPaybackDateGroup" style="margin-bottom: 20px; display: none;">
-            <label for="customerPaybackDate" style="font-size: 0.9rem; margin-bottom: 5px;">Promised Payback Date & Time</label>
+        <div class="form-group" id="customerPaybackDateGroup" style="display: none;">
+            <label for="customerPaybackDate">Promised Payback Date & Time</label>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <input type="date" id="customerPaybackDate" style="padding: 10px; font-size: 14px; flex: 1 1 190px;" disabled>
-                <input type="time" id="customerPaybackTime" step="60" style="padding: 10px; font-size: 14px; flex: 1 1 140px;" disabled>
+                <input type="date" id="customerPaybackDate" disabled>
+                <input type="time" id="customerPaybackTime" step="60" disabled>
             </div>
             <p style="margin-top: 8px; color: #64748b; font-size: 0.85rem;">Set when a loyal customer promises to pay so overdue reminders can trigger on time.</p>
         </div>
         
-        <div class="form-buttons" style="margin-top: 20px; gap: 10px;">
-            <button onclick="closeCustomerForm()" class="form-btn form-cancel" style="padding: 8px 16px; font-size: 0.9rem;">Cancel</button>
-            <button onclick="saveCustomer()" class="form-btn form-submit" style="padding: 8px 16px; font-size: 0.9rem;">Save Customer</button>
+        <div class="form-buttons">
+            <button onclick="closeCustomerForm()" class="form-btn form-cancel">Cancel</button>
+            <button onclick="saveCustomer()" class="form-btn form-submit">Save Customer</button>
         </div>
     </div>
 </div>
@@ -3993,6 +4047,16 @@
                         </div>
                     </div>
 
+                    <div class="settings-card admin-tool-card">
+                        <h3 class="settings-card-title" style="margin-bottom: 8px;">Range Sales Export</h3>
+                        <p class="settings-help-text" style="margin-bottom: 12px;">Select a date range and export all sales within that period.</p>
+                        <div class="settings-inline-row">
+                            <input type="date" id="adminRangeStartDate" placeholder="Start Date">
+                            <input type="date" id="adminRangeEndDate" placeholder="End Date">
+                            <button id="adminExportRangePdfBtn" onclick="exportAdminRangeSalesPDF()" class="add-btn" style="background: #10b981;">Export Range PDF</button>
+                        </div>
+                    </div>
+
                     <div class="stock-table-wrap admin-daily-table-wrap">
                         <table id="adminDailySummaryTable">
                             <thead>
@@ -4171,9 +4235,10 @@
                 <input type="text" class="search-input" placeholder="Search customers by name, phone, or details..." oninput="debouncedFilterCustomers(this.value)">
                 
                 <div class="filter-buttons">
-                    <button class="filter-btn active" onclick="filterCustomers('all')">All</button>
-                    <button class="filter-btn" onclick="filterCustomers('owing')">Owing</button>
-                    <button class="filter-btn" onclick="filterCustomers('cleared')">Cleared</button>
+                    <button class="filter-btn active" onclick="filterCustomers('all', event)">All</button>
+                    <button class="filter-btn" onclick="filterCustomers('owing', event)">Owing</button>
+                    <button class="filter-btn" onclick="filterCustomers('cleared', event)">Cleared</button>
+                    <button class="filter-btn" onclick="filterCustomers('overdue', event)">Overdue</button>
                 </div>
             </div>
             
