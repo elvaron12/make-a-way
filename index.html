@@ -3538,6 +3538,16 @@
     </div>
 </div>
 
+<!-- Customer Debt Details Modal -->
+<div id="customerDebtDetailsModal" class="form-overlay">
+    <div class="form-container" style="max-width: 500px;">
+        <h3 class="form-title" id="customerDebtDetailsTitle">Customer Debt Details</h3>
+        <div id="customerDebtDetailsContent" class="debt-details-content">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+    </div>
+</div>
+
 <div id="uiConfirmOverlay" class="form-overlay">
     <div class="form-container" style="max-width: 460px;">
         <h3 class="form-title" id="uiConfirmTitle">Confirm Action</h3>
@@ -3933,7 +3943,21 @@
                     
                     <div class="customer-select" id="customerSelectContainer" style="display: none;">
                         <label>Select Customer:</label>
-                        <select id="customerSelect"></select>
+                        <div class="credit-customer-search-row">
+                            <input
+                                type="text"
+                                id="creditCustomerSearch"
+                                placeholder="Find customer by name, phone, or location..."
+                                oninput="filterCreditSaleCustomers(this.value)"
+                                onkeydown="handleCreditCustomerSearchKeydown(event)"
+                                autocomplete="off"
+                                style="width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px;"
+                            >
+                            <button type="button" id="creditCustomerSearchClearBtn" class="credit-customer-clear-btn" onclick="clearCreditCustomerSearch()">Clear</button>
+                        </div>
+                        <div id="creditCustomerSelectedChip" class="credit-customer-selected-chip">No customer selected.</div>
+                        <div id="creditCustomerResults" class="credit-customer-results"></div>
+                        <select id="customerSelect" style="display: none;"></select>
                     </div>
 
                     <div class="customer-select" id="creditPromiseDateContainer" style="display: none;">
