@@ -418,6 +418,7 @@ let appMeta = {};
 let saleQty = 1;
 let selectedCustomerId = null;
 let currentSaleType = "normal";
+let creditCustomerSearchTerm = '';
 let selectedSalesHistoryType = 'all';
 let rwandaClockInterval = null;
 let rwandaClockSyncInterval = null;
@@ -2538,6 +2539,7 @@ function buildCustomerItemMarkup(customer, index, options = {}) {
             </div>
         </div>
         <div class="customer-square-buttons">
+            <button onclick="openCustomerDebtDetails(${index})" class="square-btn customer-action-btn action-info" title="View/Edit Debt Details"><span class="square-btn-label">i</span></button>
             <button onclick="openAddDebtForm(${index})" class="square-btn customer-action-btn action-add" title="${escapeHtml(t('customerActionAddDebt'))}"><span class="square-btn-label">+</span></button>
             <button onclick="openReduceDebtForm(${index})" class="square-btn customer-action-btn action-reduce" title="${escapeHtml(t('customerActionReduceDebt'))}"><span class="square-btn-label">-</span></button>
             <button onclick="openClearDebtForm(${index})" class="square-btn customer-action-btn action-clear" title="${escapeHtml(t('customerActionClearDebt'))}"><span class="square-btn-label">✓</span></button>
@@ -3040,18 +3042,12 @@ async function loadActiveUserData(user = activeUser) {
     const loadedArchives = loadedMap[archivesKey];
 
     sales = Array.isArray(loadedSales) ? loadedSales : [];
-    customers = mergeCustomerLists(loadedGlobalCustomers, loadedCustomers);
+    customers = Array.isArray(loadedGlobalCustomers) ? normalizeCustomersList(loadedGlobalCustomers) : [];
     clates = mergeClateLists(loadedGlobalClates, loadedClates);
     drinks = Array.isArray(loadedDrinks) ? loadedDrinks : [];
     settings = sanitizeUserSettings(loadedSettings);
     yearlyArchives = sanitizeYearArchives(loadedArchives);
     
-    // Try to load customers from MongoDB
-    await loadCustomersFromMongoDB(user?.phone || user);
-    
-    // Try to load drinks from MongoDB
-    await loadDrinksFromMongoDB(user?.phone || user);
-
     // Migrate legacy customer data if shared list is still empty.
     if (customers.length === 0) {
         const legacyCustomersKey = userDataKey('customers', user);
@@ -3190,7 +3186,6 @@ function buildCurrentSavePayload(user = activeUser) {
     if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey || !archivesKey) return payload;
 
     payload[salesKey] = Array.isArray(sales) ? sales : [];
-    payload[customersKey] = Array.isArray(customers) ? customers : [];
     payload[GLOBAL_CUSTOMERS_KEY] = Array.isArray(customers) ? customers : [];
     payload[clatesKey] = Array.isArray(clates) ? clates : [];
     payload[GLOBAL_CLATES_KEY] = Array.isArray(clates) ? clates : [];
@@ -3218,13 +3213,6 @@ async function saveData() {
     const payload = buildCurrentSavePayload(activeUser);
     const entries = Object.entries(payload).map(([name, value]) => ({ name, value }));
     await saveManyNamedData(entries);
-    
-    // Sync to MongoDB if user logged in
-    if (activeUser) {
-        const syncUserId = activeUser?.phone || activeUser?.id || activeUser;
-        await syncCustomersToMongoDB(syncUserId);
-        await syncDrinksToMongoDB(syncUserId);
-    }
 }
 
 // ============ MONGODB SYNC FUNCTIONS ============
@@ -3934,6 +3922,33 @@ function updateAuthModeSummary() {
     textEl.textContent = t('authModeLoginText');
 }
 
+function isEnterLikeKey(event) {
+    return Boolean(
+        event &&
+        (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter')
+    );
+}
+
+function bindLoginEnterShortcut() {
+    const loginScreen = document.getElementById('loginScreen');
+    if (!loginScreen || loginScreen.dataset.enterShortcutBound) return;
+
+    loginScreen.addEventListener('keydown', (event) => {
+        if (!isEnterLikeKey(event)) return;
+        if (forgotPinVisible) return;
+        if (authMode === 'signup') return;
+
+        const target = event.target;
+        const targetId = target && typeof target.id === 'string' ? target.id : '';
+        if (targetId !== 'phone' && targetId !== 'pin') return;
+
+        event.preventDefault();
+        void runLoginFlow();
+    }, true);
+
+    loginScreen.dataset.enterShortcutBound = '1';
+}
+
 function updateResetAccountPreview() {
     const preview = document.getElementById('resetAccountPreview');
     if (!preview) return;
@@ -4608,6 +4623,7 @@ async function handleResetPin() {
 
 function initializeAuthUI() {
     const users = getAuthUsers();
+    bindLoginEnterShortcut();
     const loginTab = document.getElementById('authLoginTab');
     const adminTab = document.getElementById('authAdminTab');
     const signupTab = document.getElementById('authSignupTab');
@@ -4698,7 +4714,7 @@ function initializeAuthUI() {
     }
     if (pinInput && !pinInput.dataset.boundEnter) {
         pinInput.addEventListener('keydown', (e) => {
-            if (e.key !== 'Enter') return;
+            if (!isEnterLikeKey(e)) return;
             if (e.repeat) return;
             e.preventDefault();
             if (authMode === 'signup') {
@@ -4712,7 +4728,7 @@ function initializeAuthUI() {
     }
     if (phoneInput && !phoneInput.dataset.boundEnter) {
         phoneInput.addEventListener('keydown', (e) => {
-            if (e.key !== 'Enter') return;
+            if (!isEnterLikeKey(e)) return;
             if (e.repeat) return;
             e.preventDefault();
             const passwordEl = document.getElementById('pin');
@@ -4858,7 +4874,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Show debt notifications on login screen
             void renderLoginDebtNotifications();
         }
-        startRwandaClock();
         bindOnboardingControls();
         ensureStockAdjustOverlayBindings();
         ensureClearDataConfirmBindings();
@@ -4879,6 +4894,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         setAuthFeedback('Startup took too long. Please refresh and try again.', 'error');
     }
+
+    // Always start the Rwanda clock even if startup data restore fails.
+    startRwandaClock();
     
     const logoutBtn = document.getElementById('logoutBtn');
     
@@ -4938,6 +4956,13 @@ function setupSearchListeners() {
         salesSearch.removeEventListener('input', handleSalesSearch);
         salesSearch.addEventListener('input', handleSalesSearch);
     }
+
+    // Credit sale customer search
+    const creditCustomerSearch = document.getElementById('creditCustomerSearch');
+    if (creditCustomerSearch) {
+        creditCustomerSearch.removeEventListener('input', handleCreditCustomerSearch);
+        creditCustomerSearch.addEventListener('input', handleCreditCustomerSearch);
+    }
 }
 
 // Drink search handler
@@ -4958,6 +4983,11 @@ function handleDepositSearch(e) {
 // Sales history search handler
 function handleSalesSearch(e) {
     filterSalesHistory(e.target.value);
+}
+
+// Credit sale customer search handler
+function handleCreditCustomerSearch(e) {
+    filterCreditSaleCustomers(e?.target?.value || '');
 }
 
 // Show app background letters after login
@@ -5154,6 +5184,45 @@ function getSyncedRwandaDate() {
     return new Date(rwandaClockBaseEpochMs + elapsedMs);
 }
 
+function buildRwandaClockFallbackParts(now, locale) {
+    const sourceDate = now instanceof Date ? now : new Date();
+    const utcMs = sourceDate.getTime() + (sourceDate.getTimezoneOffset() * 60000);
+    const kigaliDate = new Date(utcMs + (2 * 60 * 60000)); // Rwanda is UTC+2 (no DST)
+
+    const pad = (value) => String(Math.max(0, Number(value) || 0)).padStart(2, '0');
+
+    try {
+        const dayText = new Intl.DateTimeFormat(locale, {
+            weekday: 'long',
+            timeZone: 'UTC'
+        }).format(kigaliDate);
+
+        const dateText = new Intl.DateTimeFormat(locale, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'UTC'
+        }).format(kigaliDate);
+
+        const timeText = new Intl.DateTimeFormat(locale, {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+            timeZone: 'UTC'
+        }).format(kigaliDate);
+
+        return { dayText, dateText, timeText };
+    } catch (_) {
+        const fallbackDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const fallbackMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const dayText = fallbackDayNames[kigaliDate.getUTCDay()] || 'Rwanda';
+        const dateText = `${pad(kigaliDate.getUTCDate())} ${fallbackMonthNames[kigaliDate.getUTCMonth()] || 'Jan'} ${kigaliDate.getUTCFullYear()}`;
+        const timeText = `${pad(kigaliDate.getUTCHours())}:${pad(kigaliDate.getUTCMinutes())}:${pad(kigaliDate.getUTCSeconds())}`;
+        return { dayText, dateText, timeText };
+    }
+}
+
 async function syncRwandaClockFromServer() {
     const epochMs = await fetchRwandaEpochMs();
     if (!Number.isFinite(epochMs)) return false;
@@ -5175,30 +5244,35 @@ function updateRwandaClock() {
 
     const now = getSyncedRwandaDate() || new Date();
     const locale = getClockLocale();
+    let parts = null;
 
-    const dayText = new Intl.DateTimeFormat(locale, {
-        weekday: 'long',
-        timeZone: RWANDA_TIME_ZONE
-    }).format(now);
+    try {
+        parts = {
+            dayText: new Intl.DateTimeFormat(locale, {
+                weekday: 'long',
+                timeZone: RWANDA_TIME_ZONE
+            }).format(now),
+            dateText: new Intl.DateTimeFormat(locale, {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                timeZone: RWANDA_TIME_ZONE
+            }).format(now),
+            timeText: new Intl.DateTimeFormat(locale, {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+                timeZone: RWANDA_TIME_ZONE
+            }).format(now)
+        };
+    } catch (_) {
+        parts = buildRwandaClockFallbackParts(now, locale);
+    }
 
-    const dateText = new Intl.DateTimeFormat(locale, {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        timeZone: RWANDA_TIME_ZONE
-    }).format(now);
-
-    const timeText = new Intl.DateTimeFormat(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-        timeZone: RWANDA_TIME_ZONE
-    }).format(now);
-
-    dayEl.textContent = dayText;
-    dateEl.textContent = dateText;
-    timeEl.textContent = timeText;
+    dayEl.textContent = parts?.dayText || 'Rwanda';
+    dateEl.textContent = parts?.dateText || '--';
+    timeEl.textContent = parts?.timeText || '00:00:00';
 }
 
 function startRwandaClock() {
@@ -10044,7 +10118,10 @@ async function confirmSale() {
     if (customerSelectContainer) customerSelectContainer.style.display = 'none';
     const customerSelect = document.getElementById('customerSelect');
     if (customerSelect) customerSelect.value = '';
+    const creditCustomerSearch = document.getElementById('creditCustomerSearch');
+    if (creditCustomerSearch) creditCustomerSearch.value = '';
     writeCustomerPromiseDateTimeInputs('creditPromiseDate', 'creditPromiseTime', '');
+    creditCustomerSearchTerm = '';
     selectedCustomerId = null;
     currentSaleType = 'normal';
     resetQuickDrinkSelection();
@@ -10193,44 +10270,206 @@ function updateSaleTotal() {
 function changeSaleType(type) {
     currentSaleType = type;
     const container = document.getElementById('customerSelectContainer');
+    const searchInput = document.getElementById('creditCustomerSearch');
     if (container) {
         container.style.display = type === 'credit' ? 'block' : 'none';
     }
     
     if (type === 'credit') {
+        creditCustomerSearchTerm = String(searchInput?.value || '').trim();
         updateCustomerDropdown();
+        if (searchInput) {
+            setTimeout(() => searchInput.focus(), 0);
+        }
     } else {
         selectedCustomerId = null;
+        creditCustomerSearchTerm = '';
+        if (searchInput) searchInput.value = '';
+        updateCustomerDropdown();
     }
     syncCreditPromiseDateVisibility();
+}
+
+function filterCreditSaleCustomers(value = '') {
+    creditCustomerSearchTerm = String(value || '').trim();
+    updateCustomerDropdown();
+}
+
+function clearCreditCustomerSearch() {
+    creditCustomerSearchTerm = '';
+    const input = document.getElementById('creditCustomerSearch');
+    if (input) input.value = '';
+    updateCustomerDropdown();
+    if (input) input.focus();
+}
+
+function getCreditCustomerSearchEntries(searchTerm = '') {
+    const normalizedSearch = String(searchTerm || '').trim().toLowerCase();
+    const list = (Array.isArray(customers) ? customers : [])
+        .map((customer, index) => ({ customer, index }))
+        .filter(({ customer }) => customer && typeof customer === 'object');
+
+    list.sort((a, b) => {
+        const loyalDiff = Number(isLoyalCustomer(b.customer)) - Number(isLoyalCustomer(a.customer));
+        if (loyalDiff !== 0) return loyalDiff;
+        return String(a.customer?.name || '').localeCompare(String(b.customer?.name || ''));
+    });
+
+    return list.filter(({ customer }) => {
+        if (!normalizedSearch) return true;
+        const searchText = [
+            customer?.name,
+            customer?.phone,
+            customer?.location,
+            customer?.notes,
+            normalizeCustomerType(customer?.type)
+        ]
+            .map((value) => String(value || '').toLowerCase())
+            .join(' ');
+        return searchText.includes(normalizedSearch);
+    });
+}
+
+function formatCreditCustomerOptionLabel(customer, options = {}) {
+    if (!customer || typeof customer !== 'object') return localizeLooseText('Unknown customer');
+    const keepSelectedHint = Boolean(options?.keepSelectedHint);
+    const customerName = String(customer.name || '').trim() || localizeLooseText('Unknown customer');
+    const customerOwing = Number(customer.owing) || 0;
+    const owingLabel = customerOwing > 0 ? `(Owes: RWF ${customerOwing.toLocaleString()})` : '';
+    const promiseDate = getCustomerPromiseDate(customer);
+    const promiseLabel = promiseDate
+        ? (isCustomerDebtOverdue(customer)
+            ? ` | Overdue since ${formatCustomerPromiseDate(promiseDate)}`
+            : ` | Promise ${formatCustomerPromiseDate(promiseDate)}`)
+        : '';
+    const selectedHint = keepSelectedHint ? ' | Selected' : '';
+    return `${customerName} ${owingLabel}${promiseLabel}${selectedHint}`;
+}
+
+function renderCreditCustomerResults(filteredCustomers) {
+    const resultsEl = document.getElementById('creditCustomerResults');
+    if (!resultsEl) return;
+
+    const limitedResults = filteredCustomers.slice(0, 80);
+    if (!limitedResults.length) {
+        const emptyText = creditCustomerSearchTerm
+            ? localizeLooseText('No matching customers found.')
+            : localizeLooseText('No customers available.');
+        resultsEl.innerHTML = `<div class="credit-customer-empty">${escapeHtml(emptyText)}</div>`;
+        return;
+    }
+
+    resultsEl.innerHTML = limitedResults.map(({ customer, index }) => {
+        const isSelected = selectedCustomerId === index;
+        const customerName = String(customer?.name || '').trim() || localizeLooseText('Unknown customer');
+        const phone = String(customer?.phone || '').trim() || localizeLooseText('No phone');
+        const location = String(customer?.location || '').trim() || localizeLooseText('No location');
+        const typeLabel = isLoyalCustomer(customer) ? localizeLooseText('Loyal') : localizeLooseText('Regular');
+        const debt = Number(customer?.owing) || 0;
+        const debtText = debt > 0 ? `RWF ${debt.toLocaleString()}` : localizeLooseText('Cleared');
+        const promiseDate = getCustomerPromiseDate(customer);
+        const promiseText = promiseDate ? formatCustomerPromiseDate(promiseDate) : '';
+        const promiseBadge = promiseText
+            ? `<span class="credit-customer-promise ${isCustomerDebtOverdue(customer) ? 'overdue' : ''}">${escapeHtml(localizeLooseText('Payback'))}: ${escapeHtml(promiseText)}</span>`
+            : '';
+
+        return `
+            <button type="button" class="credit-customer-result-btn ${isSelected ? 'active' : ''}" onclick="selectCreditCustomer(${index})">
+                <div class="credit-customer-result-head">
+                    <div class="credit-customer-result-title">${escapeHtml(customerName)}</div>
+                    ${promiseBadge}
+                </div>
+                <div class="credit-customer-result-meta">${escapeHtml(typeLabel)} | ${escapeHtml(phone)} | ${escapeHtml(location)} | ${escapeHtml(debtText)}</div>
+            </button>
+        `;
+    }).join('');
+}
+
+function renderSelectedCreditCustomerChip() {
+    const selectedChip = document.getElementById('creditCustomerSelectedChip');
+    if (!selectedChip) return;
+    const selectedCustomer = Number.isInteger(selectedCustomerId) ? customers[selectedCustomerId] : null;
+
+    if (!selectedCustomer) {
+        selectedChip.textContent = localizeLooseText('No customer selected.');
+        return;
+    }
+
+    const customerName = String(selectedCustomer.name || '').trim() || localizeLooseText('Unknown customer');
+    const debt = Number(selectedCustomer.owing) || 0;
+    const debtText = debt > 0 ? `RWF ${debt.toLocaleString()}` : localizeLooseText('Cleared');
+    const promiseDate = getCustomerPromiseDate(selectedCustomer);
+    const promiseText = promiseDate ? ` | ${localizeLooseText('Payback')}: ${formatCustomerPromiseDate(promiseDate)}` : '';
+    selectedChip.textContent = `${localizeLooseText('Selected')}: ${customerName} (${debtText})${promiseText}`;
+}
+
+function selectCreditCustomer(index) {
+    const numericIndex = Number(index);
+    if (!Number.isInteger(numericIndex) || !customers[numericIndex]) return;
+    selectedCustomerId = numericIndex;
+    const select = document.getElementById('customerSelect');
+    if (select) select.value = String(numericIndex);
+    renderSelectedCreditCustomerChip();
+    updateCustomerDropdown();
+    syncCreditPromiseDateVisibility();
+}
+
+function handleCreditCustomerSearchKeydown(event) {
+    if (!event || event.key !== 'Enter') return;
+    event.preventDefault();
+    const filteredCustomers = getCreditCustomerSearchEntries(creditCustomerSearchTerm);
+    if (filteredCustomers.length > 0) {
+        selectCreditCustomer(filteredCustomers[0].index);
+    }
 }
 
 function updateCustomerDropdown() {
     const select = document.getElementById('customerSelect');
     if (!select) return;
+    const searchInput = document.getElementById('creditCustomerSearch');
     
     select.innerHTML = '<option value="">Select Customer</option>';
+
+    const customerEntries = getCreditCustomerSearchEntries('');
+    const filteredCustomers = getCreditCustomerSearchEntries(creditCustomerSearchTerm);
+
+    const selectedMissingFromFilter = (
+        selectedCustomerId !== null &&
+        customerEntries.some(({ index }) => index === selectedCustomerId) &&
+        !filteredCustomers.some(({ index }) => index === selectedCustomerId)
+    );
+
+    if (selectedMissingFromFilter) {
+        const selectedOption = document.createElement('option');
+        selectedOption.value = String(selectedCustomerId);
+        selectedOption.textContent = formatCreditCustomerOptionLabel(customers[selectedCustomerId], { keepSelectedHint: true });
+        select.appendChild(selectedOption);
+    }
     
-    customers.forEach((customer, index) => {
+    filteredCustomers.forEach(({ customer, index }) => {
         const option = document.createElement('option');
         option.value = index;
-        const owingLabel = customer.owing > 0 ? `(Owes: RWF ${customer.owing.toLocaleString()})` : '';
-        const promiseDate = getCustomerPromiseDate(customer);
-        const promiseLabel = promiseDate
-            ? (isCustomerDebtOverdue(customer)
-                ? ` | Overdue since ${formatCustomerPromiseDate(promiseDate)}`
-                : ` | Promise ${formatCustomerPromiseDate(promiseDate)}`)
-            : '';
-        option.textContent = `${customer.name} ${owingLabel}${promiseLabel}`;
+        option.textContent = formatCreditCustomerOptionLabel(customer);
         select.appendChild(option);
     });
 
-    if (selectedCustomerId !== null && customers[selectedCustomerId]) {
+    if (selectedCustomerId !== null && customerEntries.some(({ index }) => index === selectedCustomerId)) {
         select.value = String(selectedCustomerId);
+    } else {
+        selectedCustomerId = null;
     }
+
+    if (searchInput && searchInput.value !== creditCustomerSearchTerm) {
+        searchInput.value = creditCustomerSearchTerm;
+    }
+
+    renderSelectedCreditCustomerChip();
+    renderCreditCustomerResults(filteredCustomers);
     
     select.onchange = function() {
-        selectedCustomerId = this.value ? parseInt(this.value) : null;
+        selectedCustomerId = this.value ? parseInt(this.value, 10) : null;
+        renderSelectedCreditCustomerChip();
+        renderCreditCustomerResults(getCreditCustomerSearchEntries(creditCustomerSearchTerm));
         syncCreditPromiseDateVisibility();
     };
 }
@@ -10606,11 +10845,6 @@ async function displayCustomers() {
     const list = document.getElementById('customerList');
     if (!list) return;
     
-    // For admin users, ensure we have the latest data from MongoDB
-    if (isAdminSessionActive() && activeUser) {
-        await loadCustomersFromMongoDB(activeUser.phone || activeUser);
-    }
-    
     clearElement(list);
     
     if (customers.length === 0) {
@@ -10712,6 +10946,110 @@ const debouncedFilterCustomers = debounce(function(value) {
         list.appendChild(item);
     });
 }, 300);
+
+// ================= CUSTOMER DEBT DETAILS FUNCTIONS =================
+function openCustomerDebtDetails(index) {
+    currentCustomerIndex = index;
+    const customer = customers[index];
+    if (!customer) return;
+
+    const modal = document.getElementById('customerDebtDetailsModal');
+    const title = document.getElementById('customerDebtDetailsTitle');
+    const content = document.getElementById('customerDebtDetailsContent');
+
+    if (!modal || !title || !content) return;
+
+    title.textContent = `Debt Details - ${customer.name}`;
+
+    const promiseDate = getCustomerPromiseDate(customer);
+    const overdue = isCustomerDebtOverdue(customer);
+    const overdueLabel = overdue ? formatOverdueDurationLabel(getCustomerDebtOverdueMs(customer)) : '';
+
+    content.innerHTML = `
+        <div class="debt-details-section">
+            <div class="debt-detail-row">
+                <label>Current Debt:</label>
+                <span class="debt-amount">${customer.owing > 0 ? `RWF ${customer.owing.toLocaleString()}` : 'Cleared'}</span>
+            </div>
+            <div class="debt-detail-row">
+                <label>Status:</label>
+                <span class="debt-status ${customer.owing > 0 ? (overdue ? 'overdue' : 'owing') : 'cleared'}">
+                    ${customer.owing > 0 ? (overdue ? `Overdue ${overdueLabel}` : 'Owing') : 'Cleared'}
+                </span>
+            </div>
+            <div class="debt-detail-row">
+                <label>Promised Payment Date & Time:</label>
+                <div class="promise-date-inputs">
+                    <input type="date" id="editPromiseDate" value="${promiseDate ? new Date(promiseDate).toISOString().split('T')[0] : ''}">
+                    <input type="time" id="editPromiseTime" step="60" value="${promiseDate ? new Date(promiseDate).toTimeString().slice(0, 5) : ''}">
+                </div>
+            </div>
+            <div class="debt-detail-row">
+                <label>Customer Type:</label>
+                <select id="editCustomerType">
+                    <option value="regular" ${customer.type === 'regular' ? 'selected' : ''}>Regular Customer</option>
+                    <option value="loyal" ${customer.type === 'loyal' ? 'selected' : ''}>Loyal Customer</option>
+                </select>
+            </div>
+            <div class="debt-detail-row">
+                <label>Phone:</label>
+                <input type="tel" id="editCustomerPhone" value="${customer.phone || ''}" placeholder="Enter phone number">
+            </div>
+            <div class="debt-detail-row">
+                <label>Location:</label>
+                <input type="text" id="editCustomerLocation" value="${customer.location || ''}" placeholder="Enter location">
+            </div>
+            <div class="debt-detail-row">
+                <label>Notes:</label>
+                <textarea id="editCustomerNotes" placeholder="Additional notes">${customer.notes || ''}</textarea>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button onclick="saveCustomerDebtDetails()" class="form-submit">Save Changes</button>
+            <button onclick="closeCustomerDebtDetailsModal()" class="form-cancel">Cancel</button>
+        </div>
+    `;
+
+    modal.style.display = 'block';
+}
+
+function closeCustomerDebtDetailsModal() {
+    const modal = document.getElementById('customerDebtDetailsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveCustomerDebtDetails() {
+    const customer = customers[currentCustomerIndex];
+    if (!customer) return;
+
+    const promiseDate = document.getElementById('editPromiseDate').value;
+    const promiseTime = document.getElementById('editPromiseTime').value;
+    const customerType = document.getElementById('editCustomerType').value;
+    const phone = document.getElementById('editCustomerPhone').value.trim();
+    const location = document.getElementById('editCustomerLocation').value.trim();
+    const notes = document.getElementById('editCustomerNotes').value.trim();
+
+    // Update customer details
+    customer.type = customerType;
+    customer.phone = phone || undefined;
+    customer.location = location || undefined;
+    customer.notes = notes || undefined;
+
+    // Update promised payment date/time
+    if (promiseDate && promiseTime) {
+        customer.promisedPaybackDate = new Date(`${promiseDate}T${promiseTime}`).toISOString();
+    } else if (promiseDate) {
+        customer.promisedPaybackDate = new Date(`${promiseDate}T00:00`).toISOString();
+    } else {
+        customer.promisedPaybackDate = '';
+    }
+
+    await optimizedSaveData();
+    displayCustomers();
+    updateHome();
+    closeCustomerDebtDetailsModal();
+    showSuccessToast(`Customer details updated for ${customer.name}`);
+}
 
 // ================= CLATE/DEPOSIT FUNCTIONS =================
 async function returnKosiyo(id) {
@@ -11333,6 +11671,10 @@ function openDashboardInventory() {
 }
 
 function updateHome() {
+    updateHomeDashboard();
+}
+
+function updateHomeDashboard() {
     const allowProfit = canViewProfitData();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -14805,6 +15147,9 @@ function updateConnectivityUI(options = {}) {
             title: localizeLooseText('Offline mode active'),
             message: localizeLooseText('Sales still save on this device. When internet comes back, the app will refresh online features and update the offline cache.')
         });
+        connectivityBannerHideTimeout = setTimeout(() => {
+            setConnectivityBannerState({ visible: false });
+        }, CONNECTIVITY_BANNER_HIDE_MS);
         return;
     }
 
@@ -15783,6 +16128,8 @@ function updateLanguageUI() {
     setText('#addSelectedToCartBtn', t('addSelectedToCart'));
     setText('#addSale .sale-type label', `${t('saleType')}:`);
     setText('#addSale #customerSelectContainer label', `${t('selectCustomer')}:`);
+    setPlaceholder('#creditCustomerSearch', t('searchCustomers'));
+    setText('#creditCustomerSearchClearBtn', localizeLooseText('Clear'));
     setText('#addSale .total-display p', t('totalAmount'));
     setText('#addSale .confirm-btn', t('confirmSale'));
     setText('#addSale button[onclick="clearCart()"]', t('clearCart'));
@@ -16066,7 +16413,7 @@ function handleClearDataConfirmInput() {
     if (!input || !submitBtn) return;
 
     const normalized = String(input.value || '').trim();
-    submitBtn.disabled = normalized !== 'CLEAR USER DATA';
+    submitBtn.disabled = !isClearDataConfirmationValid(normalized);
     if (errorEl) errorEl.style.display = 'none';
 }
 
@@ -16081,7 +16428,7 @@ function openClearDataConfirmForm() {
     }
     if (!ensureClearDataConfirmBindings()) {
         const ok = window.prompt('Type CLEAR USER DATA to confirm:');
-        if (ok === 'CLEAR USER DATA') {
+        if (isClearDataConfirmationValid(ok)) {
             void confirmClearAllData(true);
         }
         return;
@@ -16113,6 +16460,249 @@ function closeClearDataConfirmForm() {
     if (errorEl) errorEl.style.display = 'none';
 }
 
+function isClearDataConfirmationValid(value = '') {
+    const normalized = String(value || '').trim().toUpperCase();
+    return normalized === 'CLEAR USER DATA' || normalized === 'CLEAR ALL DATA';
+}
+
+function getFactoryResetDataKeys(usersSnapshot = []) {
+    const keys = new Set([
+        APP_META_STORAGE_KEY,
+        GLOBAL_DRINKS_KEY,
+        GLOBAL_CUSTOMERS_KEY,
+        GLOBAL_CLATES_KEY,
+        GLOBAL_LOYAL_CUSTOMERS_KEY,
+        'sales',
+        'customers',
+        'clates',
+        'drinks',
+        'settings',
+        'archives',
+        'debts'
+    ]);
+
+    const list = Array.isArray(usersSnapshot) ? usersSnapshot : [];
+    list.forEach((user) => {
+        ['sales', 'customers', 'clates', 'drinks', 'settings', 'archives'].forEach((base) => {
+            const key = userDataKey(base, user);
+            if (key) keys.add(key);
+        });
+    });
+
+    return Array.from(keys);
+}
+
+function clearMakeawayLocalStorage(dataKeys = []) {
+    if (typeof localStorage === 'undefined') return;
+    const keysToRemove = new Set();
+
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('makeaway_')) {
+                keysToRemove.add(key);
+            }
+        }
+    } catch (_) {}
+
+    (Array.isArray(dataKeys) ? dataKeys : []).forEach((name) => {
+        if (!name) return;
+        keysToRemove.add(localStorageKey(name));
+        keysToRemove.add(String(name));
+    });
+
+    keysToRemove.forEach((key) => {
+        try {
+            localStorage.removeItem(key);
+        } catch (_) {}
+    });
+}
+
+async function clearIndexedDbKeys(dataKeys = []) {
+    try {
+        const db = await openAppDB();
+        await new Promise((resolve) => {
+            const tx = db.transaction(DB_STORE, 'readwrite');
+            const store = tx.objectStore(DB_STORE);
+            (Array.isArray(dataKeys) ? dataKeys : []).forEach((name) => {
+                if (!name) return;
+                store.delete(name);
+            });
+            tx.oncomplete = () => {
+                try { db.close(); } catch (_) {}
+                resolve(true);
+            };
+            tx.onerror = () => {
+                try { db.close(); } catch (_) {}
+                resolve(false);
+            };
+            tx.onabort = () => {
+                try { db.close(); } catch (_) {}
+                resolve(false);
+            };
+        });
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function deleteAppIndexedDatabase() {
+    if (typeof indexedDB === 'undefined') return false;
+
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            resolve(value);
+        };
+        const timeoutId = setTimeout(() => finish(false), 4000);
+
+        try {
+            const request = indexedDB.deleteDatabase(DB_NAME);
+            request.onsuccess = () => finish(true);
+            request.onerror = () => finish(false);
+            request.onblocked = () => finish(false);
+        } catch (_) {
+            finish(false);
+        }
+    });
+}
+
+async function clearOfflineShellData() {
+    try {
+        if (typeof caches !== 'undefined') {
+            const cacheKeys = await caches.keys();
+            await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey).catch(() => false)));
+        }
+    } catch (_) {}
+
+    try {
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === 'function') {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.unregister().catch(() => false)));
+        }
+    } catch (_) {}
+}
+
+async function clearElectronStoredData(dataKeys = []) {
+    if (!isElectron || !window.electronAPI || typeof window.electronAPI.invoke !== 'function') {
+        return false;
+    }
+
+    const invoke = window.electronAPI.invoke.bind(window.electronAPI);
+    const preferredCommands = ['clear-all-data', 'clear-data', 'reset-storage', 'delete-all-data'];
+
+    for (const command of preferredCommands) {
+        try {
+            const result = await invoke(command);
+            if (!result || result.success !== false) {
+                return true;
+            }
+        } catch (_) {}
+    }
+
+    const fallbackPayload = {};
+    (Array.isArray(dataKeys) ? dataKeys : []).forEach((name) => {
+        if (!name) return;
+        if (name === APP_META_STORAGE_KEY) {
+            fallbackPayload[name] = getDefaultAppMeta();
+            return;
+        }
+        if (name === 'settings' || name.startsWith('settings__')) {
+            fallbackPayload[name] = {};
+            return;
+        }
+        fallbackPayload[name] = [];
+    });
+
+    try {
+        await invoke('save-bulk-data', fallbackPayload);
+        await invoke('flush-data').catch(() => {});
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function clearAllUsersDataAndRestart() {
+    const usersSnapshot = Array.isArray(getAuthUsers()) ? [...getAuthUsers()] : [];
+    const dataKeys = getFactoryResetDataKeys(usersSnapshot);
+
+    await clearElectronStoredData(dataKeys);
+    const dbDeleted = await deleteAppIndexedDatabase();
+    if (!dbDeleted) {
+        await clearIndexedDbKeys(dataKeys);
+    }
+    clearMakeawayLocalStorage(dataKeys);
+    await clearOfflineShellData();
+
+    sales = [];
+    customers = [];
+    clates = [];
+    drinks = [];
+    settings = getDefaultUserSettings();
+    yearlyArchives = [];
+    cart = [];
+    adminSales = [];
+    adminSalesCacheLoaded = false;
+    selectedCustomerId = null;
+    currentSaleType = 'normal';
+    creditCustomerSearchTerm = '';
+    activeUser = null;
+    activeLoginMode = 'user';
+    appMeta = getDefaultAppMeta();
+
+    if (autoBackupTimeout) {
+        clearTimeout(autoBackupTimeout);
+        autoBackupTimeout = null;
+    }
+    if (autoDailySalesPdfTimeout) {
+        clearTimeout(autoDailySalesPdfTimeout);
+        autoDailySalesPdfTimeout = null;
+    }
+    if (autoDailySalesPdfCheckInterval) {
+        clearInterval(autoDailySalesPdfCheckInterval);
+        autoDailySalesPdfCheckInterval = null;
+    }
+    if (connectivityBannerHideTimeout) {
+        clearTimeout(connectivityBannerHideTimeout);
+        connectivityBannerHideTimeout = null;
+    }
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+        autoSaveInterval = null;
+    }
+
+    closeAiAssistantPanel();
+    refreshAiAssistantAccessUI();
+    closeOnboarding(false);
+
+    const app = document.getElementById('app');
+    if (app) {
+        app.style.display = 'none';
+        app.classList.remove('chrome-hidden');
+    }
+
+    const loginScreen = document.getElementById('loginScreen');
+    if (loginScreen) {
+        loginScreen.style.visibility = 'visible';
+        loginScreen.style.display = 'flex';
+    }
+
+    initializeAuthUI();
+    switchAuthMode('signup');
+    setAuthFeedback('All local data has been reset. Create the owner account to continue.', 'info');
+
+    setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
+            window.location.reload();
+        }
+    }, 180);
+}
+
 async function confirmClearAllData(skipInputValidation = false) {
     if (!activeUser) {
         alert('Please login first.');
@@ -16128,7 +16718,7 @@ async function confirmClearAllData(skipInputValidation = false) {
     const confirmationInput = document.getElementById('clearDataConfirmInput');
     const errorEl = document.getElementById('clearDataConfirmError');
     const confirmation = String(confirmationInput ? confirmationInput.value : '').trim();
-    const isValid = skipInputValidation || confirmation === 'CLEAR USER DATA';
+    const isValid = skipInputValidation || isClearDataConfirmationValid(confirmation);
 
     if (!isValid) {
         if (errorEl) {
@@ -16138,8 +16728,8 @@ async function confirmClearAllData(skipInputValidation = false) {
         return;
     }
 
-    await clearCurrentUserDataNow({ showHome: true });
     closeClearDataConfirmForm();
+    await clearAllUsersDataAndRestart();
 }
 
 function clearAllData() {
@@ -16211,6 +16801,10 @@ window.clearCart = clearCart;
 window.confirmSale = confirmSale;
 window.changeQty = changeQty;
 window.changeSaleType = changeSaleType;
+window.filterCreditSaleCustomers = filterCreditSaleCustomers;
+window.clearCreditCustomerSearch = clearCreditCustomerSearch;
+window.selectCreditCustomer = selectCreditCustomer;
+window.handleCreditCustomerSearchKeydown = handleCreditCustomerSearchKeydown;
 window.saveNewDrink = saveNewDrink;
 window.openCustomerForm = openCustomerForm;
 window.closeCustomerForm = closeCustomerForm;
@@ -16220,6 +16814,9 @@ window.openAddDebtForm = openAddDebtForm;
 window.openReduceDebtForm = openReduceDebtForm;
 window.openClearDebtForm = openClearDebtForm;
 window.closeDebtForm = closeDebtForm;
+window.openCustomerDebtDetails = openCustomerDebtDetails;
+window.closeCustomerDebtDetailsModal = closeCustomerDebtDetailsModal;
+window.saveCustomerDebtDetails = saveCustomerDebtDetails;
 window.saveCustomer = saveCustomer;
 window.saveDeposit = saveDeposit;
 window.confirmDebt = confirmDebt;
